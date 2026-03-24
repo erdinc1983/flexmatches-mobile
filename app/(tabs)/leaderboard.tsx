@@ -230,7 +230,6 @@ export default function LeaderboardScreen() {
                 url={user.avatar_url}
                 name={user.username || user.full_name || "?"}
                 size={40}
-                color={tier.color}
               />
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={[s.rowName, { color: c.text }]} numberOfLines={1}>

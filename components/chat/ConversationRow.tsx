@@ -12,6 +12,7 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { useTheme, SPACE, FONT, RADIUS } from "../../lib/theme";
+import { Avatar } from "../Avatar";
 import { getSessionState, formatSessionDate } from "./SessionBanner";
 import type { BuddySession } from "./SessionBanner";
 
@@ -19,6 +20,7 @@ import type { BuddySession } from "./SessionBanner";
 type Props = {
   name:          string;
   username:      string;
+  avatarUrl:     string | null;
   lastMessage:   string | null;
   lastMessageAt: string | null;
   unreadCount:   number;
@@ -65,29 +67,21 @@ function getSessionPill(session: BuddySession | null, myId: string): Pill | null
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export function ConversationRow({
-  name, username, lastMessage, lastMessageAt,
+  name, username, avatarUrl, lastMessage, lastMessageAt,
   unreadCount, session, myId, onPress,
 }: Props) {
   const { theme } = useTheme();
   const c = theme.colors;
 
-  const initial = (name ?? username)[0]?.toUpperCase() ?? "?";
-  const unread  = unreadCount > 0;
-  const pill    = getSessionPill(session, myId);
+  const unread = unreadCount > 0;
+  const pill   = getSessionPill(session, myId);
 
   return (
     <TouchableOpacity style={s.row} onPress={onPress} activeOpacity={0.75}>
 
       {/* Avatar */}
-      <View style={[
-        s.avatar,
-        unread
-          ? { backgroundColor: c.brand, borderColor: c.brand }
-          : { backgroundColor: c.brandSubtle, borderColor: c.brandBorder },
-      ]}>
-        <Text style={[s.initial, { color: unread ? "#fff" : c.brand }]}>
-          {initial}
-        </Text>
+      <View style={[s.avatarWrap, unread && { borderColor: c.brand, borderWidth: 2 }]}>
+        <Avatar url={avatarUrl} name={name ?? username} size={52} />
       </View>
 
       {/* Content */}
@@ -136,9 +130,8 @@ export function ConversationRow({
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  row:      { flexDirection: "row", alignItems: "center", paddingVertical: SPACE[12], paddingHorizontal: SPACE[20], gap: SPACE[12] },
-  avatar:   { width: 52, height: 52, borderRadius: 26, alignItems: "center", justifyContent: "center", borderWidth: 1.5, flexShrink: 0 },
-  initial:  { fontSize: FONT.size.xl, fontWeight: FONT.weight.black },
+  row:        { flexDirection: "row", alignItems: "center", paddingVertical: SPACE[12], paddingHorizontal: SPACE[20], gap: SPACE[12] },
+  avatarWrap: { borderRadius: 26, borderWidth: 0, flexShrink: 0 },
   content:  { flex: 1, gap: SPACE[4] },
   topRow:   { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   name:     { fontSize: FONT.size.md, flex: 1, marginRight: SPACE[8] },

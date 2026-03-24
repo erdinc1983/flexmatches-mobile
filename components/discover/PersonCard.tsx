@@ -14,8 +14,9 @@
 
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
-import { useTheme, SPACE, FONT, RADIUS } from "../../lib/theme";
+import { useTheme, SPACE, FONT, RADIUS, PALETTE } from "../../lib/theme";
 import { Icon } from "../Icon";
+import { Avatar } from "../Avatar";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type RequestStatus = "none" | "pending" | "accepted";
@@ -24,6 +25,7 @@ export type DiscoverUser = {
   id:            string;
   username:      string;
   full_name:     string | null;
+  avatar_url:    string | null;
   bio:           string | null;
   city:          string | null;
   fitness_level: "beginner" | "intermediate" | "advanced" | null;
@@ -72,7 +74,6 @@ export function PersonCard({ user, status, onConnect, onPress }: Props) {
   const { theme } = useTheme();
   const c = theme.colors;
 
-  const initial    = (user.full_name ?? user.username)[0]?.toUpperCase() ?? "?";
   const levelColor = user.fitness_level ? LEVEL_COLOR[user.fitness_level] : c.textMuted;
   const activeStr  = formatActive(user.last_active);
   const sports     = (user.sports ?? []).slice(0, 3);
@@ -87,11 +88,11 @@ export function PersonCard({ user, status, onConnect, onPress }: Props) {
       {/* ── Row 1: Avatar + identity ───────────────────────────── */}
       <View style={s.topRow}>
         {/* Avatar */}
-        <View style={[s.avatar, { backgroundColor: c.brandSubtle, borderColor: c.brandBorder }]}>
+        <View style={s.avatarWrap}>
+          <Avatar url={user.avatar_url} name={user.full_name ?? user.username} size={52} />
           {user.is_at_gym && (
-            <View style={[s.gymDot, { backgroundColor: "#22C55E", borderColor: c.bgCard }]} />
+            <View style={[s.gymDot, { backgroundColor: PALETTE.success, borderColor: c.bgCard }]} />
           )}
-          <Text style={[s.initial, { color: c.brand }]}>{initial}</Text>
         </View>
 
         {/* Identity column */}
@@ -207,9 +208,8 @@ const s = StyleSheet.create({
 
   // Top row
   topRow:      { flexDirection: "row", gap: SPACE[12], alignItems: "flex-start" },
-  avatar:      { width: 52, height: 52, borderRadius: 26, alignItems: "center", justifyContent: "center", borderWidth: 1.5, flexShrink: 0 },
+  avatarWrap:  { width: 52, height: 52, flexShrink: 0 },
   gymDot:      { position: "absolute", bottom: 1, right: 1, width: 13, height: 13, borderRadius: 7, borderWidth: 2, zIndex: 1 },
-  initial:     { fontSize: FONT.size.xxl, fontWeight: FONT.weight.black },
   identity:    { flex: 1, gap: SPACE[4] },
   nameRow:     { flexDirection: "row", alignItems: "flex-end", gap: SPACE[6] },
   name:        { fontSize: FONT.size.lg, fontWeight: FONT.weight.extrabold, flexShrink: 1 },

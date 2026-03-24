@@ -76,7 +76,7 @@ export default function HomeScreen() {
       supabase.from("workouts").select("*", { count: "exact", head: true })
         .eq("user_id", uid).gte("logged_at", monthAgo),
       supabase.from("matches")
-        .select("id, sender_id, sender:users!matches_sender_id_fkey(id, username, full_name, city, fitness_level)")
+        .select("id, sender_id, sender:users!matches_sender_id_fkey(id, username, full_name, avatar_url, city, fitness_level)")
         .eq("receiver_id", uid).eq("status", "pending").limit(5),
       supabase.from("matches").select("receiver_id").eq("sender_id", uid),
       supabase.from("buddy_sessions")
@@ -133,6 +133,7 @@ export default function HomeScreen() {
       sender_id:     m.sender_id,
       username:      m.sender.username,
       full_name:     m.sender.full_name,
+      avatar_url:    m.sender.avatar_url ?? null,
       city:          m.sender.city,
       fitness_level: m.sender.fitness_level,
     })));
@@ -169,7 +170,7 @@ export default function HomeScreen() {
 
     const { data: candidates } = await supabase
       .from("users")
-      .select("id, username, full_name, city, sports, fitness_level, availability")
+      .select("id, username, full_name, avatar_url, city, sports, fitness_level, availability")
       .neq("id", uid).limit(40);
 
     const scored = (candidates ?? [])
@@ -188,6 +189,7 @@ export default function HomeScreen() {
         id:            u.id,
         username:      u.username,
         full_name:     u.full_name ?? null,
+        avatar_url:    u.avatar_url ?? null,
         fitness_level: u.fitness_level ?? null,
         city:          u.city ?? null,
         shared_sports: u.shared_sports,

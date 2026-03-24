@@ -12,8 +12,9 @@ import {
   Modal, View, Text, TouchableOpacity, ScrollView,
   StyleSheet, Dimensions, TouchableWithoutFeedback,
 } from "react-native";
-import { useTheme, SPACE, FONT, RADIUS } from "../../lib/theme";
+import { useTheme, SPACE, FONT, RADIUS, PALETTE } from "../../lib/theme";
 import { Icon } from "../Icon";
+import { Avatar } from "../Avatar";
 import { RequestStatus, DiscoverUser } from "./PersonCard";
 
 const { height: H } = Dimensions.get("window");
@@ -41,7 +42,6 @@ export function ProfileSheet({ user, status, onConnect, onClose }: Props) {
 
   if (!user) return null;
 
-  const initial    = (user.full_name ?? user.username)[0]?.toUpperCase() ?? "?";
   const levelColor = user.fitness_level ? LEVEL_COLOR[user.fitness_level] : c.textMuted;
   const scheduleSlots = Object.entries((user.availability as Record<string, boolean>) ?? {})
     .filter(([, v]) => v).map(([k]) => SLOT_LABEL[k] ?? k);
@@ -62,11 +62,11 @@ export function ProfileSheet({ user, status, onConnect, onClose }: Props) {
 
           {/* ── Avatar + name ───────────────────────────────────── */}
           <View style={s.heroRow}>
-            <View style={[s.avatar, { backgroundColor: c.brandSubtle, borderColor: c.brandBorder }]}>
+            <View style={s.avatarWrap}>
+              <Avatar url={user.avatar_url} name={user.full_name ?? user.username} size={64} />
               {user.is_at_gym && (
-                <View style={[s.gymDot, { backgroundColor: "#22C55E", borderColor: c.bgCard }]} />
+                <View style={[s.gymDot, { backgroundColor: PALETTE.success, borderColor: c.bgCard }]} />
               )}
-              <Text style={[s.initial, { color: c.brand }]}>{initial}</Text>
             </View>
             <View style={{ flex: 1, gap: SPACE[4] }}>
               <View style={{ flexDirection: "row", alignItems: "flex-end", gap: SPACE[8] }}>
@@ -201,9 +201,8 @@ const s = StyleSheet.create({
   content:  { padding: SPACE[20], gap: SPACE[16], paddingBottom: SPACE[32] },
 
   heroRow:  { flexDirection: "row", gap: SPACE[14], alignItems: "flex-start" },
-  avatar:   { width: 64, height: 64, borderRadius: 32, alignItems: "center", justifyContent: "center", borderWidth: 2, flexShrink: 0 },
-  gymDot:   { position: "absolute", bottom: 2, right: 2, width: 16, height: 16, borderRadius: 8, borderWidth: 2.5, zIndex: 1, backgroundColor: "#22C55E" },
-  initial:  { fontSize: FONT.size.xxxl, fontWeight: FONT.weight.black },
+  avatarWrap: { width: 64, height: 64, flexShrink: 0 },
+  gymDot:   { position: "absolute", bottom: 2, right: 2, width: 16, height: 16, borderRadius: 8, borderWidth: 2.5, zIndex: 1 },
   name:     { fontSize: FONT.size.xxl, fontWeight: FONT.weight.black, letterSpacing: -0.3 },
   age:      { fontSize: FONT.size.lg, fontWeight: FONT.weight.medium, paddingBottom: 2 },
   username: { fontSize: FONT.size.sm },

@@ -186,6 +186,7 @@ export default function DiscoverScreen() {
           id:             u.id,
           username:       u.username,
           full_name:      u.full_name ?? null,
+          avatar_url:     u.avatar_url ?? null,
           bio:            u.bio ?? null,
           city:           u.city ?? null,
           fitness_level:  u.fitness_level ?? null,

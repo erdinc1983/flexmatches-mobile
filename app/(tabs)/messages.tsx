@@ -31,6 +31,7 @@ type Conversation = {
   userId:        string;
   name:          string;
   username:      string;
+  avatarUrl:     string | null;
   lastMessage:   string | null;
   lastMessageAt: string | null;
   unreadCount:   number;
@@ -54,20 +55,27 @@ export default function MessagesScreen() {
 
     const { data: matches } = await supabase
       .from("matches")
-      .select(`
-        id, sender_id, receiver_id, updated_at,
-        sender:users!matches_sender_id_fkey(id, username, full_name),
-        receiver:users!matches_receiver_id_fkey(id, username, full_name)
-      `)
+      .select("id, sender_id, receiver_id, updated_at")
       .eq("status", "accepted")
       .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
       .order("updated_at", { ascending: false });
 
-    if (!matches) { setLoading(false); return; }
+    if (!matches || matches.length === 0) { setLoading(false); return; }
+
+    // Fetch other-user profiles separately to avoid FK join RLS issues
+    const otherIds = matches.map((m: any) =>
+      m.sender_id === user.id ? m.receiver_id : m.sender_id
+    );
+    const { data: userRows } = await supabase
+      .from("users")
+      .select("id, username, full_name, avatar_url")
+      .in("id", otherIds);
+    const userMap = new Map((userRows ?? []).map((u: any) => [u.id, u]));
 
     const convos: Conversation[] = await Promise.all(
       matches.map(async (m: any) => {
-        const other = m.sender_id === user.id ? m.receiver : m.sender;
+        const otherId = m.sender_id === user.id ? m.receiver_id : m.sender_id;
+        const other = userMap.get(otherId) ?? { id: otherId, username: "unknown", full_name: null };
 
         const [
           { data: lastMsg },
@@ -96,9 +104,10 @@ export default function MessagesScreen() {
 
         return {
           matchId:       m.id,
-          userId:        other.id,
+          userId:        otherId,
           name:          other.full_name ?? other.username,
           username:      other.username,
+          avatarUrl:     other.avatar_url ?? null,
           lastMessage:   lastMsg?.content ?? null,
           lastMessageAt: lastMsg?.created_at ?? null,
           unreadCount:   unread ?? 0,
@@ -168,6 +177,7 @@ export default function MessagesScreen() {
           <ConversationRow
             name={item.name}
             username={item.username}
+            avatarUrl={item.avatarUrl}
             lastMessage={item.lastMessage}
             lastMessageAt={item.lastMessageAt}
             unreadCount={item.unreadCount}

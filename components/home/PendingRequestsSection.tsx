@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { router } from "expo-router";
 import { useTheme, SPACE, FONT, RADIUS } from "../../lib/theme";
 import { Icon } from "../Icon";
+import { Avatar } from "../Avatar";
 import { SectionHeader } from "../ui/SectionHeader";
 import type { PendingRequest } from "./types";
 
@@ -50,14 +51,11 @@ function RequestRow({
 }: { req: PendingRequest; onAccept: () => void; onDecline: () => void }) {
   const { theme } = useTheme();
   const c = theme.colors;
-  const initial = req.username[0]?.toUpperCase() ?? "?";
-  const meta    = [req.fitness_level, req.city].filter(Boolean).join(" · ");
+  const meta = [req.fitness_level, req.city].filter(Boolean).join(" · ");
 
   return (
     <View style={[s.row, { backgroundColor: c.bgCard, borderColor: c.brandBorder }]}>
-      <View style={[s.avatar, { backgroundColor: c.brand }]}>
-        <Text style={s.initial}>{initial}</Text>
-      </View>
+      <Avatar url={req.avatar_url} name={req.full_name ?? req.username} size={42} />
       <View style={{ flex: 1, gap: 2 }}>
         <Text style={[s.name, { color: c.text }]}>{req.full_name ?? req.username}</Text>
         {meta ? <Text style={[s.meta, { color: c.textMuted }]}>{meta}</Text> : null}
@@ -84,8 +82,6 @@ function RequestRow({
 
 const s = StyleSheet.create({
   row:        { flexDirection: "row", alignItems: "center", borderRadius: RADIUS.lg, padding: SPACE[12], gap: SPACE[12], borderWidth: 1 },
-  avatar:     { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  initial:    { fontSize: FONT.size.md, fontWeight: FONT.weight.extrabold, color: "#fff" },
   name:       { fontSize: FONT.size.base, fontWeight: FONT.weight.bold },
   meta:       { fontSize: FONT.size.sm, textTransform: "capitalize" },
   declineBtn: { width: 34, height: 34, borderRadius: RADIUS.sm, borderWidth: 1, alignItems: "center", justifyContent: "center" },

@@ -230,7 +230,7 @@ export default function ProfileScreen() {
 
           {/* Avatar + camera */}
           <TouchableOpacity style={s.avatarWrap} onPress={pickAndUploadPhoto} activeOpacity={0.8}>
-            <Avatar url={profile?.avatar_url} name={profile?.username ?? "?"} size={96} color={c.brand} />
+            <Avatar url={profile?.avatar_url} name={profile?.username ?? "?"} size={96} />
             <View style={[s.cameraBtn, { backgroundColor: c.brand, borderColor: c.bg }]}>
               {uploadingPhoto
                 ? <ActivityIndicator color="#fff" size="small" />

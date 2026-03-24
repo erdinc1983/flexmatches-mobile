@@ -17,6 +17,7 @@ export type PendingRequest = {
   sender_id:     string;
   username:      string;
   full_name:     string | null;
+  avatar_url:    string | null;
   fitness_level: string | null;
   city:          string | null;
 };
@@ -26,6 +27,7 @@ export type SuggestedUser = {
   id:            string;
   username:      string;
   full_name:     string | null;
+  avatar_url:    string | null;
   fitness_level: string | null;
   city:          string | null;
   shared_sports: string[];

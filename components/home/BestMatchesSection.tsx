@@ -10,6 +10,7 @@ import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from "react-nati
 import { router } from "expo-router";
 import { useTheme, SPACE, FONT, RADIUS } from "../../lib/theme";
 import { Icon } from "../Icon";
+import { Avatar } from "../Avatar";
 import { SectionHeader } from "../ui/SectionHeader";
 import type { SuggestedUser } from "./types";
 
@@ -54,7 +55,6 @@ export function BestMatchesSection({ users }: Props) {
 function MatchCard({ user, onPress }: { user: SuggestedUser; onPress: () => void }) {
   const { theme } = useTheme();
   const c = theme.colors;
-  const initial = (user.full_name ?? user.username)[0]?.toUpperCase() ?? "?";
 
   return (
     <TouchableOpacity
@@ -63,9 +63,7 @@ function MatchCard({ user, onPress }: { user: SuggestedUser; onPress: () => void
       activeOpacity={0.8}
     >
       {/* Avatar */}
-      <View style={[s.avatar, { backgroundColor: c.brandSubtle, borderColor: c.brandBorder }]}>
-        <Text style={[s.initial, { color: c.brand }]}>{initial}</Text>
-      </View>
+      <Avatar url={user.avatar_url} name={user.full_name ?? user.username} size={48} />
 
       {/* Name + level */}
       <Text style={[s.name, { color: c.text }]} numberOfLines={1}>
@@ -102,8 +100,6 @@ function MatchCard({ user, onPress }: { user: SuggestedUser; onPress: () => void
 
 const s = StyleSheet.create({
   card:    { width: 156, borderRadius: RADIUS.lg, padding: SPACE[14], gap: SPACE[6], borderWidth: 1 },
-  avatar:  { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center", borderWidth: 1.5, marginBottom: SPACE[2] },
-  initial: { fontSize: FONT.size.xl, fontWeight: FONT.weight.black },
   name:    { fontSize: FONT.size.base, fontWeight: FONT.weight.bold },
   level:   { fontSize: FONT.size.sm, textTransform: "capitalize" },
   tags:    { flexDirection: "row", flexWrap: "wrap", gap: SPACE[4], marginTop: SPACE[2] },
