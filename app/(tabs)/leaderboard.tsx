@@ -1,0 +1,289 @@
+import { useEffect, useState } from "react";
+import {
+  View, Text, StyleSheet, FlatList, TouchableOpacity,
+  ActivityIndicator, RefreshControl,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { router } from "expo-router";
+import { supabase } from "../../lib/supabase";
+import { Avatar } from "../../components/Avatar";
+import { useTheme, SPACE, FONT, RADIUS } from "../../lib/theme";
+import { Icon } from "../../components/Icon";
+
+const TIERS = [
+  { key: "diamond",  label: "Diamond",  min: 500, color: "#B9F2FF", medal: "💎" },
+  { key: "platinum", label: "Platinum", min: 200, color: "#E5E4E2", medal: "🥇" },
+  { key: "gold",     label: "Gold",     min: 100, color: "#FFD700", medal: "🥇" },
+  { key: "silver",   label: "Silver",   min: 50,  color: "#C0C0C0", medal: "🥈" },
+  { key: "bronze",   label: "Bronze",   min: 0,   color: "#CD7F32", medal: "🥉" },
+];
+
+function getTier(streak: number) {
+  if (streak >= 500) return TIERS[0];
+  if (streak >= 200) return TIERS[1];
+  if (streak >= 100) return TIERS[2];
+  if (streak >= 50)  return TIERS[3];
+  return TIERS[4];
+}
+
+function getNextTier(streak: number) {
+  if (streak >= 200) return TIERS[0];
+  if (streak >= 100) return TIERS[1];
+  if (streak >= 50)  return TIERS[2];
+  return TIERS[3];
+}
+
+type Leader = {
+  id: string;
+  full_name: string | null;
+  username: string;
+  avatar_url: string | null;
+  current_streak: number;
+  total_kudos: number;
+  city: string | null;
+};
+
+export default function LeaderboardScreen() {
+  const { theme } = useTheme();
+  const c = theme.colors;
+
+  const [me, setMe] = useState<Leader | null>(null);
+  const [myRank, setMyRank] = useState<number | null>(null);
+  const [leaders, setLeaders] = useState<Leader[]>([]);
+  const [tab, setTab] = useState<"global" | "friends">("global");
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => { load(); }, [tab]);
+
+  async function load() {
+    setLoading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data: myData } = await supabase
+      .from("users")
+      .select("id,full_name,username,avatar_url,current_streak,total_kudos,city")
+      .eq("id", user.id)
+      .single();
+    setMe(myData as Leader);
+
+    if (tab === "global") {
+      const { data } = await supabase
+        .from("users")
+        .select("id,full_name,username,avatar_url,current_streak,total_kudos,city")
+        .order("current_streak", { ascending: false })
+        .limit(50);
+      const list = (data as Leader[]) ?? [];
+      setLeaders(list);
+      const rank = list.findIndex((u) => u.id === user.id);
+      setMyRank(rank >= 0 ? rank + 1 : null);
+    } else {
+      const { data: matchData } = await supabase
+        .from("matches")
+        .select("sender_id,receiver_id")
+        .eq("status", "accepted")
+        .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`);
+      const friendIds = (matchData ?? []).map((m: any) =>
+        m.sender_id === user.id ? m.receiver_id : m.sender_id
+      );
+      friendIds.push(user.id);
+      const { data } = await supabase
+        .from("users")
+        .select("id,full_name,username,avatar_url,current_streak,total_kudos,city")
+        .in("id", friendIds)
+        .order("current_streak", { ascending: false });
+      const list = (data as Leader[]) ?? [];
+      setLeaders(list);
+      const rank = list.findIndex((u) => u.id === user.id);
+      setMyRank(rank >= 0 ? rank + 1 : null);
+    }
+    setLoading(false);
+  }
+
+  async function onRefresh() {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  }
+
+  const myTier = me ? getTier(me.current_streak ?? 0) : TIERS[4];
+  const nextTier = me ? getNextTier(me.current_streak ?? 0) : TIERS[3];
+  const progress = me && myTier.key !== "diamond"
+    ? Math.min(((me.current_streak ?? 0) / nextTier.min) * 100, 100)
+    : 100;
+
+  const rankDisplay = (i: number) => {
+    if (i === 0) return "🥇";
+    if (i === 1) return "🥈";
+    if (i === 2) return "🥉";
+    return `#${i + 1}`;
+  };
+
+  return (
+    <SafeAreaView style={[s.flex, { backgroundColor: c.bg }]}>
+      {/* Header */}
+      <View style={s.header}>
+        <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
+          <Icon name="back" size={24} color={c.textSecondary} />
+        </TouchableOpacity>
+        <View>
+          <Text style={[s.title, { color: c.text }]}>Leaderboard</Text>
+          <Text style={[s.subtitle, { color: c.textMuted }]}>Top streaks in the community</Text>
+        </View>
+      </View>
+
+      <FlatList
+        data={leaders}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={s.list}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.brand} />}
+        ListHeaderComponent={
+          <>
+            {/* My tier card */}
+            {me && (
+              <View style={[s.myTierCard, { backgroundColor: c.bgCard, borderColor: myTier.color + "44" }]}>
+                <View style={s.myTierRow}>
+                  <View style={[s.tierBadge, { borderColor: myTier.color, backgroundColor: myTier.color + "22" }]}>
+                    <Text style={{ fontSize: 22 }}>{myTier.medal}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[s.tierLabel, { color: myTier.color }]}>{myTier.label} Tier</Text>
+                    <Text style={[s.tierStreak, { color: c.text }]}>{me.current_streak ?? 0} day streak</Text>
+                    {myRank && (
+                      <Text style={[s.tierRank, { color: c.textMuted }]}>
+                        #{myRank} {tab === "global" ? "globally" : "among friends"}
+                      </Text>
+                    )}
+                  </View>
+                  <View style={{ alignItems: "flex-end" }}>
+                    <Text style={[s.kudosLabel, { color: c.textMuted }]}>Kudos</Text>
+                    <Text style={[s.kudosValue, { color: myTier.color }]}>🔥 {(me as any).total_kudos ?? 0}</Text>
+                  </View>
+                </View>
+
+                {myTier.key !== "diamond" && (
+                  <View style={{ marginTop: SPACE[14] }}>
+                    <View style={s.progressLabelRow}>
+                      <Text style={[s.progressLabel, { color: c.textMuted }]}>{myTier.label}</Text>
+                      <Text style={[s.progressLabel, { color: c.textMuted }]}>
+                        {me.current_streak ?? 0} / {nextTier.min} days → {nextTier.label}
+                      </Text>
+                    </View>
+                    <View style={[s.progressBar, { backgroundColor: c.border }]}>
+                      <View style={[s.progressFill, {
+                        width: `${progress}%` as any,
+                        backgroundColor: myTier.color,
+                      }]} />
+                    </View>
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* Tier legend */}
+            <View style={s.tierLegend}>
+              {[...TIERS].reverse().map((t) => (
+                <View key={t.key} style={[s.tierChip, { borderColor: t.color + "44", backgroundColor: c.bgCard }]}>
+                  <Text style={[s.tierChipText, { color: t.color }]}>{t.medal} {t.label}</Text>
+                </View>
+              ))}
+            </View>
+
+            {/* Tab switcher */}
+            <View style={s.tabs}>
+              {(["global", "friends"] as const).map((t) => (
+                <TouchableOpacity
+                  key={t}
+                  style={[s.tabBtn, { backgroundColor: c.bgCard }, tab === t && { backgroundColor: c.brand }]}
+                  onPress={() => setTab(t)}
+                >
+                  <Text style={[s.tabBtnText, { color: tab === t ? "#fff" : c.textMuted }]}>
+                    {t === "global" ? "🌍 Global" : "🤝 Friends"}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {loading && <ActivityIndicator color={c.brand} style={{ marginTop: SPACE[20] }} />}
+          </>
+        }
+        ListEmptyComponent={!loading ? (
+          <Text style={[s.emptyText, { color: c.textMuted }]}>
+            {tab === "friends" ? "Connect with people to see their streaks!" : "No users yet."}
+          </Text>
+        ) : null}
+        renderItem={({ item: user, index: i }) => {
+          const tier = getTier(user.current_streak ?? 0);
+          const isMe = me?.id === user.id;
+          const rankColor = i === 0 ? "#FFD700" : i === 1 ? "#C0C0C0" : i === 2 ? "#CD7F32" : c.textMuted;
+
+          return (
+            <View style={[
+              s.row,
+              { backgroundColor: c.bgCard, borderColor: c.border },
+              isMe && { backgroundColor: tier.color + "11", borderColor: tier.color + "44" },
+            ]}>
+              <Text style={[s.rank, { color: rankColor }]}>{rankDisplay(i)}</Text>
+              <Avatar
+                url={user.avatar_url}
+                name={user.username || user.full_name || "?"}
+                size={40}
+                color={tier.color}
+              />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={[s.rowName, { color: c.text }]} numberOfLines={1}>
+                  {user.full_name ?? user.username}
+                  {isMe ? <Text style={[s.youTag, { color: tier.color }]}> (you)</Text> : null}
+                </Text>
+                <Text style={[s.rowSub, { color: c.textMuted }]}>
+                  {tier.medal} {tier.label}{user.city ? ` · ${user.city}` : ""}
+                </Text>
+              </View>
+              <View style={{ alignItems: "flex-end" }}>
+                <Text style={[s.streakVal, { color: tier.color }]}>🔥 {user.current_streak ?? 0}</Text>
+                <Text style={[s.streakSub, { color: c.textMuted }]}>days</Text>
+              </View>
+            </View>
+          );
+        }}
+      />
+    </SafeAreaView>
+  );
+}
+
+const s = StyleSheet.create({
+  flex: { flex: 1 },
+  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: SPACE[16], paddingVertical: SPACE[12], gap: SPACE[12] },
+  backBtn: { padding: SPACE[4] },
+  title: { fontSize: 22, fontWeight: FONT.weight.extrabold },
+  subtitle: { fontSize: FONT.size.xs, marginTop: 2 },
+  list: { paddingHorizontal: SPACE[16], paddingBottom: SPACE[40], gap: 0 },
+  myTierCard: { borderRadius: RADIUS.lg, padding: SPACE[16], marginBottom: SPACE[16], borderWidth: 1 },
+  myTierRow: { flexDirection: "row", alignItems: "center", gap: SPACE[12] },
+  tierBadge: { width: 52, height: 52, borderRadius: 26, borderWidth: 2, alignItems: "center", justifyContent: "center" },
+  tierLabel: { fontSize: FONT.size.xs, fontWeight: FONT.weight.bold, textTransform: "uppercase", letterSpacing: 1 },
+  tierStreak: { fontSize: 18, fontWeight: FONT.weight.extrabold },
+  tierRank: { fontSize: FONT.size.xs },
+  kudosLabel: { fontSize: FONT.size.xs, marginBottom: 2 },
+  kudosValue: { fontSize: 18, fontWeight: FONT.weight.extrabold },
+  progressLabelRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: SPACE[4] },
+  progressLabel: { fontSize: FONT.size.xs },
+  progressBar: { height: 6, borderRadius: 3 },
+  progressFill: { height: 6, borderRadius: 3 },
+  tierLegend: { flexDirection: "row", gap: SPACE[6], marginBottom: SPACE[16], flexWrap: "wrap" },
+  tierChip: { borderRadius: RADIUS.pill, paddingHorizontal: SPACE[10], paddingVertical: SPACE[4], borderWidth: 1 },
+  tierChipText: { fontSize: FONT.size.xs, fontWeight: FONT.weight.semibold },
+  tabs: { flexDirection: "row", gap: SPACE[8], marginBottom: SPACE[16] },
+  tabBtn: { flex: 1, paddingVertical: SPACE[10], borderRadius: RADIUS.md, alignItems: "center" },
+  tabBtnText: { fontSize: FONT.size.sm, fontWeight: FONT.weight.bold },
+  row: { flexDirection: "row", alignItems: "center", gap: SPACE[12], borderWidth: 1, borderRadius: RADIUS.md, padding: SPACE[12], marginBottom: SPACE[8] },
+  rank: { width: 28, textAlign: "center", fontWeight: FONT.weight.extrabold, fontSize: FONT.size.base },
+  rowName: { fontSize: FONT.size.base, fontWeight: FONT.weight.bold },
+  youTag: { fontSize: FONT.size.xs, fontWeight: FONT.weight.semibold },
+  rowSub: { fontSize: FONT.size.xs, marginTop: 2 },
+  streakVal: { fontSize: FONT.size.lg, fontWeight: FONT.weight.extrabold },
+  streakSub: { fontSize: FONT.size.xs },
+  emptyText: { textAlign: "center", fontSize: FONT.size.base, marginTop: SPACE[20] },
+});
