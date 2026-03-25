@@ -39,7 +39,22 @@
           }
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#FF4500",
+          "sounds": [],
+          "iosDisplayInForeground": true
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "FlexMatches uses your location to show nearby training partners and sports venues."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

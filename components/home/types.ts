@@ -4,6 +4,7 @@ export type HomeProfile = {
   id:                  string;
   username:            string;
   full_name:           string | null;
+  avatar_url:          string | null;
   current_streak:      number;
   last_checkin_date:   string | null;
   match_count:         number;
@@ -45,8 +46,10 @@ export type SessionInfo = {
   id:           string;
   match_id:     string;
   sport:        string;
+  session_date: string;
   session_time: string | null;
-  status:       "confirmed" | "pending";
+  location:     string | null;
+  status:       "pending" | "accepted" | "completed" | "cancelled" | "declined";
   partner_name: string;
 };
 

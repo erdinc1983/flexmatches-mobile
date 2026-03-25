@@ -12,14 +12,15 @@
  * Real-time: Supabase Realtime channel refreshes the list on new messages.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, FlatList,
-  ActivityIndicator, RefreshControl,
+  ActivityIndicator, RefreshControl, Vibration,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { supabase } from "../../lib/supabase";
+import { notifyNewMessage, requestNotificationPermission } from "../../lib/notifications";
 import { useTheme, SPACE, FONT } from "../../lib/theme";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { ConversationRow } from "../../components/chat/ConversationRow";
@@ -48,10 +49,15 @@ export default function MessagesScreen() {
   const [loading,       setLoading]       = useState(true);
   const [refreshing,    setRefreshing]    = useState(false);
 
+  // Refs so realtime callbacks always see the latest values
+  const myIdRef        = useRef<string | null>(null);
+  const conversationsRef = useRef<Conversation[]>([]);
+
   const load = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     setMyId(user.id);
+    myIdRef.current = user.id;
 
     const { data: matches } = await supabase
       .from("matches")
@@ -130,15 +136,58 @@ export default function MessagesScreen() {
     });
 
     setConversations(convos);
+    conversationsRef.current = convos;
     setLoading(false);
   }, []);
 
-  useEffect(() => {
+  // Reload whenever the tab is focused (e.g. navigating back from a chat)
+  useFocusEffect(useCallback(() => {
     load();
+    // Request notification permission the first time the user sees the chat tab
+    requestNotificationPermission();
+  }, [load]));
 
+  useEffect(() => {
     const channel = supabase
       .channel("chat-inbox")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, () => load())
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
+        const msg = payload.new as { sender_id: string; match_id: string; content: string; created_at: string };
+        const isIncoming = myIdRef.current && msg.sender_id !== myIdRef.current;
+
+        // Vibration + notification — same as before
+        if (isIncoming) {
+          Vibration.vibrate(300);
+          const convo = conversationsRef.current.find((c) => c.matchId === msg.match_id);
+          notifyNewMessage(convo?.name ?? "New message", msg.content);
+        }
+
+        // Optimistic update only when conversations are already loaded
+        const current = conversationsRef.current;
+        if (current.length > 0 && current.some((c) => c.matchId === msg.match_id)) {
+          const updated = current.map((c) => {
+            if (c.matchId !== msg.match_id) return c;
+            return {
+              ...c,
+              lastMessage:   msg.content,
+              lastMessageAt: msg.created_at,
+              unreadCount:   isIncoming ? c.unreadCount + 1 : c.unreadCount,
+            };
+          });
+          updated.sort((a, b) => {
+            if (a.unreadCount > 0 && b.unreadCount === 0) return -1;
+            if (a.unreadCount === 0 && b.unreadCount > 0) return 1;
+            if (!a.lastMessageAt) return 1;
+            if (!b.lastMessageAt) return -1;
+            return new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime();
+          });
+          conversationsRef.current = updated;
+          setConversations([...updated]);
+        } else {
+          // Fallback: full reload (new conversation or not yet loaded)
+          load();
+        }
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages" }, () => load())
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };

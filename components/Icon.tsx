@@ -84,6 +84,11 @@ export const ICON_MAP = {
   error:         "alert-circle-outline",
   success:       "checkmark-circle-outline",
 
+  // View modes
+  cards:         "albums-outline",
+  list:          "list-outline",
+  map:           "map-outline",
+
   // Misc
   chevronDown:   "chevron-down",
   chevronUp:     "chevron-up",

@@ -1,7 +1,7 @@
-import { StyleSheet } from "react-native";
 import { Image } from "expo-image";
 
-const WEB_BASE = "https://flexmatches.com";
+const WEB_BASE      = "https://flexmatches.com";
+const SUPABASE_BASE = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "";
 
 // 12 male + 12 female cartoon avatars on the web server
 const MALE_AVATARS   = Array.from({ length: 12 }, (_, i) => `${WEB_BASE}/avatars/male/m${i + 1}.jpeg`);
@@ -15,13 +15,17 @@ function nameHash(name: string): number {
 }
 
 function cartoonAvatar(name: string): string {
-  return ALL_AVATARS[nameHash(name) % ALL_AVATARS.length];
+  // Ensure a non-empty seed so hash is stable
+  const seed = name?.trim() || "user";
+  return ALL_AVATARS[nameHash(seed) % ALL_AVATARS.length];
 }
 
 function resolveUrl(url: string | null | undefined): string | null {
-  if (!url) return null;
-  if (url.startsWith("http")) return url;
-  if (url.startsWith("/")) return `${WEB_BASE}${url}`;
+  if (!url || !url.trim()) return null;
+  if (url.startsWith("http"))  return url;
+  if (url.startsWith("/"))     return `${WEB_BASE}${url}`;
+  // Supabase storage relative path (e.g. "avatars/user123.jpg")
+  if (SUPABASE_BASE) return `${SUPABASE_BASE}/storage/v1/object/public/${url}`;
   return null;
 }
 
@@ -33,7 +37,7 @@ type Props = {
 
 export function Avatar({ url, name, size = 48 }: Props) {
   const radius = size / 2;
-  const src    = resolveUrl(url) ?? cartoonAvatar(name ?? "?");
+  const src    = resolveUrl(url) ?? cartoonAvatar(name);
 
   return (
     <Image
@@ -43,5 +47,3 @@ export function Avatar({ url, name, size = 48 }: Props) {
     />
   );
 }
-
-const styles = StyleSheet.create({});

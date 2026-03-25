@@ -29,7 +29,7 @@ export type BuddySession = {
   session_time: string | null;
   location:     string | null;
   notes:        string | null;
-  status:       "pending" | "accepted" | "confirmed" | "declined";
+  status:       "pending" | "accepted" | "completed" | "cancelled" | "declined";
 };
 
 export type SessionState =
@@ -41,7 +41,7 @@ export type SessionState =
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 export function getSessionState(session: BuddySession, myId: string): SessionState {
-  if (session.status === "confirmed") return "confirmed";
+  if (session.status === "completed") return "confirmed";
 
   if (session.status === "accepted") {
     return isDatePast(session.session_date) ? "needs_confirm" : "upcoming";

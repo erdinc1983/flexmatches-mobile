@@ -15,7 +15,8 @@ import { SectionHeader } from "../ui/SectionHeader";
 import type { SuggestedUser } from "./types";
 
 type Props = {
-  users: SuggestedUser[];
+  users:   SuggestedUser[];
+  onPress: (user: SuggestedUser) => void;
 };
 
 // Tag colour pairs (bg, fg) — rotates through for variety
@@ -26,7 +27,7 @@ const TAG_COLORS: Array<[string, string]> = [
   ["#A855F718", "#A855F7"],
 ];
 
-export function BestMatchesSection({ users }: Props) {
+export function BestMatchesSection({ users, onPress }: Props) {
   if (users.length === 0) return null;
 
   return (
@@ -44,7 +45,7 @@ export function BestMatchesSection({ users }: Props) {
           <MatchCard
             key={user.id}
             user={user}
-            onPress={() => router.push("/(tabs)/discover")}
+            onPress={() => onPress(user)}
           />
         ))}
       </ScrollView>
