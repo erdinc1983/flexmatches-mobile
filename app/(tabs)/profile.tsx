@@ -433,6 +433,17 @@ export default function ProfileScreen() {
           />
         )}
 
+        {/* ── Settings button ─────────────────────────────────────────────── */}
+        {!editing && (
+          <TouchableOpacity
+            style={[s.settingsBtn, { borderColor: c.border, backgroundColor: c.bgCard }]}
+            onPress={() => router.push("/settings")}
+            activeOpacity={0.8}
+          >
+            <Text style={[s.settingsBtnText, { color: c.textSecondary }]}>⚙️  Settings</Text>
+          </TouchableOpacity>
+        )}
+
         {/* ── Admin button ────────────────────────────────────────────────── */}
         {isAdmin && !editing && (
           <TouchableOpacity
@@ -440,7 +451,7 @@ export default function ProfileScreen() {
             onPress={() => router.push("/admin")}
             activeOpacity={0.8}
           >
-            <Text style={[s.adminBtnText, { color: "#f59e0b" }]}>⚙️  Admin Panel</Text>
+            <Text style={[s.adminBtnText, { color: "#f59e0b" }]}>🛡️  Admin Panel</Text>
           </TouchableOpacity>
         )}
 
@@ -1085,6 +1096,10 @@ const s = StyleSheet.create({
   // Edit button
   editBtn:     { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: SPACE[8], borderRadius: RADIUS.xl, paddingVertical: SPACE[16], borderWidth: 1.5 },
   editBtnText: { fontWeight: FONT.weight.extrabold, fontSize: FONT.size.md },
+
+  // Settings
+  settingsBtn:     { borderRadius: RADIUS.xl, paddingVertical: SPACE[16], borderWidth: 1, alignItems: "center" },
+  settingsBtnText: { fontWeight: FONT.weight.semibold, fontSize: FONT.size.md },
 
   // Admin
   adminBtn:     { borderRadius: RADIUS.xl, paddingVertical: SPACE[16], borderWidth: 1, alignItems: "center" },
