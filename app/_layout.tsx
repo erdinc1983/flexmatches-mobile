@@ -3,6 +3,7 @@ import { Stack, router } from "expo-router";
 import { Session } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
 import { ThemeProvider } from "../lib/theme";
+import { NotificationProvider } from "../lib/notificationContext";
 
 export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null);
@@ -32,6 +33,7 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider>
+      <NotificationProvider>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="index" />
         <Stack.Screen name="(auth)" />
@@ -41,6 +43,7 @@ export default function RootLayout() {
         <Stack.Screen name="search" options={{ presentation: "card", animation: "slide_from_right" }} />
         <Stack.Screen name="(tabs)/leaderboard" options={{ presentation: "card", animation: "slide_from_right" }} />
       </Stack>
+      </NotificationProvider>
     </ThemeProvider>
   );
 }

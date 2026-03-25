@@ -1,10 +1,13 @@
+import { View, Text, StyleSheet } from "react-native";
 import { Tabs } from "expo-router";
 import { useTheme } from "../../lib/theme";
+import { useNotifications } from "../../lib/notificationContext";
 import { Icon } from "../../components/Icon";
 
 export default function TabsLayout() {
   const { theme } = useTheme();
   const c = theme.colors;
+  const { unreadCount } = useNotifications();
 
   return (
     <Tabs
@@ -63,7 +66,14 @@ export default function TabsLayout() {
         options={{
           title: "Profile",
           tabBarIcon: ({ focused, color }) => (
-            <Icon name={focused ? "profileActive" : "profile"} size={24} color={color} />
+            <View>
+              <Icon name={focused ? "profileActive" : "profile"} size={24} color={color} />
+              {unreadCount > 0 && (
+                <View style={[badge.dot, { backgroundColor: c.brand }]}>
+                  <Text style={badge.dotText}>{unreadCount > 9 ? "9+" : unreadCount}</Text>
+                </View>
+              )}
+            </View>
           ),
         }}
       />
@@ -76,3 +86,15 @@ export default function TabsLayout() {
     </Tabs>
   );
 }
+
+const badge = StyleSheet.create({
+  dot: {
+    position: "absolute",
+    top: -4, right: -6,
+    minWidth: 16, height: 16,
+    borderRadius: 8,
+    alignItems: "center", justifyContent: "center",
+    paddingHorizontal: 3,
+  },
+  dotText: { color: "#fff", fontSize: 9, fontWeight: "800" },
+});

@@ -22,6 +22,7 @@ import { useTheme, SPACE, FONT, RADIUS, PALETTE, BRAND } from "../../lib/theme";
 import { Icon } from "../../components/Icon";
 import { Avatar } from "../../components/Avatar";
 import { TIERS, BADGES, BADGE_MAP, calcTier, calcUserPoints, type BadgeKey, type Tier } from "../../lib/badges";
+import { useNotifications } from "../../lib/notificationContext";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const FITNESS_LEVELS = ["beginner", "intermediate", "advanced"] as const;
@@ -142,6 +143,7 @@ function getAvailabilityDays(av: Record<string, boolean> | null | undefined): st
 export default function ProfileScreen() {
   const { theme } = useTheme();
   const c = theme.colors;
+  const { unreadCount } = useNotifications();
 
   const [profile,           setProfile]           = useState<Profile | null>(null);
   const [loading,           setLoading]           = useState(true);
@@ -355,7 +357,12 @@ export default function ProfileScreen() {
             onPress={() => router.push("/notifications")}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Icon name="notification" size={22} color={c.textMuted} />
+            <Icon name="notification" size={22} color={unreadCount > 0 ? c.brand : c.textMuted} />
+            {unreadCount > 0 && (
+              <View style={[s.bellBadge, { backgroundColor: c.brand }]}>
+                <Text style={s.bellBadgeText}>{unreadCount > 9 ? "9+" : unreadCount}</Text>
+              </View>
+            )}
           </TouchableOpacity>
 
           <TouchableOpacity style={s.avatarWrap} onPress={pickAndUploadPhoto} activeOpacity={0.8}>
@@ -981,6 +988,8 @@ const s = StyleSheet.create({
   // Hero
   hero:          { alignItems: "center", paddingTop: SPACE[16], gap: SPACE[8] },
   bellBtn:       { position: "absolute", top: SPACE[16], right: 0, width: 40, height: 40, alignItems: "center", justifyContent: "center" },
+  bellBadge:     { position: "absolute", top: 4, right: 4, minWidth: 16, height: 16, borderRadius: 8, alignItems: "center", justifyContent: "center", paddingHorizontal: 3 },
+  bellBadgeText: { color: "#fff", fontSize: 9, fontWeight: "800" },
   avatarWrap:    { position: "relative", marginBottom: SPACE[4] },
   cameraBtn:     { position: "absolute", bottom: 0, right: 0, width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center", borderWidth: 2 },
   levelDot:      { position: "absolute", bottom: 0, left: 0, width: 18, height: 18, borderRadius: 9, borderWidth: 2.5 },
