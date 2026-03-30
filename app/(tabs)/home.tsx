@@ -878,6 +878,20 @@ function sportIcon(sport: string): import("../../components/Icon").IconName {
   return "workout";
 }
 
+function sportEmoji(sport: string): string {
+  const lower = sport.toLowerCase();
+  if (lower.includes("yoga") || lower.includes("pilates")) return "🧘";
+  if (lower.includes("run") || lower.includes("cardio"))   return "🏃";
+  if (lower.includes("cycl") || lower.includes("bike"))    return "🚴";
+  if (lower.includes("swim"))                              return "🏊";
+  if (lower.includes("box"))                               return "🥊";
+  if (lower.includes("tennis"))                            return "🎾";
+  if (lower.includes("basket"))                            return "🏀";
+  if (lower.includes("soccer") || lower.includes("football")) return "⚽";
+  if (lower.includes("hik") || lower.includes("climb"))    return "🧗";
+  return "🏋️";
+}
+
 const us = StyleSheet.create({
   sectionTitle: { ...TYPE.sectionTitle },
   card:         { borderRadius: RADIUS.xl, borderWidth: 1, overflow: "hidden" },
