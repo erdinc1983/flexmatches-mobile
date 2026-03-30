@@ -1,45 +1,57 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
-import { useTheme, SPACE, FONT, RADIUS } from "../../lib/theme";
-import { Icon, IconName } from "../Icon";
+import { useTheme, SPACE, FONT, RADIUS, SHADOW } from "../../lib/theme";
 
 type Props = {
-  streak:         number;
-  matchCount:     number;
-  workoutsMonth:  number;
+  streak:       number;
+  matchCount:   number;
+  weekSessions: number;
 };
 
-export function MomentumStrip({ streak, matchCount, workoutsMonth }: Props) {
+export function MomentumStrip({ streak, matchCount, weekSessions }: Props) {
   const { theme } = useTheme();
   const c = theme.colors;
 
   return (
-    <View style={[s.strip, { borderColor: c.border, backgroundColor: c.bgCard }]}>
-      <Stat icon="streakActive" value={streak}        label="Streak"     color={c.brand}   />
-      <View style={[s.div, { backgroundColor: c.border }]} />
-      <Stat icon="matchActive"  value={matchCount}    label="Matches"    color="#22C55E"   />
-      <View style={[s.div, { backgroundColor: c.border }]} />
-      <Stat icon="workout"      value={workoutsMonth} label="This month" color="#A855F7"   />
+    <View style={[s.card, { backgroundColor: c.bgCard, borderColor: c.border }, SHADOW.sm]}>
+      <StatItem color={c.brand}   value={`${streak}d`}       label="Streak"   />
+      <View style={[s.divider, { backgroundColor: c.border }]} />
+      <StatItem color="#3B82F6"   value={`${matchCount}`}    label="Matches"  />
+      <View style={[s.divider, { backgroundColor: c.border }]} />
+      <StatItem color="#22C55E"   value={`${weekSessions}`}  label="Sessions" />
     </View>
   );
 }
 
-function Stat({ icon, value, label, color }: { icon: IconName; value: number; label: string; color: string }) {
+function StatItem({ color, value, label }: { color: string; value: string; label: string }) {
   const { theme } = useTheme();
   const c = theme.colors;
+
   return (
-    <View style={s.stat}>
-      <Icon name={icon} size={15} color={color} />
-      <Text style={[s.value, { color }]}>{value}</Text>
-      <Text style={[s.label, { color: c.textMuted }]}>{label}</Text>
+    <View style={s.item}>
+      <View style={[s.dot, { backgroundColor: color }]} />
+      <Text style={[s.value, { color: c.text }]}>{value}</Text>
+      <Text style={[s.label, { color: c.textFaint }]}>{label}</Text>
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  strip: { flexDirection: "row", alignItems: "center", borderRadius: RADIUS.lg, borderWidth: 1, paddingVertical: SPACE[14] },
-  stat:  { flex: 1, alignItems: "center", gap: SPACE[4] },
-  div:   { width: 1, height: 30 },
-  value: { fontSize: FONT.size.xl, fontWeight: FONT.weight.black },
-  label: { fontSize: FONT.size.xs, fontWeight: FONT.weight.semibold },
+  card: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: RADIUS.xl,
+    borderWidth: 1,
+    paddingVertical: SPACE[16],
+    paddingHorizontal: SPACE[10],
+  },
+  item: {
+    flex: 1,
+    alignItems: "center",
+    gap: SPACE[4],
+  },
+  dot:   { width: 8, height: 8, borderRadius: 4 },
+  value: { fontSize: FONT.size.xl, fontWeight: FONT.weight.black, letterSpacing: -0.5 },
+  label: { fontSize: 11, fontWeight: FONT.weight.semibold, letterSpacing: 0.2 },
+  divider: { width: 1, height: 38, marginHorizontal: SPACE[4] },
 });
