@@ -7,9 +7,10 @@
  */
 
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import { useTheme, SPACE, FONT, RADIUS } from "../../lib/theme";
+import { useTheme, SPACE, FONT, RADIUS, TYPE } from "../../lib/theme";
 import { Icon, IconName } from "../Icon";
 import type { PrimaryAction } from "./types";
 
@@ -42,6 +43,7 @@ type CardConfig = {
   cardBg:    string;
   cardBorder:string;
   ctaBg:     string;
+  isHero?:   boolean;
 };
 
 export function PrimaryActionCard({ action, onLogWorkout }: Props) {
@@ -66,6 +68,34 @@ export function PrimaryActionCard({ action, onLogWorkout }: Props) {
           </Text>
         </View>
       </View>
+    );
+  }
+
+  // Hero variant — full orange gradient (streak / log workout)
+  if (cfg.isHero) {
+    return (
+      <LinearGradient
+        colors={["#FFB347", "#FF7C1F", "#E03200"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={s.hero}
+      >
+        {/* Bottom wave decoration */}
+        <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+          <View style={s.waveBottom1} />
+          <View style={s.waveBottom2} />
+        </View>
+
+        <Text style={s.heroTitle}>{cfg.title}</Text>
+        <Text style={s.heroSub}>{cfg.subtitle}</Text>
+        <TouchableOpacity
+          style={s.heroBtn}
+          onPress={cfg.ctaAction}
+          activeOpacity={0.85}
+        >
+          <Text style={s.heroBtnText}>{cfg.ctaLabel}</Text>
+        </TouchableOpacity>
+      </LinearGradient>
     );
   }
 
@@ -180,15 +210,16 @@ function getConfig(
       return {
         eyebrow:    action.streak > 0 ? "DON'T BREAK IT" : "START TODAY",
         title:      action.streak > 0 ? `${action.streak}-day streak on the line` : "Start your first streak",
-        subtitle:   action.streak > 0 ? "Log tonight's session to keep it alive." : "Log your first workout to begin.",
-        ctaLabel:   "Log Workout →",
+        subtitle:   action.streak > 0 ? "Every session strengthens the habit. Keep it going." : "Log your first workout to begin your streak.",
+        ctaLabel:   "Log Workout",
         ctaAction:  onLogWorkout,
         iconName:   "streakActive",
         iconColor:  c.brand,
         iconBg:     c.brandSubtle,
         cardBg:     c.bgCard,
         cardBorder: c.brandBorder,
-        ctaBg:      c.brand,
+        ctaBg:      "#CC3700",
+        isHero:     true,
       };
   }
 }
@@ -197,11 +228,23 @@ const s = StyleSheet.create({
   card:       { borderRadius: RADIUS.xl, padding: SPACE[16], gap: SPACE[14], borderWidth: 1 },
   top:        { flexDirection: "row", alignItems: "flex-start", gap: SPACE[12] },
   iconWrap:   { width: 44, height: 44, borderRadius: RADIUS.md, alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  eyebrow:    { fontSize: FONT.size.xs, fontWeight: FONT.weight.extrabold, textTransform: "uppercase", letterSpacing: 1.5 },
-  title:      { fontSize: FONT.size.xl, fontWeight: FONT.weight.black, lineHeight: FONT.size.xl * 1.2 },
-  subtitle:   { fontSize: FONT.size.sm, lineHeight: FONT.size.sm * 1.5 },
-  cta:        { borderRadius: RADIUS.lg, paddingVertical: SPACE[14], alignItems: "center" },
-  ctaText:    { color: "#fff", fontSize: FONT.size.md, fontWeight: FONT.weight.extrabold },
+  eyebrow:    { ...TYPE.label },
+  title:      { ...TYPE.sectionTitle, lineHeight: 26 },
+  subtitle:   { ...TYPE.caption, lineHeight: 18 },
+  cta:        { borderRadius: RADIUS.pill, paddingVertical: SPACE[16], alignItems: "center" },
+  ctaText:    { ...TYPE.button, color: "#fff" },
+
+  // Hero gradient variant
+  hero:        { borderRadius: RADIUS.xxl, paddingTop: SPACE[32], paddingBottom: SPACE[28], paddingHorizontal: SPACE[24], gap: SPACE[12], alignItems: "center", overflow: "hidden" },
+  heroTitle:   { ...TYPE.screenTitle, color: "#fff", textAlign: "center" },
+  heroSub:     { ...TYPE.body, color: "rgba(255,255,255,0.88)", textAlign: "center", lineHeight: 22 },
+  heroSubBold: { fontWeight: FONT.weight.bold, color: "#fff" },
+  heroBtn:     { backgroundColor: "#C83000", borderRadius: RADIUS.pill, paddingVertical: SPACE[16], paddingHorizontal: SPACE[48], alignItems: "center", marginTop: SPACE[6] },
+  heroBtnText: { ...TYPE.button, color: "#fff" },
+
+  // Bottom wave decoration — large warm ellipses clipped at bottom
+  waveBottom1: { position: "absolute", width: 500, height: 200, borderRadius: 100, backgroundColor: "rgba(255,255,255,0.10)", bottom: -120, left: -60 },
+  waveBottom2: { position: "absolute", width: 400, height: 160, borderRadius: 80,  backgroundColor: "rgba(255,255,255,0.07)", bottom: -80,  left: 40 },
 
   // "done" compact variant
   compact:    { flexDirection: "row", alignItems: "center", gap: SPACE[10], borderRadius: RADIUS.lg, padding: SPACE[14], borderWidth: 1 },

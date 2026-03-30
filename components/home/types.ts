@@ -11,6 +11,7 @@ export type HomeProfile = {
   workout_count_month: number;
   is_at_gym:           boolean;
   gym_checkin_at:      string | null;
+  gym_name:            string | null;
 };
 
 export type PendingRequest = {

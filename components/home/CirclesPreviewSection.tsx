@@ -1,15 +1,12 @@
 /**
- * CirclesPreviewSection
- *
- * Lightweight — shows max 2 circles. One line each.
- * Tapping navigates to the Circles tab.
+ * CirclesPreviewSection — "Local Circles"
+ * 2 side-by-side cards with emoji, name, member count, Join button.
  */
 
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { router } from "expo-router";
-import { useTheme, SPACE, FONT, RADIUS } from "../../lib/theme";
-import { Icon } from "../Icon";
+import { useTheme, SPACE, FONT, RADIUS, SHADOW, TYPE } from "../../lib/theme";
 import { SectionHeader } from "../ui/SectionHeader";
 import type { CirclePreview } from "./types";
 
@@ -19,50 +16,79 @@ type Props = {
 
 export function CirclesPreviewSection({ circles }: Props) {
   if (circles.length === 0) return null;
+  const visible = circles.slice(0, 4);
 
   return (
     <View style={{ gap: SPACE[10] }}>
       <SectionHeader
-        title="Active Circles"
+        title="Local Circles"
         action={{ label: "See all", onPress: () => router.push("/(tabs)/circles" as any) }}
       />
-      <View style={{ gap: SPACE[8] }}>
-        {circles.map((circle) => (
-          <CircleRow key={circle.id} circle={circle} />
+      <View style={s.grid}>
+        {visible.map((circle) => (
+          <CircleCard key={circle.id} circle={circle} />
         ))}
       </View>
     </View>
   );
 }
 
-function CircleRow({ circle }: { circle: CirclePreview }) {
-  const { theme } = useTheme();
+function CircleCard({ circle }: { circle: CirclePreview }) {
+  const { theme, isDark } = useTheme();
   const c = theme.colors;
 
+  const BG_LIGHT: Record<string, string> = {
+    "🏋️": "#E8F4FD",
+    "🏃": "#FFF3E0",
+    "⚽": "#E8F5E9",
+    "🧘": "#F3E5F5",
+    "🚴": "#E0F2F1",
+    "🏊": "#E3F2FD",
+  };
+  const BG_DARK: Record<string, string> = {
+    "🏋️": "#0D1A2D",
+    "🏃": "#1A1200",
+    "⚽": "#0D2D1A",
+    "🧘": "#1A0D20",
+    "🚴": "#091A18",
+    "🏊": "#0A1520",
+  };
+  const emoji = circle.icon ?? "🏟️";
+  const bg    = isDark ? (BG_DARK[emoji] ?? "#1A1610") : (BG_LIGHT[emoji] ?? "#F5F0EA");
+
   return (
-    <TouchableOpacity
-      style={[s.row, { backgroundColor: c.bgCard, borderColor: c.border }]}
-      onPress={() => router.push("/(tabs)/circles" as any)}
-      activeOpacity={0.8}
-    >
-      <View style={[s.iconWrap, { backgroundColor: c.bgCardAlt }]}>
-        <Text style={s.icon}>{circle.icon || "🏋️"}</Text>
+    <View style={[s.card, { borderColor: c.border, ...SHADOW.sm }]}>
+      {/* Warm gradient-ish header area */}
+      <View style={[s.cardTop, { backgroundColor: bg }]}>
+        <Text style={s.emoji}>{emoji}</Text>
       </View>
-      <View style={{ flex: 1, gap: 2 }}>
+
+      {/* Content */}
+      <View style={[s.cardBody, { backgroundColor: c.bgCard }]}>
         <Text style={[s.name, { color: c.text }]} numberOfLines={1}>{circle.name}</Text>
         <Text style={[s.members, { color: c.textMuted }]}>
-          {circle.member_count} {circle.member_count === 1 ? "member" : "members"}
+          {circle.member_count} Members Nearby
         </Text>
+        <TouchableOpacity
+          style={[s.joinBtn, { backgroundColor: c.brand }]}
+          onPress={() => router.push("/(tabs)/circles" as any)}
+          activeOpacity={0.85}
+        >
+          <Text style={s.joinText}>Join Circle</Text>
+        </TouchableOpacity>
       </View>
-      <Icon name="chevronRight" size={16} color={c.textFaint} />
-    </TouchableOpacity>
+    </View>
   );
 }
 
 const s = StyleSheet.create({
-  row:      { flexDirection: "row", alignItems: "center", gap: SPACE[12], borderRadius: RADIUS.lg, padding: SPACE[12], borderWidth: 1 },
-  iconWrap: { width: 40, height: 40, borderRadius: RADIUS.md, alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  icon:     { fontSize: 20 },
-  name:     { fontSize: FONT.size.base, fontWeight: FONT.weight.semibold },
-  members:  { fontSize: FONT.size.sm },
+  grid:    { flexDirection: "row", gap: SPACE[10] },
+  card:    { flex: 1, borderRadius: RADIUS.xl, borderWidth: 1, overflow: "hidden" },
+  cardTop: { height: 72, alignItems: "center", justifyContent: "center" },
+  emoji:   { fontSize: 32 },
+  cardBody:{ padding: SPACE[12], gap: SPACE[6] },
+  name:    { ...TYPE.cardTitle },
+  members: { ...TYPE.caption },
+  joinBtn: { borderRadius: RADIUS.pill, paddingVertical: SPACE[10], alignItems: "center", marginTop: SPACE[6] },
+  joinText:{ color: "#fff", ...TYPE.caption, fontWeight: FONT.weight.bold },
 });

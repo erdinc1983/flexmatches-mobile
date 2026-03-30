@@ -30,6 +30,7 @@ import { HomeHeader }             from "../../components/home/HomeHeader";
 import { PrimaryActionCard }      from "../../components/home/PrimaryActionCard";
 import { PendingRequestsSection } from "../../components/home/PendingRequestsSection";
 import { BestMatchesSection }     from "../../components/home/BestMatchesSection";
+import { SectionHeader }          from "../../components/ui/SectionHeader";
 import { CirclesPreviewSection }  from "../../components/home/CirclesPreviewSection";
 import { MomentumStrip }          from "../../components/home/MomentumStrip";
 import { ProfileSheet }           from "../../components/discover/ProfileSheet";
@@ -99,8 +100,6 @@ export default function HomeScreen() {
   const [loadingCircleMem,  setLoadingCircleMem]  = useState(false);
   const [selectedSession,   setSelectedSession]   = useState<SessionInfo | null>(null);
 
-  const hour     = new Date().getHours();
-  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
   const today    = localToday();
 
   // Check nudge dismiss state once on mount
@@ -135,7 +134,7 @@ export default function HomeScreen() {
       { data: blockData },
     ] = await Promise.all([
       supabase.from("users")
-        .select("id, username, full_name, avatar_url, current_streak, last_checkin_date, is_at_gym, gym_checkin_at, sports, fitness_level, city, availability, bio")
+        .select("id, username, full_name, avatar_url, current_streak, last_checkin_date, is_at_gym, gym_checkin_at, sports, fitness_level, city, availability, bio, gym_name")
         .eq("id", uid).single(),
       supabase.from("matches").select("*", { count: "exact", head: true })
         .eq("status", "accepted").or(`sender_id.eq.${uid},receiver_id.eq.${uid}`),
@@ -205,6 +204,7 @@ export default function HomeScreen() {
       workout_count_month: workoutMonth ?? 0,
       is_at_gym:           atGym,
       gym_checkin_at:      profileData?.gym_checkin_at ?? null,
+      gym_name:            profileData?.gym_name ?? null,
     });
 
     // Profile completeness check
@@ -611,7 +611,6 @@ export default function HomeScreen() {
         {/* ── Header + stats always visible above the fold ── */}
         <HomeHeader
           name={name}
-          greeting={greeting}
           avatarUrl={profile?.avatar_url}
           unreadCount={unreadCount}
         />
@@ -631,6 +630,7 @@ export default function HomeScreen() {
             isAtGym={profile?.is_at_gym ?? false}
             toggling={gymToggling}
             onToggle={toggleGym}
+            gymName={profile?.gym_name ?? null}
           />
         )}
 
@@ -676,12 +676,16 @@ export default function HomeScreen() {
           onPress={() => router.push("/(tabs)/challenges" as any)}
           activeOpacity={0.8}
         >
-          <Text style={cs.bannerEmoji}>🏆</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={[cs.bannerTitle, { color: c.text }]}>Challenges</Text>
-            <Text style={[cs.bannerSub, { color: c.textMuted }]}>Join community fitness challenges</Text>
+          <View style={cs.iconWrap}>
+            <Text style={cs.bannerEmoji}>🏆</Text>
           </View>
-          <Icon name="chevronRight" size={16} color={c.textMuted} />
+          <View style={{ flex: 1 }}>
+            <Text style={[cs.bannerTitle, { color: c.text }]}>Community Challenges</Text>
+            <Text style={[cs.bannerSub, { color: c.textMuted }]}>Compete with local athletes</Text>
+          </View>
+          <View style={[cs.pill, { backgroundColor: c.brandSubtle }]}>
+            <Text style={[cs.pillText, { color: c.brand }]}>Join</Text>
+          </View>
         </TouchableOpacity>
       </ScrollView>
 
@@ -807,14 +811,18 @@ function UpcomingSessionsSection({ sessions, onSelect }: {
     return d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
   }
 
-  const STATUS: Record<string, { color: string; bg: string }> = {
-    accepted: { color: "#fff",     bg: "#22C55E" },
-    pending:  { color: "#92400E",  bg: "#FEF3C7" },
+  const STATUS: Record<string, { color: string; bg: string; dot: string }> = {
+    accepted: { color: "#16A34A", bg: "#DCFCE7", dot: "#16A34A" },
+    pending:  { color: "#D97706", bg: "#FEF3C7", dot: "#D97706" },
   };
 
   return (
     <View style={{ gap: SPACE[10] }}>
-      <Text style={[us.sectionTitle, { color: c.text }]}>Upcoming Sessions</Text>
+      <SectionHeader
+        title="Upcoming Sessions"
+        count={sessions.length}
+        action={{ label: "See all", onPress: () => router.push("/(tabs)/messages") }}
+      />
 
       <View style={[us.card, SHADOW.sm, { backgroundColor: c.bgCard, borderColor: c.border }]}>
         {sessions.map((sess, idx) => {
@@ -842,8 +850,9 @@ function UpcomingSessionsSection({ sessions, onSelect }: {
                     <Text style={[us.partnerName, { color: c.text }]}>with {sess.partner_name}</Text>
                   </Text>
                   <View style={[us.badge, { backgroundColor: st.bg }]}>
+                    <View style={[us.badgeDot, { backgroundColor: st.dot }]} />
                     <Text style={[us.badgeText, { color: st.color }]}>
-                      {sess.status.charAt(0).toUpperCase() + sess.status.slice(1)}
+                      {sess.status === "accepted" ? "Confirmed" : "Pending"}
                     </Text>
                   </View>
                 </View>
@@ -856,7 +865,7 @@ function UpcomingSessionsSection({ sessions, onSelect }: {
                 {/* Location */}
                 {sess.location && (
                   <View style={us.locRow}>
-                    <Icon name="location" size={11} color={c.textMuted} />
+                    <Text style={{ fontSize: 11 }}>📍</Text>
                     <Text style={[us.meta, { color: c.textMuted }]} numberOfLines={1}>{sess.location}</Text>
                   </View>
                 )}
@@ -893,22 +902,22 @@ function sportEmoji(sport: string): string {
 }
 
 const us = StyleSheet.create({
-  sectionTitle: { ...TYPE.sectionTitle },
   card:         { borderRadius: RADIUS.xl, borderWidth: 1, overflow: "hidden" },
   row:          { flexDirection: "row", alignItems: "center", gap: SPACE[12], paddingHorizontal: SPACE[16], paddingVertical: SPACE[16] },
   iconWrap:     { width: 42, height: 42, borderRadius: RADIUS.md, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   rowTop:       { flexDirection: "row", alignItems: "center", gap: SPACE[8] },
   sport:        { ...TYPE.bodyMedium, flex: 1 },
   partnerName:  { fontWeight: FONT.weight.bold },
-  badge:        { paddingHorizontal: SPACE[8], paddingVertical: 3, borderRadius: RADIUS.pill },
+  badge:        { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: SPACE[10], paddingVertical: 4, borderRadius: RADIUS.pill },
+  badgeDot:     { width: 6, height: 6, borderRadius: 3 },
   badgeText:    { fontSize: 12, fontWeight: FONT.weight.bold },
   meta:         { ...TYPE.caption },
   locRow:       { flexDirection: "row", alignItems: "center", gap: SPACE[4] },
 });
 
 // ─── Gym Strip ────────────────────────────────────────────────────────────────
-function GymStrip({ isAtGym, toggling, onToggle }: {
-  isAtGym: boolean; toggling: boolean; onToggle: () => void;
+function GymStrip({ isAtGym, toggling, onToggle, gymName }: {
+  isAtGym: boolean; toggling: boolean; onToggle: () => void; gymName?: string | null;
 }) {
   const { theme, isDark } = useTheme();
   const c = theme.colors;
@@ -930,40 +939,42 @@ function GymStrip({ isAtGym, toggling, onToggle }: {
       activeOpacity={0.75}
       disabled={toggling}
     >
-      {/* Decorative ripple circles — right side */}
+      {/* Decorative wave lines — right side */}
       <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-        <View style={[gs.ripple1, { borderColor: c.bgCardAlt }]} />
-        <View style={[gs.ripple2, { borderColor: c.bgCardAlt }]} />
-        <View style={[gs.ripple3, { borderColor: c.bgCardAlt }]} />
+        <View style={[gs.wave1, { borderColor: isDark ? "#ffffff08" : "#00000008" }]} />
+        <View style={[gs.wave2, { borderColor: isDark ? "#ffffff06" : "#00000006" }]} />
+        <View style={[gs.wave3, { borderColor: isDark ? "#ffffff04" : "#00000005" }]} />
       </View>
 
-      {/* Top row — icon + title + subtitle */}
+      {/* Single row — icon + text + toggle pill */}
       <View style={gs.topRow}>
-        <View style={[gs.pinWrap, { backgroundColor: isAtGym ? "#22C55E18" : "#FF450012" }]}>
+        <View style={[gs.pinWrap, { backgroundColor: isAtGym ? "#22C55E18" : "#FF450014" }]}>
           {toggling
             ? <ActivityIndicator size="small" color={pinColor} />
-            : <Icon name="location" size={24} color={pinColor} />
+            : <Icon name="location" size={22} color={pinColor} />
           }
         </View>
         <View style={{ flex: 1 }}>
           <Text style={[gs.label, { color: isAtGym ? PALETTE.success : c.text }]}>
-            {isAtGym ? "At the gym now" : "Check in at gym"}
+            {isAtGym ? "You're checked in" : "Check in at your gym"}
           </Text>
-          <Text style={[gs.sub, { color: c.textMuted }]}>
-            {isAtGym ? "Your matches can see you're here" : "Find partners at your gym"}
+          <View style={gs.metaRow}>
+            <Text style={{ fontSize: 11 }}>📍</Text>
+            <Text style={[gs.gymName, { color: c.textMuted }]}>{gymName ?? "Your gym"}</Text>
+            {isAtGym && (
+              <>
+                <Text style={[gs.gymName, { color: c.textFaint }]}>·</Text>
+                <View style={gs.activeDot} />
+                <Text style={gs.activeText}>Active now</Text>
+              </>
+            )}
+          </View>
+        </View>
+        <View style={[gs.togglePill, { backgroundColor: isAtGym ? "#DCFCE7" : "#FEF0E8" }]}>
+          <Text style={[gs.toggleText, { color: isAtGym ? PALETTE.success : c.brand }]}>
+            {isAtGym ? "Check Out" : "Check In"}
           </Text>
         </View>
-      </View>
-
-      {/* Divider */}
-      <View style={[gs.divider, { backgroundColor: c.border }]} />
-
-      {/* Bottom row — gym name */}
-      <View style={gs.bottomRow}>
-        <Icon name="location" size={13} color={c.textMuted} />
-        <Text style={[gs.gymName, { color: c.textSecondary }]}>
-          {isAtGym ? "Checked in" : "Summit Fitness"}
-        </Text>
       </View>
     </TouchableOpacity>
   );
@@ -976,31 +987,37 @@ function ActiveNowStrip({ partners }: { partners: ActivePartner[] }) {
 
   return (
     <View style={[an.card, { backgroundColor: c.bgCard, borderColor: c.border }]}>
-      <View style={an.header}>
-        <View style={an.dot} />
-        <Text style={[an.title, { color: c.text }]}>Active now</Text>
-        <Text style={[an.sub, { color: c.textMuted }]}>
-          {partners.length} {partners.length === 1 ? "buddy" : "buddies"} online
-        </Text>
+      {/* Subtle green top accent */}
+      <View style={[an.topAccent, { backgroundColor: PALETTE.success }]} />
+      <View style={an.inner}>
+        <View style={an.header}>
+          <View style={an.liveRow}>
+            <View style={an.dot} />
+            <Text style={[an.title, { color: c.text }]}>Active Now</Text>
+          </View>
+          <Text style={[an.sub, { color: c.textMuted }]}>
+            {partners.length} {partners.length === 1 ? "buddy" : "buddies"} · tap to chat
+          </Text>
+        </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={an.row}>
+          {partners.map((p) => (
+            <Pressable
+              key={p.id}
+              style={an.item}
+              onPress={() => router.push(`/chat/${p.match_id}` as any)}
+            >
+              <View style={an.avatarWrap}>
+                <Avatar url={p.avatar_url} name={p.full_name ?? p.username} size={52} />
+                {p.is_at_gym && <View style={[an.gymBadge, { borderColor: c.bgCard }]} />}
+                <View style={[an.activeDot, { borderColor: c.bgCard }]} />
+              </View>
+              <Text style={[an.name, { color: c.textSecondary }]} numberOfLines={1}>
+                {p.full_name?.split(" ")[0] ?? p.username}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
       </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={an.row}>
-        {partners.map((p) => (
-          <Pressable
-            key={p.id}
-            style={an.item}
-            onPress={() => router.push(`/chat/${p.match_id}` as any)}
-          >
-            <View style={an.avatarWrap}>
-              <Avatar url={p.avatar_url} name={p.full_name ?? p.username} size={46} />
-              {p.is_at_gym && <View style={[an.gymBadge, { borderColor: c.bgCard }]} />}
-              <View style={[an.activeDot, { borderColor: c.bgCard }]} />
-            </View>
-            <Text style={[an.name, { color: c.textSecondary }]} numberOfLines={1}>
-              {p.full_name?.split(" ")[0] ?? p.username}
-            </Text>
-          </Pressable>
-        ))}
-      </ScrollView>
     </View>
   );
 }
@@ -1079,32 +1096,33 @@ function NewCirclesSection({ circles, onPress, onJoin, onDismiss }: {
   const c = theme.colors;
   if (circles.length === 0) return null;
   return (
-    <View style={{ marginBottom: SPACE[20] }}>
-      <Text style={[{ fontSize: FONT.size.xs, fontWeight: FONT.weight.bold, textTransform: "uppercase", letterSpacing: 1, color: c.textMuted, marginBottom: SPACE[10], paddingHorizontal: SPACE[20] }]}>
-        NEW CIRCLES FOR YOU
-      </Text>
+    <View style={{ gap: SPACE[10] }}>
+      <SectionHeader
+        title="New Circles For You"
+        action={{ label: "See all", onPress: () => router.push("/(tabs)/circles" as any) }}
+      />
       {circles.map((circle) => (
         <TouchableOpacity
           key={circle.id}
-          style={[{ flexDirection: "row", alignItems: "center", gap: SPACE[12], paddingHorizontal: SPACE[14], paddingVertical: SPACE[12], backgroundColor: c.bgCard, borderRadius: RADIUS.xl, marginHorizontal: SPACE[16], marginBottom: SPACE[8], borderWidth: 1, borderColor: c.brandBorder }]}
+          style={[ncr.row, { backgroundColor: c.bgCard, borderColor: c.brandBorder }, SHADOW.sm]}
           onPress={() => onPress(circle)}
           activeOpacity={0.85}
         >
-          <View style={[{ width: 44, height: 44, borderRadius: RADIUS.lg, alignItems: "center", justifyContent: "center", backgroundColor: c.bgCardAlt }]}>
-            <Text style={{ fontSize: 22 }}>{circle.avatar_emoji}</Text>
+          <View style={[ncr.emojiWrap, { backgroundColor: c.bgCardAlt }]}>
+            <Text style={ncr.emoji}>{circle.avatar_emoji}</Text>
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={[{ fontSize: FONT.size.md, fontWeight: FONT.weight.bold, color: c.text }]} numberOfLines={1}>{circle.name}</Text>
-            <Text style={[{ fontSize: FONT.size.xs, color: c.textMuted, marginTop: 2 }]}>
+            <Text style={[ncr.name, { color: c.text }]} numberOfLines={1}>{circle.name}</Text>
+            <Text style={[ncr.meta, { color: c.textMuted }]}>
               {[circle.sport, circle.city].filter(Boolean).join(" · ") || "New circle"}
             </Text>
           </View>
           <TouchableOpacity
-            style={[{ borderRadius: RADIUS.md, paddingHorizontal: SPACE[12], paddingVertical: SPACE[7], backgroundColor: c.brand }]}
+            style={[ncr.joinBtn, { backgroundColor: c.brand }]}
             onPress={(e) => { e.stopPropagation(); onJoin(circle.id); }}
             activeOpacity={0.85}
           >
-            <Text style={[{ color: "#fff", fontWeight: FONT.weight.bold, fontSize: FONT.size.sm }]}>Join</Text>
+            <Text style={ncr.joinTxt}>Join</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={(e) => { e.stopPropagation(); onDismiss(circle.id); }} hitSlop={10}>
             <Icon name="close" size={16} color={c.textFaint} />
@@ -1117,31 +1135,37 @@ function NewCirclesSection({ circles, onPress, onJoin, onDismiss }: {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const gs = StyleSheet.create({
-  card:      { borderRadius: RADIUS.xl, borderWidth: 1 },
-  topRow:    { flexDirection: "row", alignItems: "center", gap: SPACE[12], paddingHorizontal: SPACE[16], paddingTop: SPACE[16], paddingBottom: SPACE[14] },
-  pinWrap:   { width: 44, height: 44, borderRadius: RADIUS.md, alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  divider:   { height: 1, marginHorizontal: SPACE[16] },
-  bottomRow: { flexDirection: "row", alignItems: "center", gap: SPACE[6], paddingHorizontal: SPACE[16], paddingVertical: SPACE[12] },
-  label:     { ...TYPE.cardTitle },
-  sub:       { ...TYPE.caption, marginTop: 3 },
-  gymName:   { ...TYPE.caption, fontWeight: FONT.weight.medium },
-  ripple1:   { position: "absolute", width: 200, height: 200, borderRadius: 100, borderWidth: 1, opacity: 0.5, top: -80, right: -50 },
-  ripple2:   { position: "absolute", width: 140, height: 140, borderRadius: 70,  borderWidth: 1, opacity: 0.4, top: -40, right: -10 },
-  ripple3:   { position: "absolute", width: 90,  height: 90,  borderRadius: 45,  borderWidth: 1, opacity: 0.3, top:   5, right:  30 },
+  card:        { borderRadius: RADIUS.xl, borderWidth: 1, overflow: "hidden" },
+  topRow:      { flexDirection: "row", alignItems: "center", gap: SPACE[12], paddingHorizontal: SPACE[16], paddingVertical: SPACE[16] },
+  pinWrap:     { width: 46, height: 46, borderRadius: RADIUS.md, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  label:       { ...TYPE.cardTitle, marginBottom: 4 },
+  metaRow:     { flexDirection: "row", alignItems: "center", gap: SPACE[4] },
+  gymName:     { fontSize: 12, fontWeight: FONT.weight.medium },
+  activeDot:   { width: 6, height: 6, borderRadius: 3, backgroundColor: "#22C55E" },
+  activeText:  { fontSize: 12, fontWeight: FONT.weight.bold, color: "#22C55E" },
+  togglePill:  { borderRadius: RADIUS.pill, paddingHorizontal: SPACE[14], paddingVertical: SPACE[8], flexShrink: 0 },
+  toggleText:  { fontSize: 13, fontWeight: FONT.weight.bold },
+  // Smooth wave arcs — large ellipses clipped at card edge
+  wave1:       { position: "absolute", width: 260, height: 260, borderRadius: 130, borderWidth: 18, top: -80, right: -100 },
+  wave2:       { position: "absolute", width: 200, height: 200, borderRadius: 100, borderWidth: 18, top: -40, right: -60 },
+  wave3:       { position: "absolute", width: 140, height: 140, borderRadius: 70,  borderWidth: 18, top:  10, right: -20 },
 });
 
 const an = StyleSheet.create({
-  card:      { borderRadius: RADIUS.xl, borderWidth: 1, paddingVertical: SPACE[14], paddingHorizontal: SPACE[14] },
-  header:    { flexDirection: "row", alignItems: "center", gap: SPACE[6], marginBottom: SPACE[12] },
+  card:      { borderRadius: RADIUS.xl, borderWidth: 1, overflow: "hidden" },
+  topAccent: { height: 3, opacity: 0.7 },
+  inner:     { paddingVertical: SPACE[14], paddingHorizontal: SPACE[14] },
+  header:    { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: SPACE[14] },
+  liveRow:   { flexDirection: "row", alignItems: "center", gap: SPACE[6] },
   dot:       { width: 8, height: 8, borderRadius: 4, backgroundColor: PALETTE.success },
-  title:     { fontSize: FONT.size.base, fontWeight: FONT.weight.bold, flex: 1 },
+  title:     { fontSize: FONT.size.base, fontWeight: FONT.weight.bold },
   sub:       { fontSize: FONT.size.xs },
   row:       { gap: SPACE[16], paddingRight: SPACE[4] },
-  item:      { alignItems: "center", gap: SPACE[6], width: 56 },
-  avatarWrap:{ width: 46, height: 46, position: "relative" },
-  activeDot: { position: "absolute", bottom: 0, right: 0, width: 12, height: 12, borderRadius: 6, backgroundColor: PALETTE.success, borderWidth: 2 },
-  gymBadge:  { position: "absolute", top: 0, right: 0, width: 14, height: 14, borderRadius: 7, backgroundColor: "#F59E0B", borderWidth: 2 },
-  name:      { fontSize: FONT.size.xs, fontWeight: FONT.weight.medium, textAlign: "center", maxWidth: 56 },
+  item:      { alignItems: "center", gap: SPACE[4], width: 62 },
+  avatarWrap:{ width: 52, height: 52, position: "relative" },
+  activeDot: { position: "absolute", bottom: 0, right: 0, width: 13, height: 13, borderRadius: 6.5, backgroundColor: PALETTE.success, borderWidth: 2 },
+  gymBadge:  { position: "absolute", top: 0, right: 0, width: 15, height: 15, borderRadius: 7.5, backgroundColor: "#F59E0B", borderWidth: 2 },
+  name:      { fontSize: FONT.size.xs, fontWeight: FONT.weight.semibold, textAlign: "center", maxWidth: 62 },
 });
 
 const pn = StyleSheet.create({
@@ -1160,6 +1184,17 @@ const nu = StyleSheet.create({
   sub:   { fontSize: FONT.size.xs, marginTop: 2 },
 });
 
+// ─── New Circles row styles ───────────────────────────────────────────────────
+const ncr = StyleSheet.create({
+  row:      { flexDirection: "row", alignItems: "center", gap: SPACE[12], paddingHorizontal: SPACE[14], paddingVertical: SPACE[14], borderRadius: RADIUS.xl, borderWidth: 1 },
+  emojiWrap:{ width: 46, height: 46, borderRadius: RADIUS.lg, alignItems: "center", justifyContent: "center" },
+  emoji:    { fontSize: 22 },
+  name:     { fontSize: FONT.size.md, fontWeight: FONT.weight.bold },
+  meta:     { fontSize: FONT.size.xs, marginTop: 2 },
+  joinBtn:  { paddingHorizontal: SPACE[14], paddingVertical: SPACE[8], borderRadius: RADIUS.pill },
+  joinTxt:  { color: "#fff", fontWeight: FONT.weight.bold, fontSize: FONT.size.sm },
+});
+
 // ─── New Circle popup styles ──────────────────────────────────────────────────
 const nc = StyleSheet.create({
   backdrop:    { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "center", alignItems: "center", padding: SPACE[20], zIndex: 100 },
@@ -1176,7 +1211,7 @@ const nc = StyleSheet.create({
   desc:        { fontSize: FONT.size.sm, textAlign: "center", lineHeight: FONT.size.sm * 1.5 },
   divider:     { height: 1, marginVertical: SPACE[14] },
   memberHeader:{ fontSize: FONT.size.xs, fontWeight: FONT.weight.bold, textTransform: "uppercase", letterSpacing: 1, marginBottom: SPACE[8] },
-  memberRow:   { flexDirection: "row", alignItems: "center", gap: SPACE[10], paddingVertical: SPACE[5] },
+  memberRow:   { flexDirection: "row", alignItems: "center", gap: SPACE[10], paddingVertical: SPACE[6] },
   memberName:  { fontSize: FONT.size.md, fontWeight: FONT.weight.semibold },
   joinBtn:     { borderRadius: RADIUS.lg, paddingVertical: SPACE[14], alignItems: "center", marginTop: SPACE[12] },
   joinText:    { color: "#fff", fontSize: FONT.size.md, fontWeight: FONT.weight.extrabold },
@@ -1494,12 +1529,15 @@ const sd = StyleSheet.create({
 
 const s = StyleSheet.create({
   root:  { flex: 1 },
-  scroll:{ padding: SPACE[20], paddingBottom: SPACE[48], gap: SPACE[20] },
+  scroll:{ paddingHorizontal: SPACE[20], paddingTop: SPACE[14], paddingBottom: SPACE[60], gap: SPACE[24] },
 });
 
 const cs = StyleSheet.create({
-  banner:      { flexDirection: "row", alignItems: "center", gap: SPACE[14], borderRadius: RADIUS.xl, padding: SPACE[16], borderWidth: 1 },
-  bannerEmoji: { fontSize: 28 },
+  banner:      { flexDirection: "row", alignItems: "center", gap: SPACE[14], borderRadius: RADIUS.xl, padding: SPACE[14], borderWidth: 1 },
+  iconWrap:    { width: 48, height: 48, borderRadius: RADIUS.lg, backgroundColor: "#FFF3E0", alignItems: "center", justifyContent: "center" },
+  bannerEmoji: { fontSize: 24 },
   bannerTitle: { fontSize: FONT.size.base, fontWeight: FONT.weight.bold },
   bannerSub:   { fontSize: FONT.size.sm, marginTop: 2 },
+  pill:        { paddingHorizontal: SPACE[14], paddingVertical: SPACE[8], borderRadius: RADIUS.pill },
+  pillText:    { fontSize: FONT.size.sm, fontWeight: FONT.weight.bold },
 });

@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, Platform } from "react-native";
 import { Tabs } from "expo-router";
 import { useTheme } from "../../lib/theme";
 import { useNotifications } from "../../lib/notificationContext";
@@ -15,14 +15,19 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarStyle: {
           backgroundColor: c.tabBar,
-          borderTopColor:  c.tabBarBorder,
-          height:          64,
-          paddingBottom:   10,
-          paddingTop:      6,
+          borderTopWidth:  0,
+          shadowColor:     "#000",
+          shadowOffset:    { width: 0, height: -4 },
+          shadowOpacity:   0.08,
+          shadowRadius:    16,
+          elevation:       12,
+          height:          Platform.OS === "ios" ? 84 : 68,
+          paddingBottom:   Platform.OS === "ios" ? 26 : 10,
+          paddingTop:      10,
         },
         tabBarActiveTintColor:   c.brand,
         tabBarInactiveTintColor: c.textFaint,
-        tabBarLabelStyle: { fontSize: 10, fontWeight: "700" },
+        tabBarLabelStyle: { fontSize: 10, fontWeight: "700", letterSpacing: 0.2 },
       }}
     >
       <Tabs.Screen
@@ -83,6 +88,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="matches"     options={{ href: null }} />
       <Tabs.Screen name="goals"       options={{ href: null }} />
       <Tabs.Screen name="leaderboard" options={{ href: null }} />
+      <Tabs.Screen name="challenges"  options={{ href: null }} />
     </Tabs>
   );
 }
