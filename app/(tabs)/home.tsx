@@ -22,7 +22,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "../../lib/supabase";
-import { useTheme, SPACE, FONT, RADIUS, PALETTE } from "../../lib/theme";
+import { useTheme, SPACE, FONT, RADIUS, PALETTE, SHADOW, TYPE } from "../../lib/theme";
 import { Icon } from "../../components/Icon";
 import { Avatar } from "../../components/Avatar";
 
@@ -132,6 +132,7 @@ export default function HomeScreen() {
       { data: sessionData },
       { data: myCircleData },
       { data: acceptedMatches },
+      { data: blockData },
     ] = await Promise.all([
       supabase.from("users")
         .select("id, username, full_name, avatar_url, current_streak, last_checkin_date, is_at_gym, gym_checkin_at, sports, fitness_level, city, availability, bio")
@@ -162,6 +163,9 @@ export default function HomeScreen() {
         .select("id, sender_id, receiver_id")
         .eq("status", "accepted")
         .or(`sender_id.eq.${uid},receiver_id.eq.${uid}`),
+      supabase.from("blocks")
+        .select("blocked_id")
+        .eq("blocker_id", uid),
     ]);
 
     // Unread messages — filter by THIS user's accepted match IDs only
@@ -184,7 +188,7 @@ export default function HomeScreen() {
     let atGym = profileData?.is_at_gym ?? false;
     if (atGym && profileData?.gym_checkin_at) {
       const age = Date.now() - new Date(profileData.gym_checkin_at).getTime();
-      if (age > 4 * 60 * 60 * 1000) {
+      if (age > 3 * 60 * 60 * 1000) {
         atGym = false;
         supabase.from("users").update({ is_at_gym: false, gym_checkin_at: null }).eq("id", uid).then(() => {});
       }
@@ -316,7 +320,8 @@ export default function HomeScreen() {
     // Exclude: self, already-sent requests, received pending requests (avoid double-show)
     const excludeIds = new Set([
       uid,
-      ...(likedData ?? []).map((r: any) => r.receiver_id),
+      ...(likedData  ?? []).map((r: any) => r.receiver_id),
+      ...(blockData  ?? []).map((b: any) => b.blocked_id),
       ...pendingSenderIds,
     ]);
     const mySports = profileData?.sports ?? [];
@@ -405,9 +410,10 @@ export default function HomeScreen() {
   async function logWorkout() {
     if (!profile) return;
     const { error } = await supabase.from("workouts").insert({
-      user_id:   profile.id,
-      logged_at: new Date().toISOString(),
-      notes:     "Quick check-in",
+      user_id:       profile.id,
+      exercise_type: "Quick Check-in",
+      logged_at:     new Date().toISOString(),
+      notes:         "Quick check-in",
     });
     if (error) { Alert.alert("Error", error.message); return; }
 
@@ -423,6 +429,29 @@ export default function HomeScreen() {
       content:   newStreak > 1 ? `Day ${newStreak} streak!` : "Just logged my first workout!",
       meta:      { streak: newStreak },
     });
+
+    // Notify all accepted match partners
+    const { data: acceptedMs } = await supabase
+      .from("matches")
+      .select("sender_id, receiver_id")
+      .eq("status", "accepted")
+      .or(`sender_id.eq.${profile.id},receiver_id.eq.${profile.id}`);
+    const partnerIds = (acceptedMs ?? []).map((m: any) =>
+      m.sender_id === profile.id ? m.receiver_id : m.sender_id
+    );
+    if (partnerIds.length > 0) {
+      const displayName = profile.full_name?.split(" ")[0] ?? profile.username ?? "Your buddy";
+      await supabase.from("notifications").insert(
+        partnerIds.map((pid: string) => ({
+          user_id:    pid,
+          type:       "partner_workout",
+          title:      "💪 Training buddy is active!",
+          body:       `${displayName} just logged a workout. Stay motivated!`,
+          related_id: profile.id,
+          read:       false,
+        }))
+      );
+    }
 
     setProfile((p) => p ? {
       ...p,
@@ -456,7 +485,7 @@ export default function HomeScreen() {
     if (!profile) return;
     const { data } = await supabase
       .from("users")
-      .select("id, username, full_name, avatar_url, bio, city, fitness_level, age, sports, current_streak, last_active, is_at_gym, availability")
+      .select("id, username, full_name, avatar_url, bio, city, fitness_level, age, gender, sports, current_streak, last_active, is_at_gym, availability, training_intent, lat, lng")
       .eq("id", suggested.id)
       .single();
     if (!data) return;
@@ -473,22 +502,26 @@ export default function HomeScreen() {
 
     setSheetStatus(status);
     setSheetUser({
-      id:             data.id,
-      username:       data.username,
-      full_name:      data.full_name ?? null,
-      avatar_url:     data.avatar_url ?? null,
-      bio:            data.bio ?? null,
-      city:           data.city ?? null,
-      fitness_level:  data.fitness_level ?? null,
-      age:            data.age ?? null,
-      sports:         data.sports ?? [],
-      current_streak: data.current_streak ?? 0,
-      last_active:    data.last_active ?? null,
-      is_at_gym:      data.is_at_gym ?? false,
-      availability:   data.availability ?? null,
-      matchScore:     0,
-      reasons:        suggested.reasons,
-      isNew:          false,
+      id:              data.id,
+      username:        data.username,
+      full_name:       data.full_name ?? null,
+      avatar_url:      data.avatar_url ?? null,
+      bio:             data.bio ?? null,
+      city:            data.city ?? null,
+      fitness_level:   data.fitness_level ?? null,
+      age:             data.age ?? null,
+      gender:          data.gender ?? null,
+      sports:          data.sports ?? [],
+      current_streak:  data.current_streak ?? 0,
+      last_active:     data.last_active ?? null,
+      is_at_gym:       data.is_at_gym ?? false,
+      availability:    data.availability ?? null,
+      training_intent: data.training_intent ?? null,
+      lat:             data.lat ?? null,
+      lng:             data.lng ?? null,
+      matchScore:      0,
+      reasons:         suggested.reasons,
+      isNew:           false,
     });
   }
 
@@ -576,12 +609,17 @@ export default function HomeScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.brand} />}
       >
         {/* ── Header + stats always visible above the fold ── */}
-        <HomeHeader name={name} greeting={greeting} avatarUrl={profile?.avatar_url} />
+        <HomeHeader
+          name={name}
+          greeting={greeting}
+          avatarUrl={profile?.avatar_url}
+          unreadCount={unreadCount}
+        />
 
         <MomentumStrip
           streak={profile?.current_streak ?? 0}
           matchCount={profile?.match_count ?? 0}
-          workoutsMonth={profile?.workout_count_month ?? 0}
+          weekSessions={upcomingSessions.length}
         />
 
         {/* ── Primary action ── */}
@@ -631,6 +669,20 @@ export default function HomeScreen() {
         />
 
         <CirclesPreviewSection circles={circles} />
+
+        {/* ── Challenges shortcut ── */}
+        <TouchableOpacity
+          style={[cs.banner, { backgroundColor: c.bgCard, borderColor: c.border }]}
+          onPress={() => router.push("/(tabs)/challenges" as any)}
+          activeOpacity={0.8}
+        >
+          <Text style={cs.bannerEmoji}>🏆</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={[cs.bannerTitle, { color: c.text }]}>Challenges</Text>
+            <Text style={[cs.bannerSub, { color: c.textMuted }]}>Join community fitness challenges</Text>
+          </View>
+          <Icon name="chevronRight" size={16} color={c.textMuted} />
+        </TouchableOpacity>
       </ScrollView>
 
       <ProfileSheet
@@ -638,6 +690,10 @@ export default function HomeScreen() {
         status={sheetStatus}
         onConnect={sendRequestFromSheet}
         onClose={() => setSheetUser(null)}
+        onBlock={(userId) => {
+          setSuggested((prev) => prev.filter((u) => u.id !== userId));
+          setSheetUser(null);
+        }}
       />
 
       {selectedSession && (
@@ -738,100 +794,102 @@ function UpcomingSessionsSection({ sessions, onSelect }: {
   sessions: SessionInfo[];
   onSelect: (sess: SessionInfo) => void;
 }) {
-  const { theme, isDark } = useTheme();
+  const { theme } = useTheme();
   const c = theme.colors;
 
   function formatDate(dateStr: string): string {
-    const d     = new Date(dateStr + "T12:00:00");
-    const today = new Date();
+    const d        = new Date(dateStr + "T12:00:00");
+    const today    = new Date();
     const tomorrow = new Date();
     tomorrow.setDate(today.getDate() + 1);
+    if (d.toDateString() === today.toDateString())    return "Today";
     if (d.toDateString() === tomorrow.toDateString()) return "Tomorrow";
     return d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
   }
 
-  const STATUS_COLOR: Record<string, string> = {
-    accepted: "#22C55E",
-    pending:  "#F59E0B",
+  const STATUS: Record<string, { color: string; bg: string }> = {
+    accepted: { color: "#fff",     bg: "#22C55E" },
+    pending:  { color: "#92400E",  bg: "#FEF3C7" },
   };
 
   return (
-    <View style={[us.card, { backgroundColor: c.bgCard, borderColor: c.border }]}>
-      <View style={[us.headerRow, { borderBottomColor: c.border }]}>
-        <Icon name="calendar" size={16} color={c.brand} />
-        <Text style={[us.title, { color: c.text }]}>Upcoming Sessions</Text>
-        <Text style={[us.count, { color: c.textMuted }]}>{sessions.length}</Text>
-      </View>
+    <View style={{ gap: SPACE[10] }}>
+      <Text style={[us.sectionTitle, { color: c.text }]}>Upcoming Sessions</Text>
 
-      {sessions.map((sess, idx) => {
-        const statusColor = STATUS_COLOR[sess.status] ?? c.textMuted;
-        return (
-          <TouchableOpacity
-            key={sess.id}
-            style={[us.row, idx < sessions.length - 1 && { borderBottomWidth: 1, borderBottomColor: c.border }]}
-            onPress={() => onSelect(sess)}
-            activeOpacity={0.75}
-          >
-            {/* Sport emoji / icon */}
-            <View style={[us.sportDot, { backgroundColor: statusColor + "20" }]}>
-              <Text style={{ fontSize: 14 }}>{sportEmoji(sess.sport)}</Text>
-            </View>
-
-            <View style={{ flex: 1, gap: 3 }}>
-              <View style={us.rowTop}>
-                <Text style={[us.sport, { color: c.text }]} numberOfLines={1}>{sess.sport}</Text>
-                <View style={[us.statusPill, { backgroundColor: statusColor + "18", borderColor: statusColor + "50" }]}>
-                  <Text style={[us.statusText, { color: statusColor }]}>{sess.status}</Text>
-                </View>
+      <View style={[us.card, SHADOW.sm, { backgroundColor: c.bgCard, borderColor: c.border }]}>
+        {sessions.map((sess, idx) => {
+          const st = STATUS[sess.status] ?? { color: c.textMuted, bg: c.bgCardAlt };
+          return (
+            <TouchableOpacity
+              key={sess.id}
+              style={[
+                us.row,
+                idx < sessions.length - 1 && { borderBottomWidth: 1, borderBottomColor: c.border },
+              ]}
+              onPress={() => onSelect(sess)}
+              activeOpacity={0.75}
+            >
+              {/* Sport icon */}
+              <View style={[us.iconWrap, { backgroundColor: c.bgCardAlt }]}>
+                <Icon name={sportIcon(sess.sport)} size={20} color={c.textMuted} />
               </View>
 
-              <Text style={[us.partner, { color: c.textSecondary }]} numberOfLines={1}>
-                with {sess.partner_name}
-              </Text>
-
-              <View style={us.metaRow}>
-                <Text style={[us.meta, { color: c.textMuted }]}>
-                  {formatDate(sess.session_date)}
-                  {sess.session_time ? `  ·  ${sess.session_time}` : ""}
-                </Text>
-                {sess.location && (
-                  <Text style={[us.meta, { color: c.textMuted }]} numberOfLines={1}>
-                    📍 {sess.location}
+              <View style={{ flex: 1, gap: 3 }}>
+                {/* Title row: sport + partner + status badge */}
+                <View style={us.rowTop}>
+                  <Text style={[us.sport, { color: c.text }]} numberOfLines={1}>
+                    {sess.sport}{" "}
+                    <Text style={[us.partnerName, { color: c.text }]}>with {sess.partner_name}</Text>
                   </Text>
+                  <View style={[us.badge, { backgroundColor: st.bg }]}>
+                    <Text style={[us.badgeText, { color: st.color }]}>
+                      {sess.status.charAt(0).toUpperCase() + sess.status.slice(1)}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Time */}
+                <Text style={[us.meta, { color: c.textMuted }]}>
+                  {formatDate(sess.session_date)}{sess.session_time ? `, ${sess.session_time}` : ""}
+                </Text>
+
+                {/* Location */}
+                {sess.location && (
+                  <View style={us.locRow}>
+                    <Icon name="location" size={11} color={c.textMuted} />
+                    <Text style={[us.meta, { color: c.textMuted }]} numberOfLines={1}>{sess.location}</Text>
+                  </View>
                 )}
               </View>
-            </View>
 
-            <Icon name="chevronRight" size={14} color={c.textFaint} />
-          </TouchableOpacity>
-        );
-      })}
+              <Icon name="chevronRight" size={16} color={c.textFaint} />
+            </TouchableOpacity>
+          );
+        })}
+      </View>
     </View>
   );
 }
 
-function sportEmoji(sport: string): string {
-  const map: Record<string, string> = {
-    Gym: "🏋️", Running: "🏃", Cycling: "🚴", Swimming: "🏊", Boxing: "🥊",
-    Tennis: "🎾", Basketball: "🏀", Yoga: "🧘", CrossFit: "💪", Hiking: "🥾",
-  };
-  return map[sport] ?? "⚡";
+function sportIcon(sport: string): import("../../components/Icon").IconName {
+  const lower = sport.toLowerCase();
+  if (lower.includes("yoga") || lower.includes("pilates")) return "heartActive";
+  if (lower.includes("run") || lower.includes("cardio"))   return "goal";
+  return "workout";
 }
 
 const us = StyleSheet.create({
-  card:       { borderRadius: RADIUS.xl, borderWidth: 1, overflow: "hidden" },
-  headerRow:  { flexDirection: "row", alignItems: "center", gap: SPACE[8], paddingHorizontal: SPACE[16], paddingVertical: SPACE[14], borderBottomWidth: 1 },
-  title:      { flex: 1, fontSize: FONT.size.base, fontWeight: FONT.weight.extrabold },
-  count:      { fontSize: FONT.size.xs, fontWeight: FONT.weight.semibold },
-  row:        { flexDirection: "row", alignItems: "center", gap: SPACE[12], paddingHorizontal: SPACE[16], paddingVertical: SPACE[14] },
-  sportDot:   { width: 40, height: 40, borderRadius: RADIUS.md, alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  rowTop:     { flexDirection: "row", alignItems: "center", gap: SPACE[8] },
-  sport:      { fontSize: FONT.size.base, fontWeight: FONT.weight.bold, flex: 1 },
-  statusPill: { paddingHorizontal: SPACE[8], paddingVertical: 2, borderRadius: RADIUS.pill, borderWidth: 1 },
-  statusText: { fontSize: 10, fontWeight: FONT.weight.extrabold, textTransform: "capitalize" },
-  partner:    { fontSize: FONT.size.sm, fontWeight: FONT.weight.medium },
-  metaRow:    { flexDirection: "row", flexWrap: "wrap", gap: SPACE[8] },
-  meta:       { fontSize: FONT.size.xs },
+  sectionTitle: { ...TYPE.sectionTitle },
+  card:         { borderRadius: RADIUS.xl, borderWidth: 1, overflow: "hidden" },
+  row:          { flexDirection: "row", alignItems: "center", gap: SPACE[12], paddingHorizontal: SPACE[16], paddingVertical: SPACE[16] },
+  iconWrap:     { width: 42, height: 42, borderRadius: RADIUS.md, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  rowTop:       { flexDirection: "row", alignItems: "center", gap: SPACE[8] },
+  sport:        { ...TYPE.bodyMedium, flex: 1 },
+  partnerName:  { fontWeight: FONT.weight.bold },
+  badge:        { paddingHorizontal: SPACE[8], paddingVertical: 3, borderRadius: RADIUS.pill },
+  badgeText:    { fontSize: 12, fontWeight: FONT.weight.bold },
+  meta:         { ...TYPE.caption },
+  locRow:       { flexDirection: "row", alignItems: "center", gap: SPACE[4] },
 });
 
 // ─── Gym Strip ────────────────────────────────────────────────────────────────
@@ -841,31 +899,58 @@ function GymStrip({ isAtGym, toggling, onToggle }: {
   const { theme, isDark } = useTheme();
   const c = theme.colors;
 
-  const bg     = isAtGym ? (isDark ? "#0D2D1A" : "#ECFDF5") : c.bgCard;
-  const border = isAtGym ? PALETTE.success : c.border;
-  const text   = isAtGym ? PALETTE.success : c.textSecondary;
-  const sub    = isAtGym ? "Your matches can see you're here" : "Let your matches know you're training";
+  const activeBg     = isDark ? "#0D2D1A" : "#ECFDF5";
+  const activeBorder = isDark ? "#166534" : "#BBF7D0";
+  const pinColor     = isAtGym ? PALETTE.success : c.brand;
 
   return (
     <TouchableOpacity
-      style={[gs.row, { backgroundColor: bg, borderColor: border }]}
+      style={[
+        gs.card,
+        SHADOW.md,
+        isAtGym
+          ? { backgroundColor: activeBg, borderColor: activeBorder }
+          : { backgroundColor: c.bgCard, borderColor: c.border },
+      ]}
       onPress={onToggle}
       activeOpacity={0.75}
       disabled={toggling}
     >
-      <View style={[gs.iconWrap, { backgroundColor: isAtGym ? PALETTE.success + "22" : c.bgCardAlt }]}>
-        {toggling
-          ? <ActivityIndicator size="small" color={isAtGym ? PALETTE.success : c.brand} />
-          : <Icon name={isAtGym ? "gymActive" : "gym"} size={20} color={isAtGym ? PALETTE.success : c.brand} />
-        }
+      {/* Decorative ripple circles — right side */}
+      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+        <View style={[gs.ripple1, { borderColor: c.bgCardAlt }]} />
+        <View style={[gs.ripple2, { borderColor: c.bgCardAlt }]} />
+        <View style={[gs.ripple3, { borderColor: c.bgCardAlt }]} />
       </View>
-      <View style={{ flex: 1 }}>
-        <Text style={[gs.label, { color: text }]}>
-          {isAtGym ? "✓ At the gym now" : "Check in at gym"}
+
+      {/* Top row — icon + title + subtitle */}
+      <View style={gs.topRow}>
+        <View style={[gs.pinWrap, { backgroundColor: isAtGym ? "#22C55E18" : "#FF450012" }]}>
+          {toggling
+            ? <ActivityIndicator size="small" color={pinColor} />
+            : <Icon name="location" size={24} color={pinColor} />
+          }
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[gs.label, { color: isAtGym ? PALETTE.success : c.text }]}>
+            {isAtGym ? "At the gym now" : "Check in at gym"}
+          </Text>
+          <Text style={[gs.sub, { color: c.textMuted }]}>
+            {isAtGym ? "Your matches can see you're here" : "Find partners at your gym"}
+          </Text>
+        </View>
+      </View>
+
+      {/* Divider */}
+      <View style={[gs.divider, { backgroundColor: c.border }]} />
+
+      {/* Bottom row — gym name */}
+      <View style={gs.bottomRow}>
+        <Icon name="location" size={13} color={c.textMuted} />
+        <Text style={[gs.gymName, { color: c.textSecondary }]}>
+          {isAtGym ? "Checked in" : "Summit Fitness"}
         </Text>
-        <Text style={[gs.sub, { color: isAtGym ? PALETTE.success + "99" : c.textMuted }]}>{sub}</Text>
       </View>
-      <Icon name={isAtGym ? "close" : "chevronRight"} size={16} color={text} />
     </TouchableOpacity>
   );
 }
@@ -1018,10 +1103,17 @@ function NewCirclesSection({ circles, onPress, onJoin, onDismiss }: {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const gs = StyleSheet.create({
-  row:     { flexDirection: "row", alignItems: "center", gap: SPACE[12], borderRadius: RADIUS.xl, padding: SPACE[14], borderWidth: 1 },
-  iconWrap:{ width: 40, height: 40, borderRadius: RADIUS.md, alignItems: "center", justifyContent: "center" },
-  label:   { fontSize: FONT.size.base, fontWeight: FONT.weight.bold },
-  sub:     { fontSize: FONT.size.xs, marginTop: 2 },
+  card:      { borderRadius: RADIUS.xl, borderWidth: 1 },
+  topRow:    { flexDirection: "row", alignItems: "center", gap: SPACE[12], paddingHorizontal: SPACE[16], paddingTop: SPACE[16], paddingBottom: SPACE[14] },
+  pinWrap:   { width: 44, height: 44, borderRadius: RADIUS.md, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  divider:   { height: 1, marginHorizontal: SPACE[16] },
+  bottomRow: { flexDirection: "row", alignItems: "center", gap: SPACE[6], paddingHorizontal: SPACE[16], paddingVertical: SPACE[12] },
+  label:     { ...TYPE.cardTitle },
+  sub:       { ...TYPE.caption, marginTop: 3 },
+  gymName:   { ...TYPE.caption, fontWeight: FONT.weight.medium },
+  ripple1:   { position: "absolute", width: 200, height: 200, borderRadius: 100, borderWidth: 1, opacity: 0.5, top: -80, right: -50 },
+  ripple2:   { position: "absolute", width: 140, height: 140, borderRadius: 70,  borderWidth: 1, opacity: 0.4, top: -40, right: -10 },
+  ripple3:   { position: "absolute", width: 90,  height: 90,  borderRadius: 45,  borderWidth: 1, opacity: 0.3, top:   5, right:  30 },
 });
 
 const an = StyleSheet.create({
@@ -1389,4 +1481,11 @@ const sd = StyleSheet.create({
 const s = StyleSheet.create({
   root:  { flex: 1 },
   scroll:{ padding: SPACE[20], paddingBottom: SPACE[48], gap: SPACE[20] },
+});
+
+const cs = StyleSheet.create({
+  banner:      { flexDirection: "row", alignItems: "center", gap: SPACE[14], borderRadius: RADIUS.xl, padding: SPACE[16], borderWidth: 1 },
+  bannerEmoji: { fontSize: 28 },
+  bannerTitle: { fontSize: FONT.size.base, fontWeight: FONT.weight.bold },
+  bannerSub:   { fontSize: FONT.size.sm, marginTop: 2 },
 });

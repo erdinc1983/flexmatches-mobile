@@ -10,9 +10,9 @@ import { Icon } from "../../components/Icon";
 
 type Workout = {
   id: string;
-  sport: string | null;
+  exercise_type: string | null;
   notes: string | null;
-  duration_minutes: number | null;
+  duration_min: number | null;
   logged_at: string;
 };
 
@@ -50,7 +50,7 @@ export default function ActivityScreen() {
     const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
     const [{ data: wData }, { data: profile }, { count: mCount }] = await Promise.all([
-      supabase.from("workouts").select("id, sport, notes, duration_minutes, logged_at").eq("user_id", user.id).order("logged_at", { ascending: false }).limit(50),
+      supabase.from("workouts").select("id, exercise_type, notes, duration_min, logged_at").eq("user_id", user.id).order("logged_at", { ascending: false }).limit(50),
       supabase.from("users").select("current_streak, is_at_gym, gym_checkin_at").eq("id", user.id).single(),
       supabase.from("workouts").select("*", { count: "exact", head: true }).eq("user_id", user.id).gte("logged_at", monthAgo),
     ]);
@@ -84,11 +84,11 @@ export default function ActivityScreen() {
     setSaving(true);
 
     const { error } = await supabase.from("workouts").insert({
-      user_id: userId,
-      sport: sport || null,
-      notes: notes.trim() || null,
-      duration_minutes: duration ? parseInt(duration) : null,
-      logged_at: new Date().toISOString(),
+      user_id:       userId,
+      exercise_type: sport || "Gym",
+      notes:         notes.trim() || null,
+      duration_min:  duration ? parseInt(duration) : null,
+      logged_at:     new Date().toISOString(),
     });
 
     if (error) { Alert.alert("Error", error.message); setSaving(false); return; }
@@ -246,16 +246,16 @@ export default function ActivityScreen() {
                 <View key={w.id} style={[s.workoutCard, { backgroundColor: c.bgCard, borderColor: c.border }]}>
                   <View style={s.workoutLeft}>
                     <Text style={s.workoutEmoji}>
-                      {SPORT_EMOJI[w.sport ?? ""] ?? "💪"}
+                      {SPORT_EMOJI[w.exercise_type ?? ""] ?? "💪"}
                     </Text>
                     <View>
-                      <Text style={[s.workoutSport, { color: c.text }]}>{w.sport ?? "Workout"}</Text>
+                      <Text style={[s.workoutSport, { color: c.text }]}>{w.exercise_type ?? "Workout"}</Text>
                       {w.notes && <Text style={[s.workoutNotes, { color: c.textMuted }]} numberOfLines={1}>{w.notes}</Text>}
                     </View>
                   </View>
                   <View style={s.workoutRight}>
-                    {w.duration_minutes && (
-                      <Text style={[s.workoutDuration, { color: c.brand }]}>{w.duration_minutes}m</Text>
+                    {w.duration_min && (
+                      <Text style={[s.workoutDuration, { color: c.brand }]}>{w.duration_min}m</Text>
                     )}
                     <Text style={[s.workoutTime, { color: c.textMuted }]}>{formatTime(w.logged_at)}</Text>
                   </View>
