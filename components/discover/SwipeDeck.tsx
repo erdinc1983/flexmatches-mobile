@@ -16,6 +16,7 @@ import {
   TouchableOpacity, Dimensions,
 } from "react-native";
 import { Image } from "expo-image";
+import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTheme, SPACE, FONT, RADIUS, PALETTE } from "../../lib/theme";
 import { resolveUrl } from "../Avatar";
@@ -182,18 +183,10 @@ export const SwipeDeck = forwardRef<SwipeDeckRef, Props>(function SwipeDeck(
 
       {/* Action buttons */}
       <View style={deck.actions}>
-        {/* Undo last swipe — always visible, grayed when nothing to undo */}
-        <ActionBtn
-          emoji="↩"
-          bg={canUndo ? "#3B82F618" : "transparent"}
-          border={canUndo ? "#3B82F6" : "#9CA3AF44"}
-          color={canUndo ? "#3B82F6" : "#9CA3AF55"}
-          size={46}
-          onPress={() => canUndo && onUndo?.()}
-        />
-        <ActionBtn emoji="✕"  bg="#FF450020" border="#FF4500" color="#FF4500" size={58} onPress={() => commitSwipe("left")} />
-        <ActionBtn emoji="ℹ️" bg="transparent" border="#9CA3AF" color="#9CA3AF" size={46} onPress={() => onCardPress(users[currentIndex])} />
-        <ActionBtn emoji="✦" bg={PALETTE.success + "20"} border={PALETTE.success} color={PALETTE.success} size={58} onPress={() => commitSwipe("right")} />
+        <ActionBtn icon="arrow-undo"       color={canUndo ? "#3B82F6" : "#C0C0C8"} bg={canUndo ? "#3B82F614" : "#F0F0F4"} size={46} onPress={() => canUndo && onUndo?.()} />
+        <ActionBtn icon="close"            color="#FF4500"        bg="#FFF0EC"       size={58} onPress={() => commitSwipe("left")} />
+        <ActionBtn icon="information"      color="#8E8E9A"        bg="#F2F2F6"       size={46} onPress={() => onCardPress(users[currentIndex])} />
+        <SparkleBtn size={58} onPress={() => commitSwipe("right")} />
       </View>
     </View>
   );
@@ -337,16 +330,34 @@ function SwipeCardContent({ user, status, onInfoPress }: {
   );
 }
 
-function ActionBtn({ emoji, bg, border, color, size, onPress }: {
-  emoji: string; bg: string; border: string; color: string; size: number; onPress: () => void;
+function ActionBtn({ icon, color, bg, size, onPress }: {
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+  color: string; bg: string; size: number; onPress: () => void;
 }) {
   return (
     <TouchableOpacity
-      style={[deck.actionBtn, { width: size, height: size, borderRadius: size / 2, backgroundColor: bg, borderColor: border }]}
+      style={[deck.actionBtn, { width: size, height: size, borderRadius: size / 2, backgroundColor: bg }]}
       onPress={onPress}
-      activeOpacity={0.75}
+      activeOpacity={0.72}
     >
-      <Text style={{ fontSize: size * 0.42 }}>{emoji}</Text>
+      <Ionicons name={icon} size={size * 0.44} color={color} />
+    </TouchableOpacity>
+  );
+}
+
+function SparkleBtn({ size, onPress }: { size: number; onPress: () => void }) {
+  return (
+    <TouchableOpacity
+      style={[deck.actionBtn, { width: size, height: size, borderRadius: size / 2, backgroundColor: "#E8FBF0" }]}
+      onPress={onPress}
+      activeOpacity={0.72}
+    >
+      {/* Main star */}
+      <Text style={{ fontSize: size * 0.40, color: "#22C55E", lineHeight: size * 0.44 }}>✦</Text>
+      {/* Small top-right star */}
+      <Text style={{ position: "absolute", top: size * 0.10, right: size * 0.12, fontSize: size * 0.18, color: "#22C55E", opacity: 0.85 }}>✦</Text>
+      {/* Small bottom-left star */}
+      <Text style={{ position: "absolute", bottom: size * 0.12, left: size * 0.13, fontSize: size * 0.13, color: "#22C55E", opacity: 0.65 }}>✦</Text>
     </TouchableOpacity>
   );
 }
@@ -372,8 +383,8 @@ const deck = StyleSheet.create({
   passOverlay: { position: "absolute", top: SPACE[24], right: SPACE[20], zIndex: 10, transform: [{ rotate: "20deg" }], borderWidth: 3, borderColor: "#FF4500", borderRadius: RADIUS.md, paddingHorizontal: SPACE[12], paddingVertical: SPACE[4] },
   passText:    { fontSize: FONT.size.xxl, fontWeight: FONT.weight.black, color: "#FF4500" },
 
-  actions:   { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: SPACE[28], paddingVertical: SPACE[20] },
-  actionBtn: { alignItems: "center", justifyContent: "center", borderWidth: 2 },
+  actions:   { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: SPACE[24], paddingVertical: SPACE[20] },
+  actionBtn: { alignItems: "center", justifyContent: "center", shadowColor: "#000", shadowOpacity: 0.10, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 4 },
 
   empty:      { flex: 1, alignItems: "center", justifyContent: "center", gap: SPACE[10] },
   emptyEmoji: { fontSize: 52 },
