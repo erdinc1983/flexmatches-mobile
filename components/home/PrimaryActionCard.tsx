@@ -62,7 +62,7 @@ export function PrimaryActionCard({ action, onLogWorkout }: Props) {
       <ImageBackground
         source={GYM_PHOTO}
         style={s.doneCard}
-        imageStyle={{ borderRadius: RADIUS.xl, top: -30 }}
+        imageStyle={{ borderRadius: RADIUS.xl }}
         resizeMode="cover"
       >
         {/* Dark gradient overlay — bottom-heavy so text readable */}
@@ -264,7 +264,7 @@ const s = StyleSheet.create({
   waveBottom2: { position: "absolute", width: 400, height: 160, borderRadius: 80,  backgroundColor: "rgba(255,255,255,0.07)", bottom: -80,  left: 40 },
 
   // "done" gym photo variant
-  doneCard:      { height: 160, borderRadius: RADIUS.xl, overflow: "hidden", justifyContent: "flex-end" },
+  doneCard:      { height: 200, borderRadius: RADIUS.xl, overflow: "hidden", justifyContent: "flex-end" },
   doneBorder:    { ...StyleSheet.absoluteFillObject, borderRadius: RADIUS.xl, borderWidth: 1.5, borderColor: BRAND.primary },
   doneContent:   { padding: SPACE[16], gap: SPACE[4] },
   doneBadge:     { flexDirection: "row", alignItems: "center", gap: SPACE[6], alignSelf: "flex-start", backgroundColor: "rgba(0,0,0,0.40)", paddingHorizontal: SPACE[10], paddingVertical: SPACE[4], borderRadius: RADIUS.pill, marginBottom: SPACE[4] },
