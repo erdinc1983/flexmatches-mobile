@@ -62,7 +62,7 @@ export function PrimaryActionCard({ action, onLogWorkout }: Props) {
       <ImageBackground
         source={GYM_PHOTO}
         style={s.doneCard}
-        imageStyle={{ borderRadius: RADIUS.xl }}
+        imageStyle={{ borderRadius: RADIUS.xl, top: -30 }}
         resizeMode="cover"
       >
         {/* Dark gradient overlay — bottom-heavy so text readable */}
