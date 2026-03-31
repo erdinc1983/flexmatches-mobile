@@ -925,56 +925,56 @@ function GymStrip({ isAtGym, toggling, onToggle, gymName }: {
   const activeBg     = isDark ? "#0D2D1A" : "#ECFDF5";
   const activeBorder = isDark ? "#166534" : "#BBF7D0";
   const pinColor     = isAtGym ? PALETTE.success : c.brand;
+  const cardBg       = isAtGym ? activeBg     : c.bgCard;
+  const cardBorder   = isAtGym ? activeBorder : c.border;
 
   return (
     <TouchableOpacity
-      style={[
-        gs.card,
-        SHADOW.md,
-        isAtGym
-          ? { backgroundColor: activeBg, borderColor: activeBorder }
-          : { backgroundColor: c.bgCard, borderColor: c.border },
-      ]}
+      style={[gs.card, SHADOW.md, { backgroundColor: cardBg, borderColor: cardBorder }]}
       onPress={onToggle}
       activeOpacity={0.75}
       disabled={toggling}
     >
-      {/* Decorative wave lines — right side */}
+      {/* Decorative wave arcs — right side */}
       <View pointerEvents="none" style={StyleSheet.absoluteFill}>
         <View style={[gs.wave1, { borderColor: isDark ? "#ffffff08" : "#00000008" }]} />
         <View style={[gs.wave2, { borderColor: isDark ? "#ffffff06" : "#00000006" }]} />
         <View style={[gs.wave3, { borderColor: isDark ? "#ffffff04" : "#00000005" }]} />
       </View>
 
-      {/* Single row — icon + text + toggle pill */}
+      {/* Top section — icon + title + subtitle */}
       <View style={gs.topRow}>
         <View style={[gs.pinWrap, { backgroundColor: isAtGym ? "#22C55E18" : "#FF450014" }]}>
           {toggling
             ? <ActivityIndicator size="small" color={pinColor} />
-            : <Icon name="location" size={22} color={pinColor} />
+            : <Icon name="location" size={24} color={pinColor} />
           }
         </View>
         <View style={{ flex: 1 }}>
           <Text style={[gs.label, { color: isAtGym ? PALETTE.success : c.text }]}>
-            {isAtGym ? "You're checked in" : "Check in at your gym"}
+            {isAtGym ? "You're checked in" : "Check in at gym"}
           </Text>
-          <View style={gs.metaRow}>
-            <Text style={{ fontSize: 11 }}>📍</Text>
-            <Text style={[gs.gymName, { color: c.textMuted }]}>{gymName ?? "Your gym"}</Text>
-            {isAtGym && (
-              <>
-                <Text style={[gs.gymName, { color: c.textFaint }]}>·</Text>
-                <View style={gs.activeDot} />
-                <Text style={gs.activeText}>Active now</Text>
-              </>
-            )}
-          </View>
-        </View>
-        <View style={[gs.togglePill, { backgroundColor: isAtGym ? "#DCFCE7" : "#FEF0E8" }]}>
-          <Text style={[gs.toggleText, { color: isAtGym ? PALETTE.success : c.brand }]}>
-            {isAtGym ? "Check Out" : "Check In"}
+          <Text style={[gs.sublabel, { color: c.textMuted }]}>
+            {isAtGym ? "Tap to check out" : "Find partners at your gym"}
           </Text>
         </View>
+      </View>
+
+      {/* Divider */}
+      <View style={[gs.divider, { backgroundColor: cardBorder }]} />
+
+      {/* Bottom section — gym name */}
+      <View style={gs.bottomRow}>
+        <Text style={{ fontSize: 13 }}>📍</Text>
+        <Text style={[gs.gymNameText, { color: c.textMuted }]}>
+          {gymName ?? "Your gym"}
+        </Text>
+        {isAtGym && (
+          <>
+            <View style={gs.activeDot} />
+            <Text style={gs.activeText}>Active now</Text>
+          </>
+        )}
       </View>
     </TouchableOpacity>
   );
@@ -1136,15 +1136,15 @@ function NewCirclesSection({ circles, onPress, onJoin, onDismiss }: {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const gs = StyleSheet.create({
   card:        { borderRadius: RADIUS.xl, borderWidth: 1, overflow: "hidden" },
-  topRow:      { flexDirection: "row", alignItems: "center", gap: SPACE[12], paddingHorizontal: SPACE[16], paddingVertical: SPACE[16] },
-  pinWrap:     { width: 46, height: 46, borderRadius: RADIUS.md, alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  label:       { ...TYPE.cardTitle, marginBottom: 4 },
-  metaRow:     { flexDirection: "row", alignItems: "center", gap: SPACE[4] },
-  gymName:     { fontSize: 12, fontWeight: FONT.weight.medium },
+  topRow:      { flexDirection: "row", alignItems: "center", gap: SPACE[14], paddingHorizontal: SPACE[16], paddingTop: SPACE[16], paddingBottom: SPACE[14] },
+  pinWrap:     { width: 48, height: 48, borderRadius: RADIUS.md, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  label:       { ...TYPE.cardTitle },
+  sublabel:    { fontSize: FONT.size.sm, marginTop: 2 },
+  divider:     { height: 1, marginHorizontal: SPACE[16] },
+  bottomRow:   { flexDirection: "row", alignItems: "center", gap: SPACE[6], paddingHorizontal: SPACE[16], paddingVertical: SPACE[12] },
+  gymNameText: { fontSize: FONT.size.sm, fontWeight: FONT.weight.medium, flex: 1 },
   activeDot:   { width: 6, height: 6, borderRadius: 3, backgroundColor: "#22C55E" },
   activeText:  { fontSize: 12, fontWeight: FONT.weight.bold, color: "#22C55E" },
-  togglePill:  { borderRadius: RADIUS.pill, paddingHorizontal: SPACE[14], paddingVertical: SPACE[8], flexShrink: 0 },
-  toggleText:  { fontSize: 13, fontWeight: FONT.weight.bold },
   // Smooth wave arcs — large ellipses clipped at card edge
   wave1:       { position: "absolute", width: 260, height: 260, borderRadius: 130, borderWidth: 18, top: -80, right: -100 },
   wave2:       { position: "absolute", width: 200, height: 200, borderRadius: 100, borderWidth: 18, top: -40, right: -60 },
