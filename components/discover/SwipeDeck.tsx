@@ -13,24 +13,41 @@
 import React, { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, Animated, PanResponder,
-  TouchableOpacity, ScrollView, Dimensions,
+  TouchableOpacity, Dimensions,
 } from "react-native";
+import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
 import { useTheme, SPACE, FONT, RADIUS, PALETTE } from "../../lib/theme";
-import { Avatar } from "../Avatar";
+import { resolveUrl } from "../Avatar";
 import { Icon } from "../Icon";
 import type { DiscoverUser, RequestStatus } from "./PersonCard";
 
+// Cartoon avatar fallback — same as Avatar.tsx
+const WEB_BASE = "https://flexmatches.com";
+const MALE_AVATARS   = Array.from({ length: 12 }, (_, i) => `${WEB_BASE}/avatars/male/m${i + 1}.jpeg`);
+const FEMALE_AVATARS = Array.from({ length: 12 }, (_, i) => `${WEB_BASE}/avatars/female/f${i + 1}.jpeg`);
+const ALL_AVATARS    = [...MALE_AVATARS, ...FEMALE_AVATARS];
+function nameHash(n: string) { let h = 0; for (let i = 0; i < n.length; i++) h = n.charCodeAt(i) + ((h << 5) - h); return Math.abs(h); }
+function cartoonAvatar(name: string) { return ALL_AVATARS[nameHash(name?.trim() || "user") % ALL_AVATARS.length]; }
+function reasonIcon(r: string): string {
+  const l = r.toLowerCase();
+  if (l.includes("sport") || l.includes("shared")) return "🎯";
+  if (l.includes("level"))                          return "⚡";
+  if (l.includes("near") || l.includes("city") || l.includes("km")) return "📍";
+  if (l.includes("train") || l.includes("morning") || l.includes("afternoon") || l.includes("evening") || l.includes("weekend")) return "📅";
+  if (l.includes("mentor") || l.includes("partner")) return "🤝";
+  return "✓";
+}
+
 const { width: W, height: H } = Dimensions.get("window");
-const CARD_H          = H * 0.54;
+const CARD_H          = H * 0.60;
+const PHOTO_H         = Math.round(CARD_H * 0.54);
 const SWIPE_THRESHOLD = 100;
 const SWIPE_DURATION  = 230;
 
 const LEVEL_COLOR: Record<string, string> = {
   beginner: "#22C55E", intermediate: "#F59E0B", advanced: "#FF4500",
 };
-const TAG_COLORS: Array<[string, string]> = [
-  ["#FF450018", "#FF4500"], ["#22C55E18", "#22C55E"], ["#3B82F618", "#3B82F6"],
-];
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Props = {
@@ -188,108 +205,110 @@ function SwipeCardContent({ user, status, onInfoPress }: {
 }) {
   const { theme } = useTheme();
   const c = theme.colors;
-  const levelColor = user.fitness_level ? LEVEL_COLOR[user.fitness_level] : c.textMuted;
+
+  const rawName     = user.full_name ?? user.username;
+  const isUUID      = /^[0-9a-f-]{20,}$/i.test(rawName);
+  const displayName = isUUID ? "Member" : rawName;
+
+  const resolvedUrl = resolveUrl(user.avatar_url);
+  const fallbackUrl = cartoonAvatar(displayName);
+  const photoUrl    = resolvedUrl ?? fallbackUrl;
+
+  const levelColor = user.fitness_level ? LEVEL_COLOR[user.fitness_level] : "#9CA3AF";
   const activeStr  = formatActive(user.last_active);
   const sports     = (user.sports ?? []).slice(0, 4);
 
-  // Score bar color
   const scoreColor =
-    user.matchScore >= 80 ? PALETTE.success :
-    user.matchScore >= 60 ? "#3B82F6" :
-    user.matchScore >= 35 ? "#F59E0B" : c.border;
+    user.matchScore >= 70 ? PALETTE.success :
+    user.matchScore >= 45 ? "#3B82F6" :
+    user.matchScore >= 25 ? "#F59E0B" : "#9CA3AF";
 
   return (
     <View style={[card.root, { backgroundColor: c.bgCard }]}>
-      {/* Score bar */}
-      <View style={[card.scoreBg, { backgroundColor: c.bgCardAlt }]}>
-        <View style={[card.scoreFill, { width: `${user.matchScore}%` as any, backgroundColor: scoreColor }]} />
+
+      {/* ── Photo section ──────────────────────────────────────────── */}
+      <View style={{ height: PHOTO_H }}>
+        <Image
+          source={{ uri: photoUrl }}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          placeholder={{ uri: fallbackUrl }}
+          transition={200}
+        />
+        <LinearGradient
+          colors={["rgba(0,0,0,0.0)", "rgba(0,0,0,0.0)", "rgba(0,0,0,0.72)"]}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+
+        {/* At gym badge — top left */}
+        {user.is_at_gym && (
+          <View style={card.gymBadge}>
+            <View style={card.gymDot} />
+            <Text style={card.gymBadgeText}>At gym</Text>
+          </View>
+        )}
+
+        {/* Match score — top right */}
+        <View style={[card.scorePill, { backgroundColor: scoreColor + "DD" }]}>
+          <Text style={card.scoreText}>{user.matchScore}% match</Text>
+        </View>
+
+        {/* Name + meta overlay — bottom of photo */}
+        <View style={card.nameOverlay}>
+          <View style={card.nameRow}>
+            <Text style={card.name} numberOfLines={1}>{displayName}</Text>
+            {user.age != null && <Text style={card.age}>{user.age}</Text>}
+          </View>
+          <View style={card.metaRow}>
+            {user.fitness_level && (
+              <View style={[card.levelBadge, { backgroundColor: levelColor + "30", borderColor: levelColor + "70" }]}>
+                <Text style={[card.levelText, { color: levelColor }]}>{user.fitness_level}</Text>
+              </View>
+            )}
+            {activeStr !== "" && (
+              <Text style={[card.activeTime, { color: activeStr === "Active now" ? "#4ADE80" : "rgba(255,255,255,0.70)" }]}>
+                {activeStr === "Active now" ? "● Active now" : activeStr}
+              </Text>
+            )}
+            {user.city && (
+              <Text style={card.cityText} numberOfLines={1}>· {user.city}</Text>
+            )}
+          </View>
+        </View>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={card.scroll}>
-        {/* Avatar + identity */}
-        <View style={card.hero}>
-          <View style={card.avatarWrap}>
-            <Avatar url={user.avatar_url} name={user.full_name ?? user.username} size={80} />
-            {user.is_at_gym && (
-              <View style={[card.gymDot, { backgroundColor: PALETTE.success, borderColor: c.bgCard }]} />
-            )}
-            {user.matchScore >= 80 && (
-              <View style={[card.hotBadge, { backgroundColor: "#FF4500" }]}>
-                <Text style={card.hotText}>🔥</Text>
-              </View>
-            )}
-          </View>
-          <View style={card.nameBlock}>
-            <View style={card.nameRow}>
-              <Text style={[card.name, { color: c.text }]} numberOfLines={1}>
-                {user.full_name ?? user.username}
-              </Text>
-              {user.age != null && (
-                <Text style={[card.age, { color: c.textMuted }]}>{user.age}</Text>
-              )}
-            </View>
-            <View style={card.metaRow}>
-              {user.fitness_level && (
-                <View style={[card.levelBadge, { backgroundColor: levelColor + "20", borderColor: levelColor + "50" }]}>
-                  <Text style={[card.levelText, { color: levelColor }]}>{user.fitness_level}</Text>
-                </View>
-              )}
-              {activeStr !== "" && (
-                <Text style={[card.activeTime, { color: activeStr === "Active now" ? "#22C55E" : c.textMuted }]}>
-                  {activeStr}
-                </Text>
-              )}
-              {user.current_streak >= 3 && (
-                <Text style={[card.streak, { color: c.brand }]}>🔥 {user.current_streak}d</Text>
-              )}
-            </View>
-            {user.city && (
-              <View style={card.cityRow}>
-                <Icon name="location" size={11} color={c.textMuted} />
-                <Text style={[card.city, { color: c.textMuted }]}>{user.city}</Text>
-              </View>
-            )}
+      {/* ── Info section ───────────────────────────────────────────── */}
+      <View style={[card.info, { backgroundColor: c.bgCard }]}>
+
+        {/* Why this works header */}
+        <View style={card.whyRow}>
+          <Text style={[card.whyLabel, { color: c.textMuted }]}>✦ Why this works</Text>
+          <View style={[card.matchPill, { backgroundColor: scoreColor + "20", borderColor: scoreColor + "50" }]}>
+            <Text style={[card.matchPillText, { color: scoreColor }]}>{user.matchScore}% match</Text>
           </View>
         </View>
 
-        {/* Score label */}
-        <View style={card.scoreRow}>
-          <View style={[card.scorePill, { backgroundColor: scoreColor + "20" }]}>
-            <Text style={[card.scoreLabel, { color: scoreColor }]}>
-              {user.matchScore}% match
-            </Text>
-          </View>
-          {user.matchScore >= 80 && (
-            <Text style={[card.topMatch, { color: scoreColor }]}>Top match ⭐</Text>
-          )}
-        </View>
-
-        {/* Reason tags */}
+        {/* Reasons */}
         {user.reasons.length > 0 ? (
-          <View style={card.tagsRow}>
-            {user.reasons.map((r, i) => {
-              const [bg, fg] = TAG_COLORS[i % TAG_COLORS.length];
-              return (
-                <View key={r} style={[card.tag, { backgroundColor: bg }]}>
-                  <Text style={[card.tagText, { color: fg }]}>{r}</Text>
-                </View>
-              );
-            })}
+          <View style={card.reasons}>
+            {user.reasons.map((r) => (
+              <View key={r} style={card.reasonRow}>
+                <Text style={card.reasonIcon}>{reasonIcon(r)}</Text>
+                <Text style={[card.reasonText, { color: c.textSecondary }]}>{r}</Text>
+              </View>
+            ))}
           </View>
         ) : (
-          <View style={card.tagsRow}>
-            <View style={[card.tag, { backgroundColor: c.bgCardAlt }]}>
-              <Text style={[card.tagText, { color: c.textMuted }]}>New to FlexMatches</Text>
+          <View style={card.reasons}>
+            <View style={card.reasonRow}>
+              <Text style={card.reasonIcon}>✨</Text>
+              <Text style={[card.reasonText, { color: c.textMuted }]}>New to FlexMatches</Text>
             </View>
           </View>
         )}
 
-        {/* Bio */}
-        {user.bio && (
-          <Text style={[card.bio, { color: c.textSecondary }]} numberOfLines={2}>{user.bio}</Text>
-        )}
-
-        {/* Sports */}
+        {/* Sports chips */}
         {sports.length > 0 && (
           <View style={card.sports}>
             {sports.map((sp) => (
@@ -300,7 +319,7 @@ function SwipeCardContent({ user, status, onInfoPress }: {
           </View>
         )}
 
-        {/* Status (if already connected) */}
+        {/* Status row */}
         {status === "pending" && (
           <View style={[card.statusRow, { backgroundColor: "#F59E0B18", borderColor: "#F59E0B44" }]}>
             <Icon name="clock" size={13} color="#F59E0B" />
@@ -310,10 +329,10 @@ function SwipeCardContent({ user, status, onInfoPress }: {
         {status === "accepted" && (
           <View style={[card.statusRow, { backgroundColor: PALETTE.success + "18", borderColor: PALETTE.success + "44" }]}>
             <Icon name="checkActive" size={13} color={PALETTE.success} />
-            <Text style={[card.statusText, { color: PALETTE.success }]}>You're matched! Open chat ›</Text>
+            <Text style={[card.statusText, { color: PALETTE.success }]}>Connected ✓ — Open chat</Text>
           </View>
         )}
-      </ScrollView>
+      </View>
     </View>
   );
 }
@@ -363,43 +382,43 @@ const deck = StyleSheet.create({
 });
 
 const card = StyleSheet.create({
-  root:     { flex: 1 },
-  scoreBg:  { height: 3 },
-  scoreFill:{ height: 3, borderRadius: 2 },
-  scroll:   { padding: SPACE[16], gap: SPACE[12], paddingBottom: SPACE[20] },
+  root:       { flex: 1, overflow: "hidden" },
 
-  hero:      { flexDirection: "row", gap: SPACE[14], alignItems: "flex-start" },
-  avatarWrap:{ width: 80, height: 80, flexShrink: 0 },
-  gymDot:    { position: "absolute", bottom: 2, right: 2, width: 16, height: 16, borderRadius: 8, borderWidth: 2.5 },
-  hotBadge:  { position: "absolute", top: -4, right: -4, width: 22, height: 22, borderRadius: 11, alignItems: "center", justifyContent: "center" },
-  hotText:   { fontSize: 12 },
+  // Photo overlays
+  gymBadge:     { position: "absolute", top: SPACE[12], left: SPACE[12], flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "rgba(0,0,0,0.50)", borderRadius: RADIUS.pill, paddingHorizontal: SPACE[10], paddingVertical: 5 },
+  gymDot:       { width: 7, height: 7, borderRadius: 4, backgroundColor: "#4ADE80" },
+  gymBadgeText: { fontSize: 12, fontWeight: FONT.weight.bold, color: "#fff" },
 
-  nameBlock: { flex: 1, gap: SPACE[6] },
-  nameRow:   { flexDirection: "row", alignItems: "flex-end", gap: SPACE[6] },
-  name:      { fontSize: FONT.size.xxl, fontWeight: FONT.weight.black, letterSpacing: -0.3, flexShrink: 1 },
-  age:       { fontSize: FONT.size.lg, fontWeight: FONT.weight.medium, paddingBottom: 2 },
-  metaRow:   { flexDirection: "row", alignItems: "center", gap: SPACE[6], flexWrap: "wrap" },
-  levelBadge:{ paddingHorizontal: SPACE[8], paddingVertical: 2, borderRadius: RADIUS.pill, borderWidth: 1 },
-  levelText: { fontSize: FONT.size.xs, fontWeight: FONT.weight.extrabold, textTransform: "capitalize" },
-  activeTime:{ fontSize: FONT.size.xs, fontWeight: FONT.weight.medium },
-  streak:    { fontSize: FONT.size.xs, fontWeight: FONT.weight.semibold },
-  cityRow:   { flexDirection: "row", alignItems: "center", gap: 3 },
-  city:      { fontSize: FONT.size.xs },
+  scorePill:  { position: "absolute", top: SPACE[12], right: SPACE[12], paddingHorizontal: SPACE[10], paddingVertical: 5, borderRadius: RADIUS.pill },
+  scoreText:  { fontSize: 12, fontWeight: FONT.weight.extrabold, color: "#fff" },
 
-  scoreRow:  { flexDirection: "row", alignItems: "center", gap: SPACE[8] },
-  scorePill: { paddingHorizontal: SPACE[10], paddingVertical: 3, borderRadius: RADIUS.pill },
-  scoreLabel:{ fontSize: FONT.size.xs, fontWeight: FONT.weight.extrabold },
-  topMatch:  { fontSize: FONT.size.xs, fontWeight: FONT.weight.semibold },
+  nameOverlay:{ position: "absolute", bottom: 0, left: 0, right: 0, padding: SPACE[14], gap: SPACE[4] },
+  nameRow:    { flexDirection: "row", alignItems: "flex-end", gap: SPACE[8] },
+  name:       { fontSize: FONT.size.xxl, fontWeight: FONT.weight.black, color: "#fff", letterSpacing: -0.4, flexShrink: 1 },
+  age:        { fontSize: FONT.size.lg, fontWeight: FONT.weight.medium, color: "rgba(255,255,255,0.80)", paddingBottom: 2 },
+  metaRow:    { flexDirection: "row", alignItems: "center", gap: SPACE[8], flexWrap: "wrap" },
+  levelBadge: { paddingHorizontal: SPACE[8], paddingVertical: 2, borderRadius: RADIUS.pill, borderWidth: 1 },
+  levelText:  { fontSize: FONT.size.xs, fontWeight: FONT.weight.extrabold, textTransform: "capitalize" },
+  activeTime: { fontSize: FONT.size.xs, fontWeight: FONT.weight.semibold },
+  cityText:   { fontSize: FONT.size.xs, color: "rgba(255,255,255,0.70)", fontWeight: FONT.weight.medium },
 
-  tagsRow:   { flexDirection: "row", flexWrap: "wrap", gap: SPACE[6] },
-  tag:       { paddingHorizontal: SPACE[10], paddingVertical: 4, borderRadius: RADIUS.pill },
-  tagText:   { fontSize: FONT.size.xs, fontWeight: FONT.weight.bold },
+  // Info section
+  info:       { flex: 1, padding: SPACE[14], gap: SPACE[10] },
 
-  bio:       { fontSize: FONT.size.sm, lineHeight: FONT.size.sm * 1.55 },
-  sports:    { flexDirection: "row", flexWrap: "wrap", gap: SPACE[6] },
-  sportChip: { paddingHorizontal: SPACE[8], paddingVertical: 3, borderRadius: RADIUS.sm, borderWidth: 1 },
-  sportText: { fontSize: FONT.size.xs, fontWeight: FONT.weight.medium },
+  whyRow:     { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  whyLabel:   { fontSize: 11, fontWeight: FONT.weight.bold, letterSpacing: 0.3, textTransform: "uppercase" },
+  matchPill:  { paddingHorizontal: SPACE[8], paddingVertical: 3, borderRadius: RADIUS.pill, borderWidth: 1 },
+  matchPillText: { fontSize: 11, fontWeight: FONT.weight.extrabold },
 
-  statusRow: { flexDirection: "row", alignItems: "center", gap: SPACE[6], borderRadius: RADIUS.md, borderWidth: 1, padding: SPACE[10] },
-  statusText:{ fontSize: FONT.size.xs, fontWeight: FONT.weight.semibold },
+  reasons:    { gap: SPACE[4] },
+  reasonRow:  { flexDirection: "row", alignItems: "center", gap: SPACE[8] },
+  reasonIcon: { fontSize: 13, width: 18 },
+  reasonText: { fontSize: FONT.size.sm, fontWeight: FONT.weight.medium, flex: 1 },
+
+  sports:     { flexDirection: "row", flexWrap: "wrap", gap: SPACE[6] },
+  sportChip:  { paddingHorizontal: SPACE[8], paddingVertical: 3, borderRadius: RADIUS.sm, borderWidth: 1 },
+  sportText:  { fontSize: FONT.size.xs, fontWeight: FONT.weight.medium },
+
+  statusRow:  { flexDirection: "row", alignItems: "center", gap: SPACE[6], borderRadius: RADIUS.md, borderWidth: 1, padding: SPACE[10] },
+  statusText: { fontSize: FONT.size.xs, fontWeight: FONT.weight.semibold },
 });
