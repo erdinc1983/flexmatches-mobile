@@ -7,12 +7,16 @@
  */
 
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, ImageBackground } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import { useTheme, SPACE, FONT, RADIUS, TYPE } from "../../lib/theme";
+import { useTheme, SPACE, FONT, RADIUS, TYPE, BRAND } from "../../lib/theme";
 import { Icon, IconName } from "../Icon";
 import type { PrimaryAction } from "./types";
+
+// Gym photo shown when workout is already logged for the day
+// TODO: Replace gym-done.jpg with a real gym photo (bench press + shoulder training scene)
+const GYM_PHOTO = require("../../assets/images/gym-done.jpg");
 
 // Light-mode friendly green surface tokens (not in PALETTE which is shared/dark-only)
 const G = {
@@ -52,22 +56,35 @@ export function PrimaryActionCard({ action, onLogWorkout }: Props) {
 
   const cfg = getConfig(action, c, isDark, onLogWorkout);
 
-  // "done" variant: compact, no CTA button
+  // "done" variant: full gym photo card
   if (action.kind === "done") {
-    const bg     = isDark ? G.darkBg     : G.lightBg;
-    const border = isDark ? G.darkBorder : G.lightBorder;
     return (
-      <View style={[s.compact, { backgroundColor: bg, borderColor: border }]}>
-        <Icon name="checkActive" size={20} color="#22C55E" />
-        <View style={{ flex: 1, gap: 2 }}>
-          <Text style={[s.compactTitle, { color: G.text }]}>
-            Workout logged · {action.streak}-day streak
+      <ImageBackground
+        source={GYM_PHOTO}
+        style={s.doneCard}
+        imageStyle={{ borderRadius: RADIUS.xl }}
+        resizeMode="cover"
+      >
+        {/* Dark gradient overlay — bottom-heavy so text readable */}
+        <LinearGradient
+          colors={["rgba(0,0,0,0.08)", "rgba(0,0,0,0.62)"]}
+          style={[StyleSheet.absoluteFill, { borderRadius: RADIUS.xl }]}
+        />
+        {/* Orange border */}
+        <View style={s.doneBorder} pointerEvents="none" />
+
+        {/* Bottom content */}
+        <View style={s.doneContent}>
+          <View style={s.doneBadge}>
+            <Icon name="checkActive" size={13} color="#22C55E" />
+            <Text style={s.doneBadgeText}>Workout Logged</Text>
+          </View>
+          <Text style={s.doneStreak}>
+            {action.streak > 0 ? `🔥 ${action.streak}-day streak` : "First workout done!"}
           </Text>
-          <Text style={[s.compactSub, { color: G.textSub }]}>
-            Come back tomorrow to extend it.
-          </Text>
+          <Text style={s.doneSub}>Come back tomorrow to keep it going.</Text>
         </View>
-      </View>
+      </ImageBackground>
     );
   }
 
@@ -246,8 +263,12 @@ const s = StyleSheet.create({
   waveBottom1: { position: "absolute", width: 500, height: 200, borderRadius: 100, backgroundColor: "rgba(255,255,255,0.10)", bottom: -120, left: -60 },
   waveBottom2: { position: "absolute", width: 400, height: 160, borderRadius: 80,  backgroundColor: "rgba(255,255,255,0.07)", bottom: -80,  left: 40 },
 
-  // "done" compact variant
-  compact:    { flexDirection: "row", alignItems: "center", gap: SPACE[10], borderRadius: RADIUS.lg, padding: SPACE[14], borderWidth: 1 },
-  compactTitle:{ flex: 1, fontSize: FONT.size.base, fontWeight: FONT.weight.bold },
-  compactSub: { fontSize: FONT.size.sm },
+  // "done" gym photo variant
+  doneCard:      { height: 160, borderRadius: RADIUS.xl, overflow: "hidden", justifyContent: "flex-end" },
+  doneBorder:    { ...StyleSheet.absoluteFillObject, borderRadius: RADIUS.xl, borderWidth: 1.5, borderColor: BRAND.primary },
+  doneContent:   { padding: SPACE[16], gap: SPACE[4] },
+  doneBadge:     { flexDirection: "row", alignItems: "center", gap: SPACE[6], alignSelf: "flex-start", backgroundColor: "rgba(0,0,0,0.40)", paddingHorizontal: SPACE[10], paddingVertical: SPACE[4], borderRadius: RADIUS.pill, marginBottom: SPACE[4] },
+  doneBadgeText: { color: "#22C55E", fontSize: 12, fontWeight: FONT.weight.bold },
+  doneStreak:    { color: "#fff", fontSize: FONT.size.lg, fontWeight: FONT.weight.black, letterSpacing: -0.3 },
+  doneSub:       { color: "rgba(255,255,255,0.72)", fontSize: FONT.size.sm },
 });
