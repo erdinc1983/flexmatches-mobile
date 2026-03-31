@@ -20,8 +20,8 @@ export const ICON_MAP = {
   // Navigation — tab bar
   home:          "home-outline",
   homeActive:    "home",
-  discover:      "compass-outline",
-  discoverActive:"compass",
+  discover:      "sparkles-outline",
+  discoverActive:"sparkles",
   chat:          "chatbubble-outline",
   chatActive:    "chatbubble",
   circles:       "people-outline",
