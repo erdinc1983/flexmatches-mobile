@@ -355,9 +355,9 @@ function SparkleBtn({ size, onPress }: { size: number; onPress: () => void }) {
       {/* Main star */}
       <Text style={{ fontSize: size * 0.40, color: "#22C55E", lineHeight: size * 0.44 }}>✦</Text>
       {/* Small top-right star */}
-      <Text style={{ position: "absolute", top: size * 0.10, right: size * 0.12, fontSize: size * 0.18, color: "#22C55E", opacity: 0.85 }}>✦</Text>
+      <Text style={{ position: "absolute", top: size * 0.16, right: size * 0.18, fontSize: size * 0.18, color: "#22C55E", opacity: 0.85 }}>✦</Text>
       {/* Small bottom-left star */}
-      <Text style={{ position: "absolute", bottom: size * 0.12, left: size * 0.13, fontSize: size * 0.13, color: "#22C55E", opacity: 0.65 }}>✦</Text>
+      <Text style={{ position: "absolute", bottom: size * 0.18, left: size * 0.19, fontSize: size * 0.13, color: "#22C55E", opacity: 0.65 }}>✦</Text>
     </TouchableOpacity>
   );
 }
