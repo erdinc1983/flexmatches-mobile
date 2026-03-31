@@ -331,7 +331,7 @@ export default function HomeScreen() {
     const { data: candidates } = await supabase
       .from("users")
       .select("id, username, full_name, avatar_url, city, sports, fitness_level, availability")
-      .neq("id", uid).limit(40);
+      .neq("id", uid).is("banned_at", null).limit(40);
 
     const scored = (candidates ?? [])
       .filter((u: any) => !excludeIds.has(u.id))

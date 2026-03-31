@@ -35,11 +35,16 @@ import { SwipeDeck, SwipeDeckRef } from "../../components/discover/SwipeDeck";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type MyProfile = {
-  id:            string;
-  sports:        string[] | null;
-  fitness_level: string | null;
-  availability:  Record<string, boolean> | null;
-  city:          string | null;
+  id:              string;
+  sports:          string[] | null;
+  fitness_level:   string | null;
+  availability:    Record<string, boolean> | null;
+  city:            string | null;
+  training_intent: string | null;
+  show_me:         string | null;  // "everyone" | "men" | "women"
+  lat:             number | null;
+  lng:             number | null;
+  gender:          string | null;
 };
 
 type Filters = {
@@ -47,6 +52,9 @@ type Filters = {
   level:    string | null;
   schedule: string | null;
   atGym:    boolean;
+  intent:   string | null;   // "guidance" | "teaching" | "equal"
+  showMe:   string | null;   // "everyone" | "men" | "women"
+  maxKm:    number | null;   // null = no distance filter
 };
 
 // Swipe undo — no time limit, tracks last swipe only
@@ -55,7 +63,41 @@ type SwipeAction = { userId: string; dbId: string; action: "like" | "pass" } | n
 // Connect undo — time-limited toast for list-view Send Request
 type UndoState = { userId: string; dbId: string; name: string } | null;
 
-const EMPTY_FILTERS: Filters = { sport: null, level: null, schedule: null, atGym: false };
+const EMPTY_FILTERS: Filters = { sport: null, level: null, schedule: null, atGym: false, intent: null, showMe: null, maxKm: null };
+
+const INTENT_OPTIONS = [
+  { value: "guidance", label: "I want guidance",       emoji: "📚" },
+  { value: "teaching", label: "I enjoy helping others", emoji: "🎓" },
+  { value: "equal",    label: "Equal training partner", emoji: "🤝" },
+];
+
+const SHOW_ME_OPTIONS = [
+  { value: "everyone", label: "Everyone" },
+  { value: "men",      label: "Men" },
+  { value: "women",    label: "Women" },
+];
+
+const DISTANCE_OPTIONS = [5, 10, 25, 50];
+
+// Haversine distance in km
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// Intent compatibility bonus (0–15 pts)
+function intentBonus(myIntent: string | null, theirIntent: string | null): number {
+  if (!myIntent || !theirIntent) return 5; // neutral
+  if (myIntent === "guidance"  && theirIntent === "teaching")  return 15;
+  if (myIntent === "teaching"  && theirIntent === "guidance")  return 15;
+  if (myIntent === "equal"     && theirIntent === "equal")     return 12;
+  if (myIntent === "equal"     || theirIntent === "equal")     return 8;
+  return 2; // same intent but not complementary (both want guidance)
+}
 const NEW_THRESHOLD = 7 * 24 * 60 * 60 * 1000;
 
 const LEVEL_ORDER: Record<string, number> = { beginner: 0, intermediate: 1, advanced: 2 };
@@ -97,6 +139,18 @@ function calcMatchScore(me: MyProfile, other: DiscoverUser): number {
   }
 
   if (other.is_at_gym) score += 10;
+
+  // Intent compatibility (replaces 10pts last_active slot at max)
+  score += intentBonus(me.training_intent, other.training_intent);
+
+  // Proximity bonus (if both have coordinates)
+  if (me.lat && me.lng && other.lat && other.lng) {
+    const km = haversineKm(me.lat, me.lng, other.lat, other.lng);
+    if (km <= 5)  score += 10;
+    else if (km <= 15) score += 6;
+    else if (km <= 30) score += 3;
+  }
+
   return Math.min(score, 100);
 }
 
@@ -117,12 +171,29 @@ function buildReasons(me: MyProfile, other: DiscoverUser): string[] {
   };
   if (sharedSlots.length > 0) reasons.push(SLOT[sharedSlots[0]] ?? sharedSlots[0]);
 
-  if (me.city && other.city?.toLowerCase() === me.city.toLowerCase()) reasons.push("Nearby");
+  if (me.city && other.city?.toLowerCase() === me.city.toLowerCase()) reasons.push("Same city");
+
+  // Proximity
+  if (me.lat && me.lng && other.lat && other.lng) {
+    const km = Math.round(haversineKm(me.lat, me.lng, other.lat, other.lng));
+    if (km <= 30) reasons.push(`${km} km away`);
+  }
+
+  // Intent compatibility
+  if (me.training_intent && other.training_intent) {
+    if (me.training_intent === "guidance" && other.training_intent === "teaching")
+      reasons.push("Great match — mentor/learner");
+    else if (me.training_intent === "teaching" && other.training_intent === "guidance")
+      reasons.push("Great match — mentor/learner");
+    else if (me.training_intent === "equal" && other.training_intent === "equal")
+      reasons.push("Both want equal partner");
+  }
+
   return reasons.slice(0, 3);
 }
 
 function activeFilterCount(f: Filters): number {
-  return [f.sport, f.level, f.schedule, f.atGym].filter(Boolean).length;
+  return [f.sport, f.level, f.schedule, f.atGym, f.intent, f.showMe, f.maxKm].filter(Boolean).length;
 }
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
@@ -162,9 +233,10 @@ export default function DiscoverScreen() {
       { data: meData },
       { data: matchData },
       { data: passData },
+      { data: blockData },
     ] = await Promise.all([
       supabase.from("users")
-        .select("id, sports, fitness_level, availability, city")
+        .select("id, sports, fitness_level, availability, city, training_intent, show_me, lat, lng, gender")
         .eq("id", user.id).single(),
       supabase.from("matches")
         .select("id, receiver_id, sender_id, status")
@@ -173,21 +245,30 @@ export default function DiscoverScreen() {
       supabase.from("passes")
         .select("passed_id")
         .eq("user_id", user.id),
+      supabase.from("blocks")
+        .select("blocked_id")
+        .eq("blocker_id", user.id),
     ]);
 
     const me: MyProfile = {
-      id:            user.id,
-      sports:        meData?.sports ?? null,
-      fitness_level: meData?.fitness_level ?? null,
-      availability:  meData?.availability ?? null,
-      city:          meData?.city ?? null,
+      id:              user.id,
+      sports:          meData?.sports ?? null,
+      fitness_level:   meData?.fitness_level ?? null,
+      availability:    meData?.availability ?? null,
+      city:            meData?.city ?? null,
+      training_intent: meData?.training_intent ?? null,
+      show_me:         meData?.show_me ?? null,
+      lat:             meData?.lat ?? null,
+      lng:             meData?.lng ?? null,
+      gender:          meData?.gender ?? null,
     };
     setMyProfile(me);
 
     const excluded = new Set([
       user.id,
-      ...(matchData ?? []).map((m: any) => m.sender_id === user.id ? m.receiver_id : m.sender_id),
-      ...(passData  ?? []).map((p: any) => p.passed_id),
+      ...(matchData  ?? []).map((m: any) => m.sender_id === user.id ? m.receiver_id : m.sender_id),
+      ...(passData   ?? []).map((p: any) => p.passed_id),
+      ...(blockData  ?? []).map((b: any) => b.blocked_id),
     ]);
 
     const initialStatuses: Record<string, RequestStatus> = {};
@@ -208,10 +289,10 @@ export default function DiscoverScreen() {
       .filter((m: any) => m.status === "pending" && m.sender_id === user.id)
       .map((m: any) => m.receiver_id);
 
-    const SELECT_FIELDS = "id, username, full_name, bio, city, fitness_level, age, sports, current_streak, last_active, avatar_url, is_at_gym, availability, created_at";
+    const SELECT_FIELDS = "id, username, full_name, bio, city, fitness_level, age, gender, sports, current_streak, last_active, avatar_url, is_at_gym, availability, training_intent, lat, lng, created_at";
 
     const [{ data: candidates }, { data: pendingProfiles }] = await Promise.all([
-      supabase.from("users").select(SELECT_FIELDS).neq("id", user.id).limit(80),
+      supabase.from("users").select(SELECT_FIELDS).neq("id", user.id).is("banned_at", null).limit(80),
       pendingSentIds.length > 0
         ? supabase.from("users").select(SELECT_FIELDS).in("id", pendingSentIds)
         : Promise.resolve({ data: [] }),
@@ -219,13 +300,17 @@ export default function DiscoverScreen() {
 
     function mapUser(u: any): DiscoverUser {
       return {
-        id:             u.id,
-        username:       u.username,
-        full_name:      u.full_name ?? null,
-        avatar_url:     u.avatar_url ?? null,
-        bio:            u.bio ?? null,
-        city:           u.city ?? null,
-        fitness_level:  u.fitness_level ?? null,
+        id:              u.id,
+        username:        u.username,
+        full_name:       u.full_name ?? null,
+        avatar_url:      u.avatar_url ?? null,
+        bio:             u.bio ?? null,
+        city:            u.city ?? null,
+        fitness_level:   u.fitness_level ?? null,
+        gender:          u.gender ?? null,
+        training_intent: u.training_intent ?? null,
+        lat:             u.lat ?? null,
+        lng:             u.lng ?? null,
         age:            u.age ?? null,
         sports:         u.sports ?? null,
         current_streak: u.current_streak ?? 0,
@@ -365,6 +450,19 @@ export default function DiscoverScreen() {
       const slots = Object.entries((u.availability ?? {}) as Record<string, boolean>)
         .filter(([, v]) => v).map(([k]) => k);
       if (!slots.includes(filters.schedule))                                              return false;
+    }
+    // Intent filter — show only users with this training intent
+    if (filters.intent  && u.training_intent !== filters.intent)                          return false;
+    // Show me filter — gender preference (skip if user has no gender set)
+    if (filters.showMe && filters.showMe !== "everyone" && u.gender) {
+      const want = filters.showMe; // "men" | "women"
+      const genderMatch = want === "men" ? u.gender === "male" : u.gender === "female";
+      if (!genderMatch)                                                                   return false;
+    }
+    // Distance filter
+    if (filters.maxKm && myProfile?.lat && myProfile?.lng && u.lat && u.lng) {
+      const km = haversineKm(myProfile.lat, myProfile.lng, u.lat, u.lng);
+      if (km > filters.maxKm)                                                             return false;
     }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -568,6 +666,10 @@ export default function DiscoverScreen() {
         status={selectedUser ? (statuses[selectedUser.id] ?? "none") : "none"}
         onConnect={() => { if (selectedUser) connect(selectedUser.id); }}
         onClose={() => setSelectedUser(null)}
+        onBlock={(userId) => {
+          setUsers((prev) => prev.filter((u) => u.id !== userId));
+          setSelectedUser(null);
+        }}
       />
 
       {/* ── Filter modal ─────────────────────────────────────────────────── */}
@@ -704,6 +806,49 @@ function FilterModal({
                 </View>
               </TouchableOpacity>
             )}
+
+            <View style={fm.section}>
+              <Text style={[fm.sectionTitle, { color: c.textMuted }]}>TRAINING INTENT</Text>
+              <View style={fm.options}>
+                {INTENT_OPTIONS.map(({ value, label }) => (
+                  <OptionChip
+                    key={value}
+                    label={label}
+                    active={draft.intent === value}
+                    onPress={() => setDraft((d) => ({ ...d, intent: d.intent === value ? null : value }))}
+                  />
+                ))}
+              </View>
+            </View>
+
+            <View style={fm.section}>
+              <Text style={[fm.sectionTitle, { color: c.textMuted }]}>WHO I WANT TO MEET</Text>
+              <View style={fm.options}>
+                {SHOW_ME_OPTIONS.map(({ value, label }) => (
+                  <OptionChip
+                    key={value}
+                    label={label}
+                    active={draft.showMe === value}
+                    onPress={() => setDraft((d) => ({ ...d, showMe: d.showMe === value ? null : value }))}
+                  />
+                ))}
+              </View>
+            </View>
+
+            <View style={fm.section}>
+              <Text style={[fm.sectionTitle, { color: c.textMuted }]}>MAX DISTANCE</Text>
+              <View style={fm.options}>
+                {DISTANCE_OPTIONS.map((km) => (
+                  <OptionChip
+                    key={km}
+                    label={`${km} km`}
+                    active={draft.maxKm === km}
+                    onPress={() => setDraft((d) => ({ ...d, maxKm: d.maxKm === km ? null : km }))}
+                  />
+                ))}
+              </View>
+            </View>
+
           </ScrollView>
 
           <TouchableOpacity
@@ -726,7 +871,7 @@ function OptionChip({ label, active, onPress }: { label: string; active: boolean
   const c = theme.colors;
   return (
     <TouchableOpacity
-      style={[fm.optionChip, { backgroundColor: active ? c.brand : c.bgCardAlt, borderColor: active ? c.brand : c.border }]}
+      style={[fm.optionChip, { backgroundColor: active ? c.brand : "transparent", borderColor: active ? c.brand : c.borderMedium }]}
       onPress={onPress}
       activeOpacity={0.75}
     >
@@ -764,7 +909,7 @@ function FilterChip({
   const c = theme.colors;
   return (
     <TouchableOpacity
-      style={[s.chip, active ? { backgroundColor: c.brand, borderColor: c.brand } : { backgroundColor: c.bgCardAlt, borderColor: c.border }]}
+      style={[s.chip, active ? { backgroundColor: c.brand, borderColor: c.brand } : { backgroundColor: "transparent", borderColor: c.borderMedium }]}
       onPress={onPress}
       activeOpacity={0.75}
     >
@@ -844,6 +989,6 @@ const fm = StyleSheet.create({
   checkbox:    { width: 24, height: 24, borderRadius: 6, borderWidth: 2, alignItems: "center", justifyContent: "center" },
   checkmark:   { color: "#fff", fontSize: 14, fontWeight: "800", lineHeight: 16 },
 
-  applyBtn:    { margin: SPACE[20], marginTop: SPACE[4], borderRadius: RADIUS.lg, paddingVertical: SPACE[16], alignItems: "center" },
+  applyBtn:    { margin: SPACE[20], marginTop: SPACE[4], borderRadius: RADIUS.pill, paddingVertical: SPACE[16], alignItems: "center" },
   applyText:   { color: "#fff", fontSize: FONT.size.md, fontWeight: FONT.weight.extrabold },
 });

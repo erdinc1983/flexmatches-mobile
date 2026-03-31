@@ -94,7 +94,9 @@ export default function AdminScreen() {
     let error: any = null;
 
     if (action === "delete") {
-      const { error: e } = await supabase.from("users").delete().eq("id", userId);
+      // Soft-delete: set banned_at so user is hidden everywhere.
+      // Hard DELETE fails silently due to RLS; Auth user must be removed via Supabase dashboard.
+      const { error: e } = await supabase.from("users").update({ banned_at: new Date().toISOString() }).eq("id", userId);
       error = e;
       if (!e) {
         setUsers(prev => prev.filter(u => u.id !== userId));
