@@ -4,7 +4,7 @@
  * match reason pill tags, name, and Connect button.
  */
 
-import React from "react";
+import React, { useState } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, ImageBackground, ScrollView, Dimensions } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
@@ -44,27 +44,30 @@ export function BestMatchesSection({ users, onPress }: Props) {
 function MatchPhotoCard({ user, onPress }: { user: SuggestedUser; onPress: () => void }) {
   const { theme } = useTheme();
   const c = theme.colors;
+  const [imgError, setImgError] = useState(false);
 
   const rawName     = user.full_name?.split(" ")[0] ?? user.username;
   const isUUID      = /^[0-9a-f-]{20,}$/i.test(rawName);
   const displayName = isUUID ? "Member" : rawName;
 
-  // Build reason tags: prefer shared sports, then generic reasons. Max 2.
   const tags = [
     ...(user.shared_sports ?? []),
     ...(user.reasons ?? []),
   ]
-    .filter((r, i, arr) => arr.indexOf(r) === i)  // dedupe
+    .filter((r, i, arr) => arr.indexOf(r) === i)
     .slice(0, 2);
+
+  const showPhoto = !!user.avatar_url && !imgError;
 
   return (
     <TouchableOpacity style={[s.card, SHADOW.md]} onPress={onPress} activeOpacity={0.88}>
-      {user.avatar_url ? (
+      {showPhoto ? (
         <ImageBackground
-          source={{ uri: user.avatar_url }}
+          source={{ uri: user.avatar_url! }}
           style={s.photo}
           imageStyle={{ borderRadius: RADIUS.xl }}
           resizeMode="cover"
+          onError={() => setImgError(true)}
         >
           <View style={s.topScrim} />
           <LinearGradient
