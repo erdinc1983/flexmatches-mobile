@@ -14,7 +14,10 @@ import { SectionHeader } from "../ui/SectionHeader";
 import { resolveUrl } from "../Avatar";
 import type { SuggestedUser } from "./types";
 
-const CARD_W = Dimensions.get("window").width * 0.52;
+const SCREEN_W = Dimensions.get("window").width;
+const H_PAD    = 20; // home screen's paddingHorizontal SPACE[20]
+const CARD_GAP = 12; // gap in contentContainerStyle SPACE[12]
+const CARD_W   = (SCREEN_W - H_PAD * 2 - CARD_GAP) / 2;
 
 // Cartoon fallback — same logic as Avatar.tsx
 const WEB_BASE = "https://flexmatches.com";
