@@ -32,6 +32,7 @@ import { PersonCard, DiscoverUser, RequestStatus } from "../../components/discov
 import { ProfileSheet } from "../../components/discover/ProfileSheet";
 import { DiscoverMap } from "../../components/discover/DiscoverMap";
 import { SwipeDeck, SwipeDeckRef } from "../../components/discover/SwipeDeck";
+import { GridCard } from "../../components/discover/GridCard";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type MyProfile = {
@@ -196,6 +197,29 @@ function activeFilterCount(f: Filters): number {
   return [f.sport, f.level, f.schedule, f.atGym, f.intent, f.showMe, f.maxKm].filter(Boolean).length;
 }
 
+// ─── FilterPill ───────────────────────────────────────────────────────────────
+function FilterPill({ label, active, dot, onPress, c }: {
+  label: string; active: boolean; dot?: string;
+  onPress: () => void;
+  c: ReturnType<typeof useTheme>["theme"]["colors"];
+}) {
+  return (
+    <TouchableOpacity
+      style={[fp.pill, { backgroundColor: active ? c.brand : c.bgCard, borderColor: active ? c.brand : c.border }]}
+      onPress={onPress}
+      activeOpacity={0.8}
+    >
+      {dot && <View style={[fp.dot, { backgroundColor: dot }]} />}
+      <Text style={[fp.label, { color: active ? "#fff" : c.textSecondary }]}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+const fp = StyleSheet.create({
+  pill:  { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: SPACE[12], paddingVertical: SPACE[8], borderRadius: RADIUS.pill, borderWidth: 1 },
+  dot:   { width: 7, height: 7, borderRadius: 4 },
+  label: { fontSize: 13, fontWeight: FONT.weight.semibold },
+});
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 export default function DiscoverScreen() {
   const { theme } = useTheme();
@@ -209,7 +233,7 @@ export default function DiscoverScreen() {
   const [loading,      setLoading]      = useState(true);
   const [refreshing,   setRefreshing]   = useState(false);
   const [filters,      setFilters]      = useState<Filters>(EMPTY_FILTERS);
-  const [viewMode,     setViewMode]     = useState<"swipe" | "list" | "map">("swipe");
+  const [viewMode,     setViewMode]     = useState<"swipe" | "list" | "map">("list");
   const [showFilter,   setShowFilter]   = useState(false);
   const [selectedUser, setSelectedUser] = useState<DiscoverUser | null>(null);
   const [showSearch,      setShowSearch]      = useState(false);
@@ -580,81 +604,69 @@ export default function DiscoverScreen() {
         />
       )}
 
-      {/* ── List view ────────────────────────────────────────────────────── */}
+      {/* ── List view (2-column grid) ─────────────────────────────────────── */}
       {viewMode === "list" && (
         <FlatList
-          data={[...pendingUsers, ...displayed]}
+          data={displayed}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={s.list}
+          numColumns={2}
+          columnWrapperStyle={{ gap: 10 }}
+          contentContainerStyle={s.grid}
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.brand} />}
           ListHeaderComponent={
-            <>
-              {/* At Gym Now strip — deduped from main list */}
-              {atGymUsers.length > 0 && (
-                <View style={{ gap: SPACE[10] }}>
-                  <View style={s.atGymHeader}>
-                    <View style={s.liveDot} />
-                    <Text style={[s.atGymTitle, { color: c.text }]}>At the gym now</Text>
-                    <Text style={[s.atGymCount, { color: c.textMuted }]}>{atGymUsers.length}</Text>
-                  </View>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={{ gap: SPACE[12], paddingRight: SPACE[4] }}
-                  >
-                    {atGymUsers.slice(0, 8).map((u) => (
-                      <AtGymBubble key={u.id} user={u} onPress={() => setSelectedUser(u)} />
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
-
-              {/* Sport filter chips */}
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={s.chips}
-              >
-                <FilterChip
-                  label="All"
-                  active={filters.sport === null && !filters.atGym}
-                  onPress={() => setFilters((f) => ({ ...f, sport: null, atGym: false }))}
+            <View style={{ gap: SPACE[12], marginBottom: SPACE[4] }}>
+              {/* Quick filter pills */}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: SPACE[8], paddingRight: 4 }}>
+                <FilterPill
+                  label="At gym now"
+                  active={filters.atGym}
+                  dot="#4ADE80"
+                  onPress={() => setFilters((f) => ({ ...f, atGym: !f.atGym }))}
+                  c={c}
                 />
-                {sportOptions.map((sp) => (
-                  <FilterChip
+                <FilterPill
+                  label="Best fit"
+                  active={!filters.atGym && !filters.maxKm}
+                  onPress={() => setFilters(EMPTY_FILTERS)}
+                  c={c}
+                />
+                <FilterPill
+                  label="Nearby"
+                  active={filters.maxKm === 25}
+                  onPress={() => setFilters((f) => ({ ...f, maxKm: f.maxKm === 25 ? null : 25 }))}
+                  c={c}
+                />
+                {myProfile?.sports?.slice(0, 3).map((sp) => (
+                  <FilterPill
                     key={sp}
                     label={sp}
                     active={filters.sport === sp}
                     onPress={() => setFilters((f) => ({ ...f, sport: f.sport === sp ? null : sp }))}
+                    c={c}
                   />
                 ))}
-                <FilterChip
-                  label="At Gym"
-                  active={filters.atGym}
-                  onPress={() => setFilters((f) => ({ ...f, atGym: !f.atGym }))}
-                  dot={atGymUsers.length > 0}
-                />
               </ScrollView>
-            </>
+              {/* People count */}
+              <Text style={[s.peopleCount, { color: c.textMuted }]}>
+                {displayed.length} people near you
+              </Text>
+            </View>
           }
-          ItemSeparatorComponent={() => <View style={{ height: SPACE[10] }} />}
           renderItem={({ item }) => (
-            <PersonCard
+            <GridCard
               user={item}
               status={statuses[item.id] ?? "none"}
-              matchId={matchIds[item.id]}
-              onConnect={() => connect(item.id)}
-              onCancelRequest={() => cancelRequest(item.id)}
               onPress={() => setSelectedUser(item)}
+              onConnect={() => connect(item.id)}
+              matchId={matchIds[item.id]}
             />
           )}
           ListEmptyComponent={
             <EmptyState
-              icon="discover"
-              title={filters.atGym ? "Nobody at the gym right now" : filters.sport ? `No ${filters.sport} partners yet` : "No new partners — pull to refresh"}
-              subtitle={pendingUsers.length > 0 ? undefined : "Try adjusting your filters or refreshing."}
-              action={{ label: "Clear filters", onPress: () => setFilters(EMPTY_FILTERS) }}
+              icon="search"
+              title="No matches found"
+              subtitle={filterCount > 0 ? "Try adjusting your filters." : "Pull down to refresh."}
             />
           }
         />
@@ -923,6 +935,8 @@ function FilterChip({
 const s = StyleSheet.create({
   root: { flex: 1 },
   list: { padding: SPACE[16], paddingBottom: SPACE[48], gap: SPACE[16] },
+  grid:        { paddingHorizontal: SPACE[16], paddingTop: SPACE[4], paddingBottom: SPACE[60], gap: 10 },
+  peopleCount: { fontSize: 12, fontWeight: FONT.weight.medium, paddingHorizontal: 2 },
 
   header:        { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: SPACE[16], paddingVertical: SPACE[12], borderBottomWidth: 1 },
   title:         { fontSize: FONT.size.xxxl, fontWeight: FONT.weight.black, letterSpacing: -0.5 },
