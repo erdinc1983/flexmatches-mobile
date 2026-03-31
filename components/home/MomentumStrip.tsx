@@ -1,5 +1,6 @@
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import { router } from "expo-router";
 import { useTheme, SPACE, FONT, RADIUS, SHADOW } from "../../lib/theme";
 
 type Props = {
@@ -14,23 +15,28 @@ export function MomentumStrip({ streak, matchCount, weekSessions }: Props) {
 
   return (
     <View style={s.row}>
-      <Chip value={`${streak}d`}      label="Day Streak" c={c} />
-      <Chip value={`${matchCount}`}   label="Matches"    c={c} />
-      <Chip value={`${weekSessions}`} label="Sessions"   c={c} />
+      <Chip value={`${streak}d`}      label="Day Streak" c={c} onPress={() => router.push("/(tabs)/activity" as any)} />
+      <Chip value={`${matchCount}`}   label="Matches"    c={c} onPress={() => router.push("/(tabs)/matches"  as any)} />
+      <Chip value={`${weekSessions}`} label="Sessions"   c={c} onPress={() => router.push("/(tabs)/messages"       )} />
     </View>
   );
 }
 
-function Chip({ value, label, c }: {
-  value: string;
-  label: string;
-  c:    ReturnType<typeof useTheme>["theme"]["colors"];
+function Chip({ value, label, c, onPress }: {
+  value:   string;
+  label:   string;
+  c:       ReturnType<typeof useTheme>["theme"]["colors"];
+  onPress: () => void;
 }) {
   return (
-    <View style={[s.chip, { backgroundColor: c.bgCard, borderColor: c.border }, SHADOW.sm]}>
+    <TouchableOpacity
+      style={[s.chip, { backgroundColor: c.bgCard, borderColor: c.border }, SHADOW.sm]}
+      onPress={onPress}
+      activeOpacity={0.75}
+    >
       <Text style={[s.value, { color: c.text }]}>{value}</Text>
       <Text style={[s.label, { color: c.textMuted }]}>{label}</Text>
-    </View>
+    </TouchableOpacity>
   );
 }
 
