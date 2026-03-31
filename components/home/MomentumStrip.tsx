@@ -14,22 +14,21 @@ export function MomentumStrip({ streak, matchCount, weekSessions }: Props) {
 
   return (
     <View style={s.row}>
-      <Chip value={`${streak}d`}         label="Day Streak" color={c.brand}   c={c} />
-      <Chip value={`${matchCount}`}       label="Matches"   color="#3B82F6"   c={c} />
-      <Chip value={`${weekSessions}`}     label="Sessions"  color="#22C55E"   c={c} />
+      <Chip value={`${streak}d`}      label="Day Streak" c={c} />
+      <Chip value={`${matchCount}`}   label="Matches"    c={c} />
+      <Chip value={`${weekSessions}`} label="Sessions"   c={c} />
     </View>
   );
 }
 
-function Chip({ value, label, color, c }: {
+function Chip({ value, label, c }: {
   value: string;
   label: string;
-  color: string;
   c:    ReturnType<typeof useTheme>["theme"]["colors"];
 }) {
   return (
     <View style={[s.chip, { backgroundColor: c.bgCard, borderColor: c.border }, SHADOW.sm]}>
-      <Text style={[s.value, { color }]}>{value}</Text>
+      <Text style={[s.value, { color: c.text }]}>{value}</Text>
       <Text style={[s.label, { color: c.textMuted }]}>{label}</Text>
     </View>
   );
