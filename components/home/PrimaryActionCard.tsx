@@ -16,7 +16,7 @@ import type { PrimaryAction } from "./types";
 
 // Gym photo shown when workout is already logged for the day
 // TODO: Replace gym-done.jpg with a real gym photo (bench press + shoulder training scene)
-const GYM_PHOTO = require("../../assets/images/gym-done.jpg");
+const GYM_PHOTO = require("../../assets/images/gym-done.jpeg");
 
 // Light-mode friendly green surface tokens (not in PALETTE which is shared/dark-only)
 const G = {
