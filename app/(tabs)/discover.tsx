@@ -466,7 +466,6 @@ export default function DiscoverScreen() {
   const filterCount  = activeFilterCount(filters);
 
   const displayed = users.filter((u) => {
-    if (viewMode === "list" && atGymUsers.length > 0 && atGymUserIds.has(u.id)) return false; // deduped into strip
     if (filters.atGym   && !u.is_at_gym)                                                  return false;
     if (filters.sport   && !(u.sports ?? []).includes(filters.sport))                     return false;
     if (filters.level   && u.fitness_level !== filters.level)                             return false;
@@ -607,7 +606,7 @@ export default function DiscoverScreen() {
       {/* ── List view (2-column grid) ─────────────────────────────────────── */}
       {viewMode === "list" && (
         <FlatList
-          data={displayed}
+          data={[...pendingUsers, ...displayed]}
           keyExtractor={(item) => item.id}
           numColumns={2}
           columnWrapperStyle={{ gap: 10 }}
