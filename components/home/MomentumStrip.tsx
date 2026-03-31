@@ -45,12 +45,12 @@ const s = StyleSheet.create({
   chip:  {
     flex: 1,
     alignItems: "center",
-    paddingVertical: SPACE[12],
+    paddingVertical: SPACE[8],
     paddingHorizontal: SPACE[6],
-    borderRadius: RADIUS.xl,
+    borderRadius: RADIUS.lg,
     borderWidth: 1,
-    gap: SPACE[2],
+    gap: 2,
   },
-  value: { fontSize: FONT.size.xl, fontWeight: FONT.weight.black, letterSpacing: -0.5 },
-  label: { fontSize: 11, fontWeight: FONT.weight.semibold, letterSpacing: 0.1, textAlign: "center" },
+  value: { fontSize: FONT.size.md, fontWeight: FONT.weight.black, letterSpacing: -0.3 },
+  label: { fontSize: 10, fontWeight: FONT.weight.medium, letterSpacing: 0.1, textAlign: "center" },
 });
