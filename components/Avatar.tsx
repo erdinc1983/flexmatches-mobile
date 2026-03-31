@@ -20,7 +20,7 @@ function cartoonAvatar(name: string): string {
   return ALL_AVATARS[nameHash(seed) % ALL_AVATARS.length];
 }
 
-function resolveUrl(url: string | null | undefined): string | null {
+export function resolveUrl(url: string | null | undefined): string | null {
   if (!url || !url.trim()) return null;
   if (url.startsWith("http"))  return url;
   if (url.startsWith("/"))     return `${WEB_BASE}${url}`;

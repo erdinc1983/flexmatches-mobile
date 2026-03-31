@@ -10,6 +10,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { useTheme, SPACE, FONT, RADIUS, SHADOW, TYPE } from "../../lib/theme";
 import { SectionHeader } from "../ui/SectionHeader";
+import { resolveUrl } from "../Avatar";
 import type { SuggestedUser } from "./types";
 
 const CARD_W = Dimensions.get("window").width * 0.52;
@@ -57,13 +58,14 @@ function MatchPhotoCard({ user, onPress }: { user: SuggestedUser; onPress: () =>
     .filter((r, i, arr) => arr.indexOf(r) === i)
     .slice(0, 2);
 
-  const showPhoto = !!user.avatar_url && !imgError;
+  const resolvedUrl = resolveUrl(user.avatar_url);
+  const showPhoto   = !!resolvedUrl && !imgError;
 
   return (
     <TouchableOpacity style={[s.card, SHADOW.md]} onPress={onPress} activeOpacity={0.88}>
       {showPhoto ? (
         <ImageBackground
-          source={{ uri: user.avatar_url! }}
+          source={{ uri: resolvedUrl! }}
           style={s.photo}
           imageStyle={{ borderRadius: RADIUS.xl }}
           resizeMode="cover"
