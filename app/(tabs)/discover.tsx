@@ -17,6 +17,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useFocusEffect } from "expo-router";
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, RefreshControl, ScrollView, Modal,
@@ -49,13 +50,13 @@ type MyProfile = {
 };
 
 type Filters = {
-  sport:    string | null;
-  level:    string | null;
-  schedule: string | null;
-  atGym:    boolean;
-  intent:   string | null;   // "guidance" | "teaching" | "equal"
-  showMe:   string | null;   // "everyone" | "men" | "women"
-  maxKm:    number | null;   // null = no distance filter
+  sports:    string[];       // multi-select
+  levels:    string[];       // multi-select
+  schedules: string[];       // multi-select
+  atGym:     boolean;
+  intents:   string[];       // multi-select
+  showMe:    string | null;  // "everyone" | "men" | "women" — single (preference)
+  maxKm:     number | null;
 };
 
 // Swipe undo — no time limit, tracks last swipe only
@@ -64,7 +65,7 @@ type SwipeAction = { userId: string; dbId: string; action: "like" | "pass" } | n
 // Connect undo — time-limited toast for list-view Send Request
 type UndoState = { userId: string; dbId: string; name: string } | null;
 
-const EMPTY_FILTERS: Filters = { sport: null, level: null, schedule: null, atGym: false, intent: null, showMe: null, maxKm: null };
+const EMPTY_FILTERS: Filters = { sports: [], levels: [], schedules: [], atGym: false, intents: [], showMe: null, maxKm: null };
 
 const INTENT_OPTIONS = [
   { value: "guidance", label: "I want guidance",       emoji: "📚" },
@@ -194,7 +195,38 @@ function buildReasons(me: MyProfile, other: DiscoverUser): string[] {
 }
 
 function activeFilterCount(f: Filters): number {
-  return [f.sport, f.level, f.schedule, f.atGym, f.intent, f.showMe, f.maxKm].filter(Boolean).length;
+  return f.sports.length + f.levels.length + f.schedules.length +
+    (f.atGym ? 1 : 0) + f.intents.length + (f.showMe ? 1 : 0) + (f.maxKm ? 1 : 0);
+}
+
+function applyFilters(
+  users: DiscoverUser[],
+  f: Filters,
+  myProfile: MyProfile | null,
+  query: string,
+): DiscoverUser[] {
+  return users.filter((u) => {
+    if (f.atGym && !u.is_at_gym) return false;
+    if (f.sports.length > 0 && !f.sports.some((s) => (u.sports ?? []).includes(s))) return false;
+    if (f.levels.length > 0 && !f.levels.includes(u.fitness_level ?? "")) return false;
+    if (f.schedules.length > 0) {
+      const slots = Object.entries((u.availability ?? {}) as Record<string, boolean>)
+        .filter(([, v]) => v).map(([k]) => k);
+      if (!f.schedules.some((s) => slots.includes(s))) return false;
+    }
+    if (f.intents.length > 0 && !f.intents.includes(u.training_intent ?? "")) return false;
+    if (f.showMe && f.showMe !== "everyone" && u.gender) {
+      const genderMatch = f.showMe === "men" ? u.gender === "male" : u.gender === "female";
+      if (!genderMatch) return false;
+    }
+    if (f.maxKm && myProfile?.lat && myProfile?.lng && u.lat && u.lng) {
+      if (haversineKm(myProfile.lat, myProfile.lng, u.lat, u.lng) > f.maxKm) return false;
+    }
+    if (query.trim()) {
+      if (!(u.full_name ?? u.username ?? "").toLowerCase().includes(query.toLowerCase())) return false;
+    }
+    return true;
+  });
 }
 
 // ─── FilterPill ───────────────────────────────────────────────────────────────
@@ -368,9 +400,14 @@ export default function DiscoverScreen() {
     setLoading(false);
   }, []);
 
-  // Only load once on mount — useFocusEffect caused deck to restart on every tab switch.
-  // Pull-to-refresh handles manual reload.
+  // Load once on mount
   useEffect(() => { load(); }, [load]);
+
+  // Reset filters every time the tab comes into focus
+  useFocusEffect(useCallback(() => {
+    setFilters(EMPTY_FILTERS);
+    setSearchQuery("");
+  }, []));
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -465,34 +502,7 @@ export default function DiscoverScreen() {
   const sportOptions = myProfile?.sports?.length ? myProfile.sports : ["Gym", "Running", "Cycling"];
   const filterCount  = activeFilterCount(filters);
 
-  const displayed = users.filter((u) => {
-    if (filters.atGym   && !u.is_at_gym)                                                  return false;
-    if (filters.sport   && !(u.sports ?? []).includes(filters.sport))                     return false;
-    if (filters.level   && u.fitness_level !== filters.level)                             return false;
-    if (filters.schedule) {
-      const slots = Object.entries((u.availability ?? {}) as Record<string, boolean>)
-        .filter(([, v]) => v).map(([k]) => k);
-      if (!slots.includes(filters.schedule))                                              return false;
-    }
-    // Intent filter — show only users with this training intent
-    if (filters.intent  && u.training_intent !== filters.intent)                          return false;
-    // Show me filter — gender preference (skip if user has no gender set)
-    if (filters.showMe && filters.showMe !== "everyone" && u.gender) {
-      const want = filters.showMe; // "men" | "women"
-      const genderMatch = want === "men" ? u.gender === "male" : u.gender === "female";
-      if (!genderMatch)                                                                   return false;
-    }
-    // Distance filter
-    if (filters.maxKm && myProfile?.lat && myProfile?.lng && u.lat && u.lng) {
-      const km = haversineKm(myProfile.lat, myProfile.lng, u.lat, u.lng);
-      if (km > filters.maxKm)                                                             return false;
-    }
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      if (!(u.full_name ?? u.username ?? "").toLowerCase().includes(q))                  return false;
-    }
-    return true;
-  });
+  const displayed = applyFilters(users, filters, myProfile, searchQuery);
 
   // ── Render ───────────────────────────────────────────────────────────────────
   if (loading) {
@@ -614,7 +624,7 @@ export default function DiscoverScreen() {
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.brand} />}
           ListHeaderComponent={
-            <View style={{ gap: SPACE[12], marginBottom: SPACE[4] }}>
+            <View style={{ gap: SPACE[10], marginBottom: SPACE[4] }}>
               {/* Quick filter pills */}
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: SPACE[8], paddingRight: 4 }}>
                 <FilterPill
@@ -625,31 +635,48 @@ export default function DiscoverScreen() {
                   c={c}
                 />
                 <FilterPill
-                  label="Best fit"
-                  active={!filters.atGym && !filters.maxKm}
-                  onPress={() => setFilters(EMPTY_FILTERS)}
-                  c={c}
-                />
-                <FilterPill
                   label="Nearby"
                   active={filters.maxKm === 25}
                   onPress={() => setFilters((f) => ({ ...f, maxKm: f.maxKm === 25 ? null : 25 }))}
                   c={c}
                 />
-                {myProfile?.sports?.slice(0, 3).map((sp) => (
+                {(["beginner", "intermediate", "advanced"] as const).map((lv) => (
+                  <FilterPill
+                    key={lv}
+                    label={lv.charAt(0).toUpperCase() + lv.slice(1)}
+                    active={filters.levels.includes(lv)}
+                    onPress={() => setFilters((f) => ({
+                      ...f,
+                      levels: f.levels.includes(lv) ? f.levels.filter((l) => l !== lv) : [...f.levels, lv],
+                    }))}
+                    c={c}
+                  />
+                ))}
+                {myProfile?.sports?.slice(0, 4).map((sp) => (
                   <FilterPill
                     key={sp}
                     label={sp}
-                    active={filters.sport === sp}
-                    onPress={() => setFilters((f) => ({ ...f, sport: f.sport === sp ? null : sp }))}
+                    active={filters.sports.includes(sp)}
+                    onPress={() => setFilters((f) => ({
+                      ...f,
+                      sports: f.sports.includes(sp) ? f.sports.filter((s) => s !== sp) : [...f.sports, sp],
+                    }))}
                     c={c}
                   />
                 ))}
               </ScrollView>
-              {/* People count */}
-              <Text style={[s.peopleCount, { color: c.textMuted }]}>
-                {displayed.length} people near you
-              </Text>
+              {/* Always-visible partner count */}
+              <View style={s.countRow}>
+                <Text style={[s.peopleCount, { color: c.text }]}>
+                  <Text style={{ fontWeight: FONT.weight.black }}>{[...pendingUsers, ...displayed].length}</Text>
+                  {" partner"}{[...pendingUsers, ...displayed].length !== 1 ? "s" : ""} {filterCount > 0 ? "matching filters" : "near you"}
+                </Text>
+                {filterCount > 0 && (
+                  <TouchableOpacity onPress={() => setFilters(EMPTY_FILTERS)}>
+                    <Text style={[s.clearFilters, { color: c.brand }]}>Clear all</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
           }
           renderItem={({ item }) => (
@@ -689,6 +716,8 @@ export default function DiscoverScreen() {
         filters={filters}
         sportOptions={sportOptions}
         atGymCount={atGymUsers.length}
+        allUsers={[...pendingUsers, ...users]}
+        myProfile={myProfile}
         onApply={(f) => { setFilters(f); setShowFilter(false); }}
         onClose={() => setShowFilter(false)}
       />
@@ -714,12 +743,14 @@ export default function DiscoverScreen() {
 
 // ─── Filter Modal ─────────────────────────────────────────────────────────────
 function FilterModal({
-  visible, filters, sportOptions, atGymCount, onApply, onClose,
+  visible, filters, sportOptions, atGymCount, allUsers, myProfile, onApply, onClose,
 }: {
   visible:      boolean;
   filters:      Filters;
   sportOptions: string[];
   atGymCount:   number;
+  allUsers:     DiscoverUser[];
+  myProfile:    MyProfile | null;
   onApply:      (f: Filters) => void;
   onClose:      () => void;
 }) {
@@ -728,23 +759,33 @@ function FilterModal({
   const [draft, setDraft] = useState<Filters>(filters);
   useEffect(() => { if (visible) setDraft(filters); }, [visible]);
 
-  const count = activeFilterCount(draft);
+  const activeCount  = activeFilterCount(draft);
+  const previewCount = applyFilters(allUsers, draft, myProfile, "").length;
+
+  function toggleArr<T>(arr: T[], val: T): T[] {
+    return arr.includes(val) ? arr.filter((x) => x !== val) : [...arr, val];
+  }
 
   return (
-    <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <TouchableWithoutFeedback onPress={onClose}>
         <View style={fm.backdrop} />
       </TouchableWithoutFeedback>
 
-      <View style={fm.centeredWrap} pointerEvents="box-none">
+      <View style={fm.sheet} pointerEvents="box-none">
         <View style={[fm.card, { backgroundColor: c.bgCard }]}>
+
+          {/* Handle bar */}
+          <View style={[fm.handle, { backgroundColor: c.border }]} />
 
           <View style={fm.headerRow}>
             <Text style={[fm.title, { color: c.text }]}>Filters</Text>
             <View style={fm.headerRight}>
-              <TouchableOpacity onPress={() => setDraft(EMPTY_FILTERS)}>
-                <Text style={[fm.reset, { color: c.brand }]}>Reset</Text>
-              </TouchableOpacity>
+              {activeCount > 0 && (
+                <TouchableOpacity onPress={() => setDraft(EMPTY_FILTERS)}>
+                  <Text style={[fm.reset, { color: c.brand }]}>Clear all</Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
                 style={[fm.closeBtn, { backgroundColor: c.bgCardAlt }]}
                 onPress={onClose}
@@ -757,15 +798,34 @@ function FilterModal({
 
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={fm.content}>
 
+            {/* At gym now */}
+            <TouchableOpacity
+              style={[fm.toggleRow, { backgroundColor: c.bgCardAlt, borderColor: draft.atGym ? PALETTE.success : c.border }]}
+              onPress={() => setDraft((d) => ({ ...d, atGym: !d.atGym }))}
+              activeOpacity={0.8}
+            >
+              <View style={fm.toggleLeft}>
+                <View style={[fm.liveDot, { backgroundColor: PALETTE.success }]} />
+                <View>
+                  <Text style={[fm.toggleLabel, { color: c.text }]}>At gym now</Text>
+                  <Text style={[fm.toggleSub, { color: c.textMuted }]}>{atGymCount} currently training</Text>
+                </View>
+              </View>
+              <View style={[fm.checkbox, { borderColor: draft.atGym ? PALETTE.success : c.border, backgroundColor: draft.atGym ? PALETTE.success : "transparent" }]}>
+                {draft.atGym && <Text style={fm.checkmark}>✓</Text>}
+              </View>
+            </TouchableOpacity>
+
             <View style={fm.section}>
               <Text style={[fm.sectionTitle, { color: c.textMuted }]}>FITNESS LEVEL</Text>
+              <Text style={[fm.sectionHint, { color: c.textFaint }]}>Pick one or more</Text>
               <View style={fm.options}>
                 {["beginner", "intermediate", "advanced"].map((lv) => (
                   <OptionChip
                     key={lv}
                     label={lv.charAt(0).toUpperCase() + lv.slice(1)}
-                    active={draft.level === lv}
-                    onPress={() => setDraft((d) => ({ ...d, level: d.level === lv ? null : lv }))}
+                    active={draft.levels.includes(lv)}
+                    onPress={() => setDraft((d) => ({ ...d, levels: toggleArr(d.levels, lv) }))}
                   />
                 ))}
               </View>
@@ -773,13 +833,14 @@ function FilterModal({
 
             <View style={fm.section}>
               <Text style={[fm.sectionTitle, { color: c.textMuted }]}>TRAINS</Text>
+              <Text style={[fm.sectionHint, { color: c.textFaint }]}>Pick one or more</Text>
               <View style={fm.options}>
                 {Object.entries(SCHEDULE_LABELS).map(([key, label]) => (
                   <OptionChip
                     key={key}
                     label={label}
-                    active={draft.schedule === key}
-                    onPress={() => setDraft((d) => ({ ...d, schedule: d.schedule === key ? null : key }))}
+                    active={draft.schedules.includes(key)}
+                    onPress={() => setDraft((d) => ({ ...d, schedules: toggleArr(d.schedules, key) }))}
                   />
                 ))}
               </View>
@@ -787,46 +848,29 @@ function FilterModal({
 
             <View style={fm.section}>
               <Text style={[fm.sectionTitle, { color: c.textMuted }]}>SPORT</Text>
+              <Text style={[fm.sectionHint, { color: c.textFaint }]}>Pick one or more</Text>
               <View style={fm.options}>
                 {sportOptions.map((sp) => (
                   <OptionChip
                     key={sp}
                     label={sp}
-                    active={draft.sport === sp}
-                    onPress={() => setDraft((d) => ({ ...d, sport: d.sport === sp ? null : sp }))}
+                    active={draft.sports.includes(sp)}
+                    onPress={() => setDraft((d) => ({ ...d, sports: toggleArr(d.sports, sp) }))}
                   />
                 ))}
               </View>
             </View>
 
-            {atGymCount > 0 && (
-              <TouchableOpacity
-                style={[fm.toggleRow, { backgroundColor: c.bgCardAlt, borderColor: draft.atGym ? PALETTE.success : c.border }]}
-                onPress={() => setDraft((d) => ({ ...d, atGym: !d.atGym }))}
-                activeOpacity={0.8}
-              >
-                <View style={fm.toggleLeft}>
-                  <View style={[fm.liveDot, { backgroundColor: PALETTE.success }]} />
-                  <View>
-                    <Text style={[fm.toggleLabel, { color: c.text }]}>At gym now only</Text>
-                    <Text style={[fm.toggleSub, { color: c.textMuted }]}>{atGymCount} currently training</Text>
-                  </View>
-                </View>
-                <View style={[fm.checkbox, { borderColor: draft.atGym ? PALETTE.success : c.border, backgroundColor: draft.atGym ? PALETTE.success : "transparent" }]}>
-                  {draft.atGym && <Text style={fm.checkmark}>✓</Text>}
-                </View>
-              </TouchableOpacity>
-            )}
-
             <View style={fm.section}>
               <Text style={[fm.sectionTitle, { color: c.textMuted }]}>TRAINING INTENT</Text>
+              <Text style={[fm.sectionHint, { color: c.textFaint }]}>Pick one or more</Text>
               <View style={fm.options}>
-                {INTENT_OPTIONS.map(({ value, label }) => (
+                {INTENT_OPTIONS.map(({ value, label, emoji }) => (
                   <OptionChip
                     key={value}
-                    label={label}
-                    active={draft.intent === value}
-                    onPress={() => setDraft((d) => ({ ...d, intent: d.intent === value ? null : value }))}
+                    label={`${emoji} ${label}`}
+                    active={draft.intents.includes(value)}
+                    onPress={() => setDraft((d) => ({ ...d, intents: toggleArr(d.intents, value) }))}
                   />
                 ))}
               </View>
@@ -868,7 +912,8 @@ function FilterModal({
             activeOpacity={0.85}
           >
             <Text style={fm.applyText}>
-              {count > 0 ? `Show results · ${count} active` : "Show all results"}
+              Show {previewCount} partner{previewCount !== 1 ? "s" : ""}
+              {activeCount > 0 ? ` · ${activeCount} filter${activeCount > 1 ? "s" : ""} active` : ""}
             </Text>
           </TouchableOpacity>
         </View>
@@ -935,7 +980,9 @@ const s = StyleSheet.create({
   root: { flex: 1 },
   list: { padding: SPACE[16], paddingBottom: SPACE[48], gap: SPACE[16] },
   grid:        { paddingHorizontal: SPACE[16], paddingTop: SPACE[4], paddingBottom: SPACE[60], gap: 10 },
-  peopleCount: { fontSize: 12, fontWeight: FONT.weight.medium, paddingHorizontal: 2 },
+  countRow:    { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 2 },
+  peopleCount: { fontSize: 13, fontWeight: FONT.weight.medium },
+  clearFilters:{ fontSize: 13, fontWeight: FONT.weight.semibold },
 
   header:        { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: SPACE[16], paddingVertical: SPACE[12], borderBottomWidth: 1 },
   title:         { fontSize: FONT.size.xxxl, fontWeight: FONT.weight.black, letterSpacing: -0.5 },
@@ -977,19 +1024,21 @@ const s = StyleSheet.create({
 });
 
 const fm = StyleSheet.create({
-  backdrop:    { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.55)" },
-  centeredWrap:{ ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
-  card:        { width: "88%", maxWidth: 420, borderRadius: RADIUS.xxl, overflow: "hidden" },
+  backdrop:    { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.50)" },
+  sheet:       { ...StyleSheet.absoluteFillObject, justifyContent: "flex-end" },
+  card:        { borderTopLeftRadius: RADIUS.xxl, borderTopRightRadius: RADIUS.xxl, overflow: "hidden", maxHeight: "85%" },
+  handle:      { width: 36, height: 4, borderRadius: 2, alignSelf: "center", marginTop: SPACE[12], marginBottom: SPACE[4] },
 
-  headerRow:   { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: SPACE[20], paddingBottom: SPACE[4] },
+  headerRow:   { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: SPACE[20], paddingVertical: SPACE[12] },
   headerRight: { flexDirection: "row", alignItems: "center", gap: SPACE[12] },
   title:       { fontSize: FONT.size.xl, fontWeight: FONT.weight.black },
   reset:       { fontSize: FONT.size.sm, fontWeight: FONT.weight.semibold },
   closeBtn:    { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center" },
 
-  content:     { padding: SPACE[20], paddingTop: SPACE[14], gap: SPACE[20] },
-  section:     { gap: SPACE[10] },
+  content:     { paddingHorizontal: SPACE[20], paddingBottom: SPACE[20], gap: SPACE[20] },
+  section:     { gap: SPACE[8] },
   sectionTitle:{ fontSize: FONT.size.xs, fontWeight: FONT.weight.extrabold, letterSpacing: 1 },
+  sectionHint: { fontSize: 11, marginTop: -4 },
   options:     { flexDirection: "row", flexWrap: "wrap", gap: SPACE[8] },
   optionChip:  { paddingHorizontal: SPACE[14], paddingVertical: SPACE[8], borderRadius: RADIUS.pill, borderWidth: 1 },
   optionText:  { fontSize: FONT.size.sm, fontWeight: FONT.weight.semibold },
@@ -1002,6 +1051,6 @@ const fm = StyleSheet.create({
   checkbox:    { width: 24, height: 24, borderRadius: 6, borderWidth: 2, alignItems: "center", justifyContent: "center" },
   checkmark:   { color: "#fff", fontSize: 14, fontWeight: "800", lineHeight: 16 },
 
-  applyBtn:    { margin: SPACE[20], marginTop: SPACE[4], borderRadius: RADIUS.pill, paddingVertical: SPACE[16], alignItems: "center" },
+  applyBtn:    { margin: SPACE[20], marginTop: SPACE[8], borderRadius: RADIUS.pill, paddingVertical: SPACE[16], alignItems: "center" },
   applyText:   { color: "#fff", fontSize: FONT.size.md, fontWeight: FONT.weight.extrabold },
 });

@@ -23,6 +23,7 @@ import { Icon } from "../../components/Icon";
 import { Avatar } from "../../components/Avatar";
 import { TIERS, BADGES, BADGE_MAP, calcTier, calcUserPoints, type BadgeKey, type Tier } from "../../lib/badges";
 import { useNotifications } from "../../lib/notificationContext";
+import { unregisterPushToken } from "../../lib/pushTokens";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const FITNESS_LEVELS = ["beginner", "intermediate", "advanced"] as const;
@@ -100,11 +101,15 @@ type Profile = {
   sports:          string[] | null;
   certifications:  string[] | null;
   avatar_url:      string | null;
-  is_pro:          boolean | null;
-  current_streak:  number;
-  longest_streak:  number;
-  total_workouts:  number;
-  match_count:     number;
+  is_pro:              boolean | null;
+  training_intent:     string | null;
+  show_me:             string | null;
+  current_streak:      number;
+  longest_streak:      number;
+  total_workouts:      number;
+  match_count:         number;
+  sessions_completed:  number;
+  response_rate:       number | null;
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -173,9 +178,12 @@ export default function ProfileScreen() {
       { count: monthlyWorkouts },
       { data: adminData },
       { data: badges },
+      { count: sessionsCompleted },
+      { count: receivedTotal },
+      { count: receivedResponded },
     ] = await Promise.all([
       supabase.from("users")
-        .select("username, full_name, bio, city, gym_name, fitness_level, age, gender, occupation, company, industry, education_level, career_goals, weight, target_weight, availability, sports, certifications, avatar_url, is_pro, current_streak, longest_streak")
+        .select("username, full_name, bio, city, gym_name, fitness_level, age, gender, occupation, company, industry, education_level, career_goals, weight, target_weight, availability, sports, certifications, avatar_url, is_pro, training_intent, show_me, current_streak, longest_streak")
         .eq("id", user.id).single(),
       supabase.from("workouts").select("*", { count: "exact", head: true }).eq("user_id", user.id),
       supabase.from("matches").select("*", { count: "exact", head: true }).eq("status", "accepted")
@@ -183,18 +191,27 @@ export default function ProfileScreen() {
       supabase.from("workouts").select("*", { count: "exact", head: true }).eq("user_id", user.id).gte("logged_at", monthAgo),
       supabase.from("users").select("is_admin").eq("id", user.id).single(),
       supabase.from("user_badges").select("badge_key").eq("user_id", user.id),
+      supabase.from("buddy_sessions").select("id", { count: "exact", head: true })
+        .or(`proposer_id.eq.${user.id},receiver_id.eq.${user.id}`).eq("status", "completed"),
+      supabase.from("matches").select("id", { count: "exact", head: true }).eq("receiver_id", user.id),
+      supabase.from("matches").select("id", { count: "exact", head: true }).eq("receiver_id", user.id)
+        .in("status", ["accepted", "declined"]),
     ]);
 
     if (data) {
+      const rTotal     = receivedTotal ?? 0;
+      const rResponded = receivedResponded ?? 0;
       const full: Profile = {
         ...data,
-        sports:         data.sports ?? [],
-        certifications: data.certifications ?? [],
-        avatar_url:     data.avatar_url ?? null,
-        current_streak: data.current_streak ?? 0,
-        longest_streak: data.longest_streak ?? 0,
-        total_workouts: totalWorkouts ?? 0,
-        match_count:    matchCount ?? 0,
+        sports:              data.sports ?? [],
+        certifications:      data.certifications ?? [],
+        avatar_url:          data.avatar_url ?? null,
+        current_streak:      data.current_streak ?? 0,
+        longest_streak:      data.longest_streak ?? 0,
+        total_workouts:      totalWorkouts ?? 0,
+        match_count:         matchCount ?? 0,
+        sessions_completed:  sessionsCompleted ?? 0,
+        response_rate:       rTotal > 0 ? Math.round((rResponded / rTotal) * 100) : null,
       };
       setProfile(full);
       setForm(full);
@@ -240,6 +257,8 @@ export default function ProfileScreen() {
       sports:          form.sports,
       certifications:  form.certifications,
       availability:    form.availability,
+      training_intent: form.training_intent,
+      show_me:         form.show_me,
     }).eq("id", userId);
     setSaving(false);
     if (error) { Alert.alert("Error", error.message); return; }
@@ -317,9 +336,11 @@ export default function ProfileScreen() {
 
   async function handleShareProfile() {
     if (!profile) return;
+    const url = `https://flexmatches.com/u/${profile.username}`;
     try {
       await Share.share({
-        message: `Check out my FlexMatches profile! @${profile.username}`,
+        message: `Check out my FlexMatches profile! ${url}`,
+        url,
         title: "FlexMatches",
       });
     } catch (_) {}
@@ -328,12 +349,17 @@ export default function ProfileScreen() {
   async function handleSignOut() {
     Alert.alert("Sign Out", "Are you sure?", [
       { text: "Cancel", style: "cancel" },
-      { text: "Sign Out", style: "destructive", onPress: () => supabase.auth.signOut() },
+      {
+        text: "Sign Out", style: "destructive", onPress: async () => {
+          if (profile?.id) await unregisterPushToken(profile.id);
+          await supabase.auth.signOut();
+        },
+      },
     ]);
   }
 
   // ── Loading ──────────────────────────────────────────────────────────────────
-  if (loading) {
+  if (loading || !profile) {
     return (
       <SafeAreaView style={[s.root, { backgroundColor: c.bg }]}>
         <ActivityIndicator color={c.brand} size="large" style={{ flex: 1 }} />
@@ -440,6 +466,27 @@ export default function ProfileScreen() {
           />
         )}
 
+        {/* ── Pro upgrade / manage ────────────────────────────────────────── */}
+        {!editing && (
+          profile?.is_pro ? (
+            <TouchableOpacity
+              style={[s.proManageBtn, { borderColor: "#60a5fa55", backgroundColor: "#60a5fa11" }]}
+              onPress={() => router.push("/pro")}
+              activeOpacity={0.8}
+            >
+              <Text style={[s.proManageBtnText, { color: "#60a5fa" }]}>Pro — Manage Subscription</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={[s.proUpgradeBtn]}
+              onPress={() => router.push("/pro")}
+              activeOpacity={0.85}
+            >
+              <Text style={s.proUpgradeBtnText}>Upgrade to Pro</Text>
+            </TouchableOpacity>
+          )
+        )}
+
         {/* ── Settings button ─────────────────────────────────────────────── */}
         {!editing && (
           <TouchableOpacity
@@ -447,7 +494,7 @@ export default function ProfileScreen() {
             onPress={() => router.push("/settings")}
             activeOpacity={0.8}
           >
-            <Text style={[s.settingsBtnText, { color: c.textSecondary }]}>⚙️  Settings</Text>
+            <Text style={[s.settingsBtnText, { color: c.textSecondary }]}>Settings</Text>
           </TouchableOpacity>
         )}
 
@@ -458,9 +505,23 @@ export default function ProfileScreen() {
             onPress={() => router.push("/admin")}
             activeOpacity={0.8}
           >
-            <Text style={[s.adminBtnText, { color: "#f59e0b" }]}>🛡️  Admin Panel</Text>
+            <Text style={[s.adminBtnText, { color: "#f59e0b" }]}>Admin Panel</Text>
           </TouchableOpacity>
         )}
+
+        {/* ── Invite Friends ──────────────────────────────────────────────── */}
+        <TouchableOpacity
+          style={[s.inviteBtn, { backgroundColor: "#FF450012", borderColor: "#FF450044" }]}
+          onPress={() => router.push("/referral")}
+          activeOpacity={0.8}
+        >
+          <Text style={s.inviteEmoji}>📣</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={[s.inviteTitle, { color: c.text }]}>Invite Friends</Text>
+            <Text style={[s.inviteSub, { color: c.textMuted }]}>Earn rewards for every friend who joins</Text>
+          </View>
+          <Icon name="chevronRight" size={16} color="#FF4500" />
+        </TouchableOpacity>
 
         {/* ── Sign Out ────────────────────────────────────────────────────── */}
         <TouchableOpacity
@@ -556,7 +617,7 @@ function ViewMode({ profile, workoutsThisMonth, levelColor, earnedBadges, userTi
             })}
           </View>
           {getBestTime(profile.availability) !== "Not set" && (
-            <Text style={[s.availTime, { color: c.textMuted }]}>⏰ {getBestTime(profile.availability)}</Text>
+            <Text style={[s.availTime, { color: c.textMuted }]}>{getBestTime(profile.availability)}</Text>
           )}
         </View>
       )}
@@ -644,13 +705,65 @@ function ViewMode({ profile, workoutsThisMonth, levelColor, earnedBadges, userTi
         </View>
       )}
 
+      {/* Trust signals */}
+      {(profile.sessions_completed > 0 || profile.response_rate !== null) && (
+        <View style={[s.trustCard, { backgroundColor: c.bgCard, borderColor: c.border }]}>
+          <Text style={[s.trustTitle, { color: c.text }]}>Trust & Reliability</Text>
+          <View style={s.trustRow}>
+            {profile.sessions_completed > 0 && (
+              <View style={[s.trustPill, { backgroundColor: "#22C55E18", borderColor: "#22C55E44" }]}>
+                <Text style={{ fontSize: 14 }}>🤝</Text>
+                <View>
+                  <Text style={[s.trustPillValue, { color: "#22C55E" }]}>{profile.sessions_completed}</Text>
+                  <Text style={[s.trustPillLabel, { color: c.textMuted }]}>sessions done</Text>
+                </View>
+              </View>
+            )}
+            {profile.response_rate !== null && (
+              <View style={[s.trustPill, {
+                backgroundColor: profile.response_rate >= 80 ? "#22C55E18" : profile.response_rate >= 50 ? "#F59E0B18" : "#EF444418",
+                borderColor:     profile.response_rate >= 80 ? "#22C55E44" : profile.response_rate >= 50 ? "#F59E0B44" : "#EF444444",
+              }]}>
+                <Text style={{ fontSize: 14 }}>⚡</Text>
+                <View>
+                  <Text style={[s.trustPillValue, { color: profile.response_rate >= 80 ? "#22C55E" : profile.response_rate >= 50 ? "#F59E0B" : "#EF4444" }]}>
+                    {profile.response_rate}%
+                  </Text>
+                  <Text style={[s.trustPillLabel, { color: c.textMuted }]}>response rate</Text>
+                </View>
+              </View>
+            )}
+            {profile.match_count >= 5 && (
+              <View style={[s.trustPill, { backgroundColor: "#3B82F618", borderColor: "#3B82F644" }]}>
+                <Text style={{ fontSize: 14 }}>✓</Text>
+                <View>
+                  <Text style={[s.trustPillValue, { color: "#3B82F6" }]}>Active</Text>
+                  <Text style={[s.trustPillLabel, { color: c.textMuted }]}>community</Text>
+                </View>
+              </View>
+            )}
+          </View>
+        </View>
+      )}
+
+      {/* Training intent chip */}
+      {profile.training_intent && (
+        <View style={[s.intentRow, { backgroundColor: c.brandSubtle, borderColor: c.brandBorder }]}>
+          <Text style={[s.intentText, { color: c.brand }]}>
+            {profile.training_intent === "guidance" ? "I want guidance" :
+             profile.training_intent === "teaching" ? "I enjoy helping others" :
+                                                      "Equal training partner"}
+          </Text>
+        </View>
+      )}
+
       {/* Career info */}
       {(profile.company || profile.industry || profile.education_level || profile.career_goals) && (
         <View style={[s.careerCard, { backgroundColor: c.bgCard, borderColor: c.border }]}>
           <Text style={[s.careerTitle, { color: c.text }]}>Career</Text>
-          {profile.company         && <Text style={[s.careerRow, { color: c.textSecondary }]}>🏢 {profile.company}</Text>}
-          {profile.industry        && <Text style={[s.careerRow, { color: c.textSecondary }]}>📊 {profile.industry}</Text>}
-          {profile.education_level && <Text style={[s.careerRow, { color: c.textSecondary }]}>🎓 {profile.education_level}</Text>}
+          {profile.company         && <Text style={[s.careerRow, { color: c.textSecondary }]}>{profile.company}</Text>}
+          {profile.industry        && <Text style={[s.careerRow, { color: c.textSecondary }]}>{profile.industry}</Text>}
+          {profile.education_level && <Text style={[s.careerRow, { color: c.textSecondary }]}>{profile.education_level}</Text>}
           {profile.career_goals    && <Text style={[s.careerRow, { color: c.textMuted }]}>{profile.career_goals}</Text>}
         </View>
       )}
@@ -784,7 +897,7 @@ function EditForm({ form, setForm, saving, onSave, onCancel, toggleSport, toggle
       <View style={s.field}>
         <Text style={[s.fieldLabel, { color: c.textMuted }]}>Training Times</Text>
         <View style={s.timeRow}>
-          {TIME_OPTIONS.map(({ value, label, sub, emoji }) => {
+          {TIME_OPTIONS.map(({ value, label, sub }) => {
             const active = !!(form.availability ?? {})[value];
             return (
               <TouchableOpacity
@@ -792,7 +905,6 @@ function EditForm({ form, setForm, saving, onSave, onCancel, toggleSport, toggle
                 style={[s.timeBtn, { borderColor: active ? c.brand : c.border, backgroundColor: active ? c.brandSubtle : c.bgInput }]}
                 onPress={() => toggleTime(value)}
               >
-                <Text style={s.timeEmoji}>{emoji}</Text>
                 <Text style={[s.timeLabel, { color: active ? c.brand : c.text }]}>{label}</Text>
                 <Text style={[s.timeSub, { color: c.textMuted }]}>{sub}</Text>
               </TouchableOpacity>
@@ -810,10 +922,10 @@ function EditForm({ form, setForm, saving, onSave, onCancel, toggleSport, toggle
             return (
               <TouchableOpacity
                 key={sport}
-                style={[s.sportChip, { backgroundColor: selected ? c.brandSubtle : c.bgCard, borderColor: selected ? c.brand : c.border }]}
+                style={[s.sportChip, { backgroundColor: selected ? c.brandSubtle : "transparent", borderColor: selected ? c.brand : c.borderMedium }]}
                 onPress={() => toggleSport(sport)}
               >
-                <Text style={[s.sportChipText, { color: selected ? c.brand : c.textMuted }]}>{sport}</Text>
+                <Text style={[s.sportChipText, { color: selected ? c.brand : c.textSecondary }]}>{sport}</Text>
               </TouchableOpacity>
             );
           })}
@@ -918,6 +1030,53 @@ function EditForm({ form, setForm, saving, onSave, onCancel, toggleSport, toggle
                 onPress={() => setForm({ ...form, education_level: edu })}
               >
                 <Text style={[s.sportChipText, { color: active ? c.brand : c.textMuted }]}>{edu}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+
+      {/* Training Intent */}
+      <Text style={[s.sectionTitle, { color: c.text, marginTop: SPACE[4] }]}>Training Intent</Text>
+      <View style={s.field}>
+        <Text style={[s.fieldLabel, { color: c.textMuted }]}>How do you want to train?</Text>
+        <View style={s.sportsWrap}>
+          {[
+            { value: "guidance", label: "I want guidance" },
+            { value: "teaching", label: "I enjoy helping others" },
+            { value: "equal",    label: "Equal training partner" },
+          ].map(opt => {
+            const active = form.training_intent === opt.value;
+            return (
+              <TouchableOpacity
+                key={opt.value}
+                style={[s.sportChip, { backgroundColor: active ? c.brandSubtle : c.bgCard, borderColor: active ? c.brand : c.border }]}
+                onPress={() => setForm({ ...form, training_intent: active ? null : opt.value })}
+              >
+                <Text style={[s.sportChipText, { color: active ? c.brand : c.textMuted }]}>{opt.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+
+      {/* Who I Want to Meet */}
+      <View style={s.field}>
+        <Text style={[s.fieldLabel, { color: c.textMuted }]}>Who I want to meet</Text>
+        <View style={s.sportsWrap}>
+          {[
+            { value: "everyone", label: "Everyone" },
+            { value: "men",      label: "Men" },
+            { value: "women",    label: "Women" },
+          ].map(opt => {
+            const active = form.show_me === opt.value;
+            return (
+              <TouchableOpacity
+                key={opt.value}
+                style={[s.sportChip, { backgroundColor: active ? c.brandSubtle : c.bgCard, borderColor: active ? c.brand : c.border }]}
+                onPress={() => setForm({ ...form, show_me: active ? null : opt.value })}
+              >
+                <Text style={[s.sportChipText, { color: active ? c.brand : c.textMuted }]}>{opt.label}</Text>
               </TouchableOpacity>
             );
           })}
@@ -1078,6 +1237,18 @@ const s = StyleSheet.create({
   certAddBtn:   { paddingHorizontal: SPACE[16], paddingVertical: SPACE[12], borderRadius: RADIUS.lg, justifyContent: "center" },
   certAddText:  { color: "#fff", fontWeight: FONT.weight.bold },
 
+  // Trust card
+  trustCard:       { borderRadius: RADIUS.xl, padding: SPACE[16], borderWidth: 1, gap: SPACE[12] },
+  trustTitle:      { fontSize: FONT.size.sm, fontWeight: FONT.weight.extrabold, textTransform: "uppercase", letterSpacing: 0.8 },
+  trustRow:        { flexDirection: "row", gap: SPACE[10], flexWrap: "wrap" },
+  trustPill:       { flexDirection: "row", alignItems: "center", gap: SPACE[8], paddingHorizontal: SPACE[12], paddingVertical: SPACE[8], borderRadius: RADIUS.lg, borderWidth: 1 },
+  trustPillValue:  { fontSize: FONT.size.md, fontWeight: FONT.weight.black },
+  trustPillLabel:  { fontSize: 10, fontWeight: FONT.weight.medium, marginTop: 1 },
+
+  // Intent
+  intentRow:   { alignSelf: "flex-start", paddingHorizontal: SPACE[14], paddingVertical: SPACE[8], borderRadius: RADIUS.pill, borderWidth: 1 },
+  intentText:  { fontSize: FONT.size.sm, fontWeight: FONT.weight.bold },
+
   // Career
   careerCard:  { borderRadius: RADIUS.xl, padding: SPACE[16], borderWidth: 1, gap: SPACE[8] },
   careerTitle: { fontSize: FONT.size.md, fontWeight: FONT.weight.extrabold },
@@ -1117,4 +1288,12 @@ const s = StyleSheet.create({
   // Sign out
   logoutBtn:  { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: SPACE[8], marginTop: SPACE[8], paddingVertical: SPACE[16], borderRadius: RADIUS.xl, borderWidth: 1 },
   logoutText: { fontWeight: FONT.weight.bold, fontSize: FONT.size.sm },
+  inviteBtn:      { flexDirection: "row", alignItems: "center", gap: SPACE[12], borderRadius: RADIUS.xl, padding: SPACE[16], borderWidth: 1, marginTop: SPACE[4] },
+  inviteEmoji:    { fontSize: 24 },
+  inviteTitle:    { fontSize: FONT.size.sm, fontWeight: FONT.weight.bold },
+  inviteSub:      { fontSize: FONT.size.xs, marginTop: 2 },
+  proUpgradeBtn:  { backgroundColor: "#FF4500", borderRadius: RADIUS.xl, paddingVertical: SPACE[16], alignItems: "center", shadowColor: "#FF4500", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 5 },
+  proUpgradeBtnText: { color: "#fff", fontWeight: FONT.weight.black, fontSize: FONT.size.base },
+  proManageBtn:   { borderRadius: RADIUS.xl, paddingVertical: SPACE[14], alignItems: "center", borderWidth: 1 },
+  proManageBtnText: { fontWeight: FONT.weight.bold, fontSize: FONT.size.sm },
 });

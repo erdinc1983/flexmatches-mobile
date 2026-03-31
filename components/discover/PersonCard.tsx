@@ -24,22 +24,26 @@ import { Avatar } from "../Avatar";
 export type RequestStatus = "none" | "pending" | "accepted";
 
 export type DiscoverUser = {
-  id:            string;
-  username:      string;
-  full_name:     string | null;
-  avatar_url:    string | null;
-  bio:           string | null;
-  city:          string | null;
-  fitness_level: "beginner" | "intermediate" | "advanced" | null;
-  age:           number | null;
-  sports:        string[] | null;
-  current_streak: number;
-  last_active:   string | null;
-  is_at_gym:     boolean;
-  availability:  Record<string, boolean> | null;
-  matchScore:    number;
-  reasons:       string[];
-  isNew:         boolean;
+  id:              string;
+  username:        string;
+  full_name:       string | null;
+  avatar_url:      string | null;
+  bio:             string | null;
+  city:            string | null;
+  fitness_level:   "beginner" | "intermediate" | "advanced" | null;
+  age:             number | null;
+  gender:          string | null;
+  sports:          string[] | null;
+  current_streak:  number;
+  last_active:     string | null;
+  is_at_gym:       boolean;
+  availability:    Record<string, boolean> | null;
+  training_intent: string | null;
+  lat:             number | null;
+  lng:             number | null;
+  matchScore:      number;
+  reasons:         string[];
+  isNew:           boolean;
 };
 
 type Props = {
@@ -58,11 +62,6 @@ const LEVEL_COLOR: Record<string, string> = {
   advanced:     "#FF4500",
 };
 
-const TAG_PALETTE: Array<[string, string]> = [
-  ["#FF450018", "#FF4500"],
-  ["#22C55E18", "#22C55E"],
-  ["#3B82F618", "#3B82F6"],
-];
 
 function formatActive(iso: string | null): string {
   if (!iso) return "";
@@ -73,10 +72,8 @@ function formatActive(iso: string | null): string {
   return "";
 }
 
-function scoreBarColor(score: number, border: string): string {
-  if (score >= 80) return PALETTE.success;
-  if (score >= 60) return "#3B82F6";
-  if (score >= 35) return "#F59E0B";
+function scoreBarColor(score: number, brand: string, border: string): string {
+  if (score >= 35) return brand;
   return border;
 }
 
@@ -91,7 +88,7 @@ export function PersonCard({ user, status, onConnect, onCancelRequest, onPress, 
   const allSports   = user.sports ?? [];
   const sports      = sportsExpanded ? allSports : allSports.slice(0, 3);
   const hiddenCount = allSports.length - 3;
-  const barColor    = scoreBarColor(user.matchScore, c.border);
+  const barColor    = scoreBarColor(user.matchScore, c.brand, c.border);
 
   return (
     <TouchableOpacity
@@ -173,20 +170,30 @@ export function PersonCard({ user, status, onConnect, onCancelRequest, onPress, 
         {/* ── Row 2: Reason tags (with fallback) ─────────────────── */}
         <View style={s.tagsRow}>
           {user.reasons.length > 0 ? (
-            user.reasons.map((reason, i) => {
-              const [bg, fg] = TAG_PALETTE[i % TAG_PALETTE.length];
-              return (
-                <View key={reason} style={[s.tag, { backgroundColor: bg }]}>
-                  <Text style={[s.tagText, { color: fg }]}>{reason}</Text>
-                </View>
-              );
-            })
+            user.reasons.map((reason) => (
+              <View key={reason} style={[s.tag, { backgroundColor: c.brandSubtle }]}>
+                <Text style={[s.tagText, { color: c.brand }]}>{reason}</Text>
+              </View>
+            ))
           ) : (
             <View style={[s.tag, { backgroundColor: c.bgCardAlt }]}>
               <Text style={[s.tagText, { color: c.textMuted }]}>New to FlexMatches</Text>
             </View>
           )}
         </View>
+
+        {/* ── Intent chip ────────────────────────────────────────── */}
+        {user.training_intent && (
+          <View style={s.intentRow}>
+            <View style={[s.intentChip, { backgroundColor: c.brandSubtle, borderColor: c.brandBorder }]}>
+              <Text style={[s.intentText, { color: c.brand }]}>
+                {user.training_intent === "guidance"  ? "Wants guidance" :
+                 user.training_intent === "teaching"  ? "Loves helping others" :
+                                                        "Equal partner"}
+              </Text>
+            </View>
+          </View>
+        )}
 
         {/* ── Row 3: Bio ─────────────────────────────────────────── */}
         {user.bio ? (
@@ -199,13 +206,13 @@ export function PersonCard({ user, status, onConnect, onCancelRequest, onPress, 
         <View style={s.bottomRow}>
           <View style={s.sportsRow}>
             {sports.map((sp) => (
-              <View key={sp} style={[s.sportChip, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}>
+              <View key={sp} style={[s.sportChip, { backgroundColor: "transparent", borderColor: c.borderMedium }]}>
                 <Text style={[s.sportText, { color: c.textSecondary }]}>{sp}</Text>
               </View>
             ))}
             {!sportsExpanded && hiddenCount > 0 && (
               <TouchableOpacity
-                style={[s.sportChip, { backgroundColor: c.bgCardAlt, borderColor: c.brand }]}
+                style={[s.sportChip, { backgroundColor: "transparent", borderColor: c.brand }]}
                 onPress={(e) => { e.stopPropagation(); setSportsExpanded(true); }}
               >
                 <Text style={[s.sportText, { color: c.brand }]}>+{hiddenCount}</Text>
@@ -282,6 +289,11 @@ const s = StyleSheet.create({
   tag:         { paddingHorizontal: SPACE[10], paddingVertical: 4, borderRadius: RADIUS.pill },
   tagText:     { fontSize: FONT.size.xs, fontWeight: FONT.weight.bold },
 
+  // Intent
+  intentRow:  { flexDirection: "row" },
+  intentChip: { paddingHorizontal: SPACE[10], paddingVertical: 4, borderRadius: RADIUS.pill, borderWidth: 1 },
+  intentText: { fontSize: FONT.size.xs, fontWeight: FONT.weight.bold },
+
   // Bio
   bio:         { fontSize: FONT.size.sm, lineHeight: FONT.size.sm * 1.5 },
 
@@ -292,10 +304,10 @@ const s = StyleSheet.create({
   sportText:   { fontSize: FONT.size.xs, fontWeight: FONT.weight.medium },
 
   // Action buttons
-  connectBtn:  { paddingHorizontal: SPACE[16], paddingVertical: SPACE[8], borderRadius: RADIUS.lg },
+  connectBtn:  { paddingHorizontal: SPACE[16], paddingVertical: SPACE[8], borderRadius: RADIUS.pill },
   connectText: { fontSize: FONT.size.sm, fontWeight: FONT.weight.extrabold, color: "#fff" },
-  pendingBtn:  { paddingHorizontal: SPACE[16], paddingVertical: SPACE[8], borderRadius: RADIUS.lg, borderWidth: 1 },
+  pendingBtn:  { paddingHorizontal: SPACE[16], paddingVertical: SPACE[8], borderRadius: RADIUS.pill, borderWidth: 1 },
   pendingText: { fontSize: FONT.size.sm, fontWeight: FONT.weight.medium },
-  messageBtn:  { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: SPACE[12], paddingVertical: SPACE[8], borderRadius: RADIUS.lg, borderWidth: 1 },
+  messageBtn:  { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: SPACE[12], paddingVertical: SPACE[8], borderRadius: RADIUS.pill, borderWidth: 1 },
   messageText: { fontSize: FONT.size.sm, fontWeight: FONT.weight.semibold },
 });
