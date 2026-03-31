@@ -155,7 +155,7 @@ export const SwipeDeck = forwardRef<SwipeDeckRef, Props>(function SwipeDeck(
               >
                 {/* Overlays */}
                 <Animated.View style={[deck.likeOverlay, { opacity: likeOpacity }]}>
-                  <Text style={deck.likeText}>LIKED ❤️</Text>
+                  <Text style={deck.likeText}>LIKED ✦</Text>
                 </Animated.View>
                 <Animated.View style={[deck.passOverlay, { opacity: passOpacity }]}>
                   <Text style={deck.passText}>NOPE ✕</Text>
@@ -193,7 +193,7 @@ export const SwipeDeck = forwardRef<SwipeDeckRef, Props>(function SwipeDeck(
         />
         <ActionBtn emoji="✕"  bg="#FF450020" border="#FF4500" color="#FF4500" size={58} onPress={() => commitSwipe("left")} />
         <ActionBtn emoji="ℹ️" bg="transparent" border="#9CA3AF" color="#9CA3AF" size={46} onPress={() => onCardPress(users[currentIndex])} />
-        <ActionBtn emoji="❤️" bg={PALETTE.success + "20"} border={PALETTE.success} color={PALETTE.success} size={58} onPress={() => commitSwipe("right")} />
+        <ActionBtn emoji="✦" bg={PALETTE.success + "20"} border={PALETTE.success} color={PALETTE.success} size={58} onPress={() => commitSwipe("right")} />
       </View>
     </View>
   );

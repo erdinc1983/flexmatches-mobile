@@ -548,7 +548,7 @@ export default function DiscoverScreen() {
                 onPress={() => setViewMode(mode)}
               >
                 <Icon
-                  name={mode === "swipe" ? "heartActive" : mode === "list" ? "list" : "map"}
+                  name={mode === "swipe" ? "discoverActive" : mode === "list" ? "list" : "map"}
                   size={15}
                   color={viewMode === mode ? "#fff" : c.textSecondary}
                 />
