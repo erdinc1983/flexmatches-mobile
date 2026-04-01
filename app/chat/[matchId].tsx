@@ -954,10 +954,10 @@ export default function ChatScreen() {
       <Modal
         visible={showMapPicker}
         animationType="slide"
-        presentationStyle="fullScreen"
+        transparent={false}
         onRequestClose={() => setShowMapPicker(false)}
       >
-        <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }} edges={["top", "bottom"]}>
           <MapLocationPicker
             colors={c}
             onSelect={(loc) => { setSessionLocation(loc); setShowMapPicker(false); }}
