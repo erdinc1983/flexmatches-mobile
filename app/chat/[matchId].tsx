@@ -322,7 +322,7 @@ export default function ChatScreen() {
       .from("buddy_sessions")
       .select("id, match_id, proposer_id, receiver_id, sport, session_date, session_time, location, notes, status")
       .eq("match_id", matchId)
-      .not("status", "in", '("declined","cancelled")')
+      .not("status", "in", '("declined","cancelled","completed")')
       .order("session_date", { ascending: true })
       .limit(1).maybeSingle();
     setSession(data as BuddySession | null);

@@ -117,19 +117,8 @@ export function SessionBanner({ session, myId, partnerName, onAccept, onDecline,
   const state     = getSessionState(session, myId);
   const dateLabel = formatSessionDate(session.session_date, session.session_time);
 
-  // ── Confirmed: quiet one-liner ─────────────────────────────────────────────
-  if (state === "confirmed") {
-    return (
-      <View style={[s.banner, { backgroundColor: c.bgCard, borderBottomColor: c.border }]}>
-        <View style={s.row}>
-          <Icon name="checkActive" size={13} color={c.textMuted} />
-          <Text style={[s.text, { color: c.textMuted }]}>
-            {session.sport} session completed
-          </Text>
-        </View>
-      </View>
-    );
-  }
+  // ── Confirmed: no banner needed ───────────────────────────────────────────
+  if (state === "confirmed") return null;
 
   // ── Pending (I proposed): waiting state + edit/cancel ─────────────────────
   if (state === "pending_mine") {
