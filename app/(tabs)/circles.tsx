@@ -538,12 +538,9 @@ export default function CirclesScreen() {
       )}
 
       {/* ── Create Circle Wizard ─────────────────────────────────────────────── */}
-      <Modal visible={showCreate && !showMapPicker} transparent animationType="slide" onRequestClose={resetCreate}>
-        <View style={wiz.backdrop}>
-          <KeyboardAvoidingView
-            style={[wiz.card, { backgroundColor: c.bg }]}
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
-          >
+      <Modal visible={showCreate && !showMapPicker} transparent animationType="fade" onRequestClose={resetCreate}>
+        <KeyboardAvoidingView style={wiz.backdrop} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+          <View style={[wiz.card, { backgroundColor: c.bg }]}>
             {/* Header */}
             <View style={[wiz.header, { borderBottomColor: c.border }]}>
               <TouchableOpacity onPress={resetCreate} hitSlop={12}>
@@ -761,8 +758,8 @@ export default function CirclesScreen() {
                 </TouchableOpacity>
               )}
             </View>
-          </KeyboardAvoidingView>
-        </View>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ── Map Picker Modal ──────────────────────────────────────────────────── */}
@@ -941,8 +938,9 @@ const s = StyleSheet.create({
 
 // ─── Wizard styles ────────────────────────────────────────────────────────────
 const wiz = StyleSheet.create({
-  backdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.45)" },
-  card:     { borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: SCREEN_H * 0.88 },
+  backdrop: { flex: 1, justifyContent: "center", alignItems: "center",
+              backgroundColor: "rgba(0,0,0,0.45)", paddingHorizontal: 16, paddingVertical: 40 },
+  card:     { width: "100%", borderRadius: 24, maxHeight: SCREEN_H * 0.82 },
   header:   { flexDirection: "row", alignItems: "center", justifyContent: "space-between",
               paddingHorizontal: SPACE[20], paddingVertical: SPACE[16], borderBottomWidth: 1 },
   title:    { fontSize: FONT.size.xl, fontWeight: FONT.weight.black },
