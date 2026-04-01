@@ -331,6 +331,35 @@ export default function ChatScreen() {
     await supabase.from("buddy_sessions").update({ status: "declined" }).eq("id", session.id);
     setSession(null);
   }
+  async function cancelSession() {
+    if (!session) return;
+    await supabase.from("buddy_sessions").update({ status: "cancelled" }).eq("id", session.id);
+    setSession(null);
+  }
+
+  function editSession() {
+    if (!session) return;
+    // Pre-fill wizard with existing session values
+    setSessionSport(session.sport);
+    setSessionTitle("");
+    setSessionDate(session.session_date);
+    if (session.session_time) {
+      const [h, m] = session.session_time.split(":").map(Number);
+      setSessionHour(h);
+      setSessionMinute(m);
+      setUseTime(true);
+    } else {
+      setUseTime(false);
+    }
+    setSessionLocation(session.location ?? "");
+    setWizardStep(1);
+    // Cancel the old pending session, wizard propose will create a new one
+    supabase.from("buddy_sessions").update({ status: "cancelled" }).eq("id", session.id).then(() => {
+      setSession(null);
+    });
+    setShowWizard(true);
+  }
+
   async function confirmSession() {
     if (!session || !userId) return;
     // Mark session completed — both participants get +1 sessions_kept
@@ -472,6 +501,8 @@ export default function ChatScreen() {
           onAccept={acceptSession}
           onDecline={declineSession}
           onConfirm={confirmSession}
+          onCancel={session.proposer_id === userId && session.status === "pending" ? cancelSession : undefined}
+          onEdit={session.proposer_id === userId && session.status === "pending" ? editSession : undefined}
         />
       )}
 

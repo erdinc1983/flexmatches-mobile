@@ -106,9 +106,11 @@ type Props = {
   onAccept:    () => void;
   onDecline:   () => void;
   onConfirm:   () => void;
+  onCancel?:   () => void;
+  onEdit?:     () => void;
 };
 
-export function SessionBanner({ session, myId, partnerName, onAccept, onDecline, onConfirm }: Props) {
+export function SessionBanner({ session, myId, partnerName, onAccept, onDecline, onConfirm, onCancel, onEdit }: Props) {
   const { theme, isDark } = useTheme();
   const c = theme.colors;
 
@@ -129,24 +131,48 @@ export function SessionBanner({ session, myId, partnerName, onAccept, onDecline,
     );
   }
 
-  // ── Pending (I proposed): waiting state ────────────────────────────────────
+  // ── Pending (I proposed): waiting state + edit/cancel ─────────────────────
   if (state === "pending_mine") {
     const bg     = isDark ? AMBER.darkBg     : AMBER.lightBg;
     const border = isDark ? AMBER.darkBorder : AMBER.lightBorder;
     const txt    = isDark ? AMBER.darkText   : AMBER.lightText;
     const sub    = isDark ? AMBER.darkSub    : AMBER.lightSub;
     return (
-      <View style={[s.banner, { backgroundColor: bg, borderBottomColor: border }]}>
+      <View style={[s.banner, s.bannerTall, { backgroundColor: bg, borderBottomColor: border }]}>
         <View style={s.row}>
           <Icon name="clock" size={13} color={AMBER.icon} />
           <View style={s.textCol}>
             <Text style={[s.text, { color: txt }]}>
               {session.sport} · {dateLabel}
             </Text>
+            {session.location && (
+              <Text style={[s.sub, { color: sub }]}>📍 {session.location}</Text>
+            )}
             <Text style={[s.sub, { color: sub }]}>
               Waiting for {partnerName} to confirm
             </Text>
           </View>
+        </View>
+        <View style={s.actions}>
+          {onEdit && (
+            <TouchableOpacity
+              style={[s.editBtn, { borderColor: isDark ? AMBER.darkBorder : AMBER.lightBorder }]}
+              onPress={onEdit}
+              activeOpacity={0.8}
+            >
+              <Icon name="edit" size={13} color={AMBER.icon} />
+              <Text style={[s.editText, { color: AMBER.icon }]}>Edit</Text>
+            </TouchableOpacity>
+          )}
+          {onCancel && (
+            <TouchableOpacity
+              style={[s.cancelBtn, { borderColor: isDark ? AMBER.darkBorder : AMBER.lightBorder }]}
+              onPress={onCancel}
+              activeOpacity={0.8}
+            >
+              <Text style={[s.cancelText, { color: isDark ? AMBER.darkText : AMBER.lightText }]}>Cancel session</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     );
@@ -247,4 +273,8 @@ const s = StyleSheet.create({
   declineText: { fontSize: FONT.size.sm, fontWeight: FONT.weight.medium },
   acceptBtn:   { flex: 1, paddingVertical: SPACE[8], borderRadius: RADIUS.md, alignItems: "center" },
   ctaText:     { fontSize: FONT.size.sm, fontWeight: FONT.weight.bold, color: "#fff" },
+  editBtn:     { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: SPACE[8], paddingHorizontal: SPACE[12], borderRadius: RADIUS.md, borderWidth: 1 },
+  editText:    { fontSize: FONT.size.sm, fontWeight: FONT.weight.semibold },
+  cancelBtn:   { flex: 1, paddingVertical: SPACE[8], borderRadius: RADIUS.md, borderWidth: 1, alignItems: "center" },
+  cancelText:  { fontSize: FONT.size.sm, fontWeight: FONT.weight.medium },
 });
