@@ -102,7 +102,7 @@ export default function MessagesScreen() {
           supabase.from("buddy_sessions")
             .select("id, match_id, proposer_id, receiver_id, sport, session_date, session_time, location, notes, status")
             .eq("match_id", m.id)
-            .neq("status", "declined")
+            .not("status", "in", '("declined","cancelled","completed")')
             .order("session_date", { ascending: true })
             .limit(1)
             .maybeSingle(),

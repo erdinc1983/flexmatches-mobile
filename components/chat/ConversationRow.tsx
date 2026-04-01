@@ -54,7 +54,7 @@ function timeLabel(iso: string): string {
 }
 
 function getSessionPill(session: BuddySession | null, myId: string): Pill | null {
-  if (!session || session.status === "declined" || session.status === "confirmed") return null;
+  if (!session || ["declined", "cancelled", "completed"].includes(session.status)) return null;
   const state = getSessionState(session, myId);
   switch (state) {
     case "pending_mine":
