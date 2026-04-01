@@ -637,14 +637,18 @@ export default function ChatScreen() {
         </View>
       </Modal>
 
-      {/* ── Session wizard — step-by-step bottom sheet ───────────────── */}
+      {/* ── Session wizard — centered card ───────────────────────────── */}
       <Modal
         visible={showWizard}
-        animationType="slide"
+        animationType="fade"
         transparent
         onRequestClose={() => { if (showMapPicker) setShowMapPicker(false); else setShowWizard(false); }}
       >
-        <View style={wz.overlay}>
+        <KeyboardAvoidingView
+          style={wz.overlay}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={20}
+        >
           <TouchableOpacity style={wz.backdropArea} activeOpacity={1} onPress={() => !showMapPicker && setShowWizard(false)} />
           <View style={[wz.sheet, { backgroundColor: c.bgCard }]}>
 
@@ -873,7 +877,7 @@ export default function ChatScreen() {
 
             </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <ProfileSheet
@@ -927,12 +931,12 @@ const am = StyleSheet.create({
 
 // ─── Wizard styles ────────────────────────────────────────────────────────────
 const wz = StyleSheet.create({
-  overlay:     { flex: 1, justifyContent: "flex-end" },
-  backdropArea:{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)" },
-  sheet:       { borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: SCREEN_H * 0.88, overflow: "hidden" },
-  mapOverlay:  { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 10, borderTopLeftRadius: 24, borderTopRightRadius: 24 },
-  handle:      { width: 40, height: 4, borderRadius: 2, alignSelf: "center", marginTop: SPACE[12], marginBottom: SPACE[4] },
-  stepHeader:  { flexDirection: "row", alignItems: "center", paddingHorizontal: SPACE[20], paddingVertical: SPACE[12], gap: SPACE[12] },
+  overlay:     { flex: 1, justifyContent: "center", alignItems: "center", padding: SPACE[20], backgroundColor: "rgba(0,0,0,0.50)" },
+  backdropArea:{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
+  sheet:       { width: "100%", borderRadius: 24, maxHeight: SCREEN_H * 0.82, overflow: "hidden" },
+  mapOverlay:  { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 10, borderRadius: 24 },
+  handle:      { width: 0, height: 0 }, // not needed for centered card
+  stepHeader:  { flexDirection: "row", alignItems: "center", paddingHorizontal: SPACE[20], paddingVertical: SPACE[16], gap: SPACE[12] },
   stepTitleBox:{ flex: 1, alignItems: "center" },
   stepTitle:   { fontSize: 18, fontWeight: "700" },
   stepIndicator:{ fontSize: 12, marginTop: 2 },
