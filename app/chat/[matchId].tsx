@@ -204,8 +204,10 @@ export default function ChatScreen() {
   const [useTime,         setUseTime]         = useState(false);
   const [sessionLocation, setSessionLocation] = useState("");
   const [proposing,       setProposing]       = useState(false);
-  const [showMapPicker,   setShowMapPicker]   = useState(false);
-  const [sheetUser,       setSheetUser]       = useState<DiscoverUser | null>(null);
+  const [showMapPicker,     setShowMapPicker]     = useState(false);
+  const [sheetUser,         setSheetUser]         = useState<DiscoverUser | null>(null);
+  const [showCompleted,     setShowCompleted]     = useState(false);
+  const [completedSessions, setCompletedSessions] = useState<{ id: string; sport: string; session_date: string; completed_at: string | null }[]>([]);
 
   const flatListRef = useRef<FlatList>(null);
 
@@ -292,6 +294,16 @@ export default function ChatScreen() {
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 100);
     loadSession();
   }
+
+  const loadCompletedSessions = useCallback(async () => {
+    const { data } = await supabase
+      .from("buddy_sessions")
+      .select("id, sport, session_date, completed_at")
+      .eq("match_id", matchId)
+      .eq("status", "completed")
+      .order("session_date", { ascending: false });
+    setCompletedSessions(data ?? []);
+  }, [matchId]);
 
   const loadSession = useCallback(async () => {
     const { data } = await supabase
@@ -600,7 +612,7 @@ export default function ChatScreen() {
 
           {/* Propose a session */}
           <TouchableOpacity
-            style={am.row}
+            style={[am.row, { borderBottomColor: c.border }]}
             onPress={() => { setShowActionMenu(false); openWizard(); }}
             activeOpacity={0.75}
           >
@@ -610,6 +622,26 @@ export default function ChatScreen() {
             <View style={am.rowText}>
               <Text style={[am.rowLabel, { color: c.text }]}>Propose a session</Text>
               <Text style={[am.rowSub, { color: c.textMuted }]}>Pick sport, date and time</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={c.textFaint} />
+          </TouchableOpacity>
+
+          {/* Completed sessions */}
+          <TouchableOpacity
+            style={am.row}
+            onPress={() => {
+              setShowActionMenu(false);
+              loadCompletedSessions();
+              setShowCompleted(true);
+            }}
+            activeOpacity={0.75}
+          >
+            <View style={[am.iconBox, { backgroundColor: "#8B5CF618" }]}>
+              <Ionicons name="checkmark-circle-outline" size={20} color="#8B5CF6" />
+            </View>
+            <View style={am.rowText}>
+              <Text style={[am.rowLabel, { color: c.text }]}>Completed sessions</Text>
+              <Text style={[am.rowSub, { color: c.textMuted }]}>Sessions you did together</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={c.textFaint} />
           </TouchableOpacity>
@@ -873,6 +905,51 @@ export default function ChatScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
+      {/* ── Completed sessions modal ─────────────────────────────────── */}
+      <Modal
+        visible={showCompleted}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setShowCompleted(false)}
+      >
+        <TouchableOpacity
+          style={am.backdrop}
+          activeOpacity={1}
+          onPress={() => setShowCompleted(false)}
+        />
+        <View style={[am.sheet, { backgroundColor: c.bgCard }]}>
+          <Text style={[am.sheetTitle, { color: c.text }]}>
+            Completed sessions
+          </Text>
+
+          {completedSessions.length === 0 ? (
+            <View style={cs.empty}>
+              <Text style={[cs.emptyEmoji]}>🏋️</Text>
+              <Text style={[cs.emptyText, { color: c.textMuted }]}>No completed sessions yet</Text>
+              <Text style={[cs.emptySub, { color: c.textFaint }]}>When you confirm a session happened it will appear here</Text>
+            </View>
+          ) : (
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: SCREEN_H * 0.4 }}>
+              {completedSessions.map((s, i) => (
+                <View key={s.id} style={[cs.row, { borderBottomColor: c.border, borderBottomWidth: i < completedSessions.length - 1 ? StyleSheet.hairlineWidth : 0 }]}>
+                  <View style={[cs.badge, { backgroundColor: "#22C55E18" }]}>
+                    <Ionicons name="checkmark-circle" size={18} color="#22C55E" />
+                  </View>
+                  <View style={cs.rowText}>
+                    <Text style={[cs.sport, { color: c.text }]}>{s.sport}</Text>
+                    <Text style={[cs.date, { color: c.textMuted }]}>
+                      {new Date(s.session_date + "T12:00:00").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+          )}
+
+          <View style={{ height: 16 }} />
+        </View>
+      </Modal>
+
       {/* ── Map picker — full-screen modal ───────────────────────────── */}
       <Modal
         visible={showMapPicker}
@@ -983,6 +1060,19 @@ const wz = StyleSheet.create({
   nextBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
   proposeBtn:  { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: SPACE[8], borderRadius: RADIUS.lg, paddingVertical: SPACE[16], marginTop: SPACE[4] },
   proposeBtnText:{ color: "#fff", fontSize: 16, fontWeight: "700" },
+});
+
+// ─── Completed sessions styles ───────────────────────────────────────────────
+const cs = StyleSheet.create({
+  empty:     { alignItems: "center", paddingVertical: SPACE[24], gap: SPACE[8] },
+  emptyEmoji:{ fontSize: 32 },
+  emptyText: { fontSize: 15, fontWeight: "600" },
+  emptySub:  { fontSize: 13, textAlign: "center", paddingHorizontal: SPACE[16] },
+  row:       { flexDirection: "row", alignItems: "center", paddingVertical: SPACE[12], gap: SPACE[12] },
+  badge:     { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  rowText:   { flex: 1 },
+  sport:     { fontSize: 15, fontWeight: "600" },
+  date:      { fontSize: 13, marginTop: 2 },
 });
 
 // ─── Main styles ──────────────────────────────────────────────────────────────
