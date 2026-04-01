@@ -225,11 +225,11 @@ export function MapLocationPicker({ onSelect, onClose, colors }: Props) {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const mp = StyleSheet.create({
-  root:        { flex: 1 },
-  header:      { flexDirection: "row", alignItems: "center", paddingHorizontal: SPACE[16], paddingVertical: SPACE[12], gap: SPACE[10], borderBottomWidth: 1 },
+  root:        { flex: 1, flexDirection: "column" },
+  header:      { flexDirection: "row", alignItems: "center", paddingHorizontal: SPACE[16], paddingVertical: SPACE[12], gap: SPACE[10], borderBottomWidth: 1, flexShrink: 0 },
   title:       { fontSize: FONT.size.lg, fontWeight: FONT.weight.extrabold, flex: 1 },
-  chipBar:     { flexGrow: 0 },
-  chipRow:     { gap: SPACE[8], paddingHorizontal: SPACE[12], paddingVertical: SPACE[8] },
+  chipBar:     { flexShrink: 0, height: 48 },
+  chipRow:     { gap: SPACE[8], paddingHorizontal: SPACE[12], paddingVertical: SPACE[8], alignItems: "center" },
   chip:        { flexDirection: "row", alignItems: "center", gap: SPACE[4], paddingHorizontal: SPACE[10], paddingVertical: SPACE[5], borderRadius: RADIUS.pill, borderWidth: 1.5 },
   chipEmoji:   { fontSize: 12 },
   chipLabel:   { fontSize: FONT.size.xs, fontWeight: FONT.weight.semibold },

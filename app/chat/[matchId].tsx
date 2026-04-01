@@ -721,10 +721,10 @@ export default function ChatScreen() {
 
       {/* ── Session wizard — centered card ───────────────────────────── */}
       <Modal
-        visible={showWizard}
+        visible={showWizard && !showMapPicker}
         animationType="fade"
         transparent
-        onRequestClose={() => { editingSessionRef.current = null; setShowWizard(false); setShowMapPicker(false); }}
+        onRequestClose={() => { editingSessionRef.current = null; setShowWizard(false); }}
       >
         <KeyboardAvoidingView
           style={wz.overlay}
@@ -733,17 +733,6 @@ export default function ChatScreen() {
         >
           <TouchableOpacity style={wz.backdropArea} activeOpacity={1} onPress={() => { editingSessionRef.current = null; setShowWizard(false); }} />
           <View style={[wz.sheet, { backgroundColor: c.bgCard }]}>
-
-            {/* Map picker — absolute overlay inside wizard card */}
-            {showMapPicker && (
-              <View style={[StyleSheet.absoluteFillObject, { backgroundColor: c.bgCard, borderRadius: 24, zIndex: 20, overflow: "hidden" }]}>
-                <MapLocationPicker
-                  colors={c}
-                  onSelect={(loc) => { setSessionLocation(loc); setShowMapPicker(false); }}
-                  onClose={() => setShowMapPicker(false)}
-                />
-              </View>
-            )}
 
             {/* Handle */}
             <View style={[wz.handle, { backgroundColor: c.border }]} />
@@ -1005,6 +994,21 @@ export default function ChatScreen() {
 
           <View style={{ height: 16 }} />
         </View>
+      </Modal>
+
+      {/* ── Map picker — standalone modal (no parent modal = works on iOS) ── */}
+      <Modal
+        visible={showMapPicker}
+        animationType="slide"
+        onRequestClose={() => setShowMapPicker(false)}
+      >
+        <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
+          <MapLocationPicker
+            colors={c}
+            onSelect={(loc) => { setSessionLocation(loc); setShowMapPicker(false); }}
+            onClose={() => setShowMapPicker(false)}
+          />
+        </SafeAreaView>
       </Modal>
 
       <ProfileSheet
