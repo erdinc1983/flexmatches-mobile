@@ -209,7 +209,8 @@ export default function ChatScreen() {
   const [showCompleted,     setShowCompleted]     = useState(false);
   const [completedSessions, setCompletedSessions] = useState<{ id: string; sport: string; session_date: string; completed_at: string | null }[]>([]);
 
-  const flatListRef = useRef<FlatList>(null);
+  const flatListRef       = useRef<FlatList>(null);
+  const editingSessionRef = useRef<string | null>(null); // id of session being replaced via Edit
 
   // ── Wizard open helpers ──────────────────────────────────────────────────
   function openWizard(prefilledDate?: string) {
@@ -339,7 +340,9 @@ export default function ChatScreen() {
 
   function editSession() {
     if (!session) return;
-    // Pre-fill wizard with existing session values
+    // Store the id — only cancel AFTER new session is successfully proposed
+    editingSessionRef.current = session.id;
+    // Pre-fill wizard with existing values
     setSessionSport(session.sport);
     setSessionTitle("");
     setSessionDate(session.session_date);
@@ -353,10 +356,6 @@ export default function ChatScreen() {
     }
     setSessionLocation(session.location ?? "");
     setWizardStep(1);
-    // Cancel the old pending session, wizard propose will create a new one
-    supabase.from("buddy_sessions").update({ status: "cancelled" }).eq("id", session.id).then(() => {
-      setSession(null);
-    });
     setShowWizard(true);
   }
 
@@ -386,6 +385,11 @@ export default function ChatScreen() {
     if (sessionDate.trim()) {
       const partnerName = other?.full_name?.split(" ")[0] ?? other?.username ?? "your partner";
       scheduleSessionReminder(partnerName, sessionDate.trim());
+    }
+    // If editing an existing session, cancel it now that new one is saved
+    if (editingSessionRef.current) {
+      await supabase.from("buddy_sessions").update({ status: "cancelled" }).eq("id", editingSessionRef.current);
+      editingSessionRef.current = null;
     }
     setProposing(false);
     setShowWizard(false);
@@ -709,14 +713,14 @@ export default function ChatScreen() {
         visible={showWizard}
         animationType="fade"
         transparent
-        onRequestClose={() => { if (showMapPicker) setShowMapPicker(false); else setShowWizard(false); }}
+        onRequestClose={() => { if (showMapPicker) setShowMapPicker(false); else { editingSessionRef.current = null; setShowWizard(false); } }}
       >
         <KeyboardAvoidingView
           style={wz.overlay}
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           keyboardVerticalOffset={20}
         >
-          <TouchableOpacity style={wz.backdropArea} activeOpacity={1} onPress={() => setShowWizard(false)} />
+          <TouchableOpacity style={wz.backdropArea} activeOpacity={1} onPress={() => { editingSessionRef.current = null; setShowWizard(false); }} />
           <View style={[wz.sheet, { backgroundColor: c.bgCard }]}>
 
             {/* Handle */}
@@ -735,7 +739,7 @@ export default function ChatScreen() {
                 </Text>
                 <Text style={[wz.stepIndicator, { color: c.textMuted }]}>{wizardStep} / 3</Text>
               </View>
-              <TouchableOpacity onPress={() => setShowWizard(false)} hitSlop={10}>
+              <TouchableOpacity onPress={() => { editingSessionRef.current = null; setShowWizard(false); }} hitSlop={10}>
                 <Ionicons name="close" size={22} color={c.textSecondary} />
               </TouchableOpacity>
             </View>
