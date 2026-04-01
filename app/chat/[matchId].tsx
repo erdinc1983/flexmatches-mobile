@@ -253,9 +253,20 @@ export default function ChatScreen() {
     const sessionChannel = supabase
       .channel(`chat-sessions:${matchId}`)
       .on("postgres_changes", {
-        event: "*", schema: "public", table: "buddy_sessions",
+        event: "INSERT", schema: "public", table: "buddy_sessions",
         filter: `match_id=eq.${matchId}`,
-      }, () => loadSession())
+      }, (payload) => {
+        const s = payload.new as BuddySession;
+        if (!["declined","cancelled"].includes(s.status)) setSession(s);
+      })
+      .on("postgres_changes", {
+        event: "UPDATE", schema: "public", table: "buddy_sessions",
+        filter: `match_id=eq.${matchId}`,
+      }, (payload) => {
+        const s = payload.new as BuddySession;
+        if (["declined","cancelled","completed"].includes(s.status)) setSession(null);
+        else setSession(s);
+      })
       .subscribe();
 
     return () => {
@@ -713,7 +724,7 @@ export default function ChatScreen() {
         visible={showWizard}
         animationType="fade"
         transparent
-        onRequestClose={() => { if (showMapPicker) setShowMapPicker(false); else { editingSessionRef.current = null; setShowWizard(false); } }}
+        onRequestClose={() => { editingSessionRef.current = null; setShowWizard(false); setShowMapPicker(false); }}
       >
         <KeyboardAvoidingView
           style={wz.overlay}
@@ -722,6 +733,17 @@ export default function ChatScreen() {
         >
           <TouchableOpacity style={wz.backdropArea} activeOpacity={1} onPress={() => { editingSessionRef.current = null; setShowWizard(false); }} />
           <View style={[wz.sheet, { backgroundColor: c.bgCard }]}>
+
+            {/* Map picker — absolute overlay inside wizard card */}
+            {showMapPicker && (
+              <View style={[StyleSheet.absoluteFillObject, { backgroundColor: c.bgCard, borderRadius: 24, zIndex: 20, overflow: "hidden" }]}>
+                <MapLocationPicker
+                  colors={c}
+                  onSelect={(loc) => { setSessionLocation(loc); setShowMapPicker(false); }}
+                  onClose={() => setShowMapPicker(false)}
+                />
+              </View>
+            )}
 
             {/* Handle */}
             <View style={[wz.handle, { backgroundColor: c.border }]} />
@@ -985,22 +1007,6 @@ export default function ChatScreen() {
         </View>
       </Modal>
 
-      {/* ── Map picker — full-screen modal ───────────────────────────── */}
-      <Modal
-        visible={showMapPicker}
-        animationType="slide"
-        transparent={false}
-        onRequestClose={() => setShowMapPicker(false)}
-      >
-        <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }} edges={["top", "bottom"]}>
-          <MapLocationPicker
-            colors={c}
-            onSelect={(loc) => { setSessionLocation(loc); setShowMapPicker(false); }}
-            onClose={() => setShowMapPicker(false)}
-          />
-        </SafeAreaView>
-      </Modal>
-
       <ProfileSheet
         user={sheetUser}
         status="accepted"
@@ -1053,7 +1059,7 @@ const am = StyleSheet.create({
 const wz = StyleSheet.create({
   overlay:     { flex: 1, justifyContent: "center", alignItems: "center", padding: SPACE[20], backgroundColor: "rgba(0,0,0,0.50)" },
   backdropArea:{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
-  sheet:       { width: "100%", borderRadius: 24, maxHeight: SCREEN_H * 0.90, overflow: "hidden" },
+  sheet:       { width: "100%", borderRadius: 24, maxHeight: SCREEN_H * 0.90 },
   handle:      { width: 0, height: 0 }, // not needed for centered card
   stepHeader:  { flexDirection: "row", alignItems: "center", paddingHorizontal: SPACE[20], paddingVertical: SPACE[16], gap: SPACE[12] },
   stepTitleBox:{ flex: 1, alignItems: "center" },
