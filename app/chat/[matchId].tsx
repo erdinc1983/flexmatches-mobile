@@ -1,14 +1,16 @@
 /**
  * Chat — Individual Conversation
  *
- * Improvements:
- * - Real avatar images in header + message bubbles (Avatar component)
- * - Message delivery ticks: ✓ gray (sent), ✓✓ gray (delivered), ✓✓ blue (read)
- * - Schedule session: centered modal (not bottom sheet)
- * - Inline calendar date picker
- * - Drum-roll time picker (up/down spinners)
- * - Custom event name when sport = "Other"
- * - Location picker from map (react-native-maps + expo-location)
+ * Header:
+ *   ← avatar + name (tap = profile, long-press = actions) | ⋮ (3-line menu)
+ *
+ * 3-line menu → bottom sheet:
+ *   Today · Tomorrow · Propose a session
+ *
+ * Session wizard (3 steps, slides up from bottom):
+ *   Step 1 — Sport
+ *   Step 2 — Date (pre-filled when Today/Tomorrow tapped)
+ *   Step 3 — Time (optional) + Location → Propose
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -18,8 +20,10 @@ import {
   Modal, ScrollView, Dimensions, Vibration, Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, router } from "expo-router";
 import { supabase } from "../../lib/supabase";
+import { scheduleSessionReminder } from "../../lib/notifications";
 import { MapLocationPicker } from "../../components/MapLocationPicker";
 import { useTheme, SPACE, FONT, RADIUS } from "../../lib/theme";
 import { Icon } from "../../components/Icon";
@@ -66,19 +70,38 @@ const DAY_LABELS = ["Su","Mo","Tu","We","Th","Fr","Sa"];
 
 const { height: SCREEN_H, width: SCREEN_W } = Dimensions.get("window");
 
+// ─── Date helpers ─────────────────────────────────────────────────────────────
+function toDateStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+function todayStr():    string { return toDateStr(new Date()); }
+function tomorrowStr(): string { const t = new Date(); t.setDate(t.getDate()+1); return toDateStr(t); }
+function nextWeekdayStr(target: number): string {
+  const t = new Date();
+  const diff = (target - t.getDay() + 7) % 7 || 7;
+  t.setDate(t.getDate() + diff);
+  return toDateStr(t);
+}
+function friendlyDate(iso: string): string {
+  if (!iso) return "";
+  const today = todayStr();
+  const tmrw  = tomorrowStr();
+  if (iso === today) return "Today";
+  if (iso === tmrw)  return "Tomorrow";
+  return new Date(iso + "T12:00:00").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+}
+
 // ─── Calendar Picker ──────────────────────────────────────────────────────────
 function CalendarPicker({
   value, onChange, colors,
 }: { value: string; onChange: (d: string) => void; colors: any }) {
   const today = new Date();
   const initDate = value ? new Date(value + "T12:00:00") : today;
-
   const [vm, setVm] = useState({ year: initDate.getFullYear(), month: initDate.getMonth() });
-
   const { year, month } = vm;
+
   const firstDay    = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-
   const cells: (number | null)[] = [];
   for (let i = 0; i < firstDay; i++) cells.push(null);
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
@@ -86,43 +109,29 @@ function CalendarPicker({
   const rows: (number | null)[][] = [];
   for (let i = 0; i < cells.length; i += 7) rows.push(cells.slice(i, i + 7));
 
-  const selDate = value ? new Date(value + "T12:00:00") : null;
-  const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
-
+  const todayS = todayStr();
   const dayStr = (d: number) =>
     `${year}-${String(month+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
 
-  const isSelected = (d: number) => selDate
-    ? selDate.getFullYear()===year && selDate.getMonth()===month && selDate.getDate()===d
-    : false;
-  const isPast = (d: number) => dayStr(d) < todayStr;
-
-  const prev = () => setVm(({year:y,month:m}) => m===0 ? {year:y-1,month:11} : {year:y,month:m-1});
-  const next = () => setVm(({year:y,month:m}) => m===11 ? {year:y+1,month:0} : {year:y,month:m+1});
+  const isSelected = (d: number) => value === dayStr(d);
+  const isPast     = (d: number) => dayStr(d) < todayS;
 
   return (
     <View style={cal.root}>
-      {/* Month nav */}
       <View style={cal.nav}>
-        <TouchableOpacity onPress={prev} style={cal.navBtn} hitSlop={8}>
+        <TouchableOpacity onPress={() => setVm(({year:y,month:m}) => m===0 ? {year:y-1,month:11} : {year:y,month:m-1})} hitSlop={10}>
           <Text style={[cal.navArrow, { color: colors.textMuted }]}>‹</Text>
         </TouchableOpacity>
-        <Text style={[cal.monthLabel, { color: colors.text }]}>
-          {MONTHS[month]} {year}
-        </Text>
-        <TouchableOpacity onPress={next} style={cal.navBtn} hitSlop={8}>
+        <Text style={[cal.monthLabel, { color: colors.text }]}>{MONTHS[month]} {year}</Text>
+        <TouchableOpacity onPress={() => setVm(({year:y,month:m}) => m===11 ? {year:y+1,month:0} : {year:y,month:m+1})} hitSlop={10}>
           <Text style={[cal.navArrow, { color: colors.textMuted }]}>›</Text>
         </TouchableOpacity>
       </View>
-
-      {/* Day-of-week headers */}
       <View style={cal.row}>
         {DAY_LABELS.map((l) => (
           <Text key={l} style={[cal.dayHeader, { color: colors.textFaint }]}>{l}</Text>
         ))}
       </View>
-
-      {/* Day grid */}
       {rows.map((row, ri) => (
         <View key={ri} style={cal.row}>
           {row.map((day, ci) => {
@@ -137,11 +146,9 @@ function CalendarPicker({
                 disabled={past}
                 hitSlop={2}
               >
-                <Text style={[
-                  cal.dayText,
-                  { color: past ? colors.textFaint : sel ? "#fff" : colors.text },
-                  sel && { fontWeight: "900" },
-                ]}>{day}</Text>
+                <Text style={[cal.dayText, { color: past ? colors.textFaint : sel ? "#fff" : colors.text }, sel && { fontWeight: "900" }]}>
+                  {day}
+                </Text>
               </TouchableOpacity>
             );
           })}
@@ -152,30 +159,16 @@ function CalendarPicker({
 }
 
 // ─── Time Picker ──────────────────────────────────────────────────────────────
-function TimePickerInline({
-  hour, minute, onHourChange, onMinuteChange, colors,
-}: { hour: number; minute: number; onHourChange: (h:number)=>void; onMinuteChange:(m:number)=>void; colors:any }) {
-  return (
-    <View style={tp.root}>
-      <TimeColumn value={hour} max={23} step={1} onChange={onHourChange} colors={colors} />
-      <Text style={[tp.colon, { color: colors.text }]}>:</Text>
-      <TimeColumn value={minute} max={55} step={5} onChange={onMinuteChange} colors={colors} />
-    </View>
-  );
-}
-
 function TimeColumn({ value, max, step, onChange, colors }: {
   value: number; max: number; step: number; onChange: (v:number)=>void; colors: any;
 }) {
-  const inc = () => onChange(value + step > max ? 0 : value + step);
-  const dec = () => onChange(value - step < 0 ? max : value - step);
   return (
     <View style={tp.col}>
-      <TouchableOpacity onPress={inc} style={tp.arrow} hitSlop={10}>
+      <TouchableOpacity onPress={() => onChange(value + step > max ? 0 : value + step)} style={tp.arrow} hitSlop={10}>
         <Text style={[tp.arrowText, { color: colors.textMuted }]}>▲</Text>
       </TouchableOpacity>
       <Text style={[tp.val, { color: colors.text }]}>{String(value).padStart(2,"0")}</Text>
-      <TouchableOpacity onPress={dec} style={tp.arrow} hitSlop={10}>
+      <TouchableOpacity onPress={() => onChange(value - step < 0 ? max : value - step)} style={tp.arrow} hitSlop={10}>
         <Text style={[tp.arrowText, { color: colors.textMuted }]}>▼</Text>
       </TouchableOpacity>
     </View>
@@ -197,10 +190,14 @@ export default function ChatScreen() {
   const [text,            setText]            = useState("");
   const [sending,         setSending]         = useState(false);
 
-  // Schedule sheet state
-  const [showSchedule,    setShowSchedule]    = useState(false);
+  // Action menu (3-line button)
+  const [showActionMenu,  setShowActionMenu]  = useState(false);
+
+  // Session wizard
+  const [showWizard,      setShowWizard]      = useState(false);
+  const [wizardStep,      setWizardStep]      = useState<1|2|3>(1);
   const [sessionSport,    setSessionSport]    = useState("Gym");
-  const [sessionTitle,    setSessionTitle]    = useState("");         // for "Other"
+  const [sessionTitle,    setSessionTitle]    = useState("");
   const [sessionDate,     setSessionDate]     = useState("");
   const [sessionHour,     setSessionHour]     = useState(9);
   const [sessionMinute,   setSessionMinute]   = useState(0);
@@ -211,6 +208,19 @@ export default function ChatScreen() {
   const [sheetUser,       setSheetUser]       = useState<DiscoverUser | null>(null);
 
   const flatListRef = useRef<FlatList>(null);
+
+  // ── Wizard open helpers ──────────────────────────────────────────────────
+  function openWizard(prefilledDate?: string) {
+    setSessionSport("Gym");
+    setSessionTitle("");
+    setSessionDate(prefilledDate ?? "");
+    setSessionHour(9);
+    setSessionMinute(0);
+    setUseTime(false);
+    setSessionLocation("");
+    setWizardStep(1);
+    setShowWizard(true);
+  }
 
   // ── Init & subscriptions ──────────────────────────────────────────────────
   useEffect(() => {
@@ -224,7 +234,6 @@ export default function ChatScreen() {
       }, (payload) => {
         const newMsg = payload.new as Message;
         setMessages((prev) => [...prev, newMsg]);
-        // Subtle vibration for incoming messages (not own)
         if (userIdRef.current && newMsg.sender_id !== userIdRef.current) Vibration.vibrate(150);
         setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 80);
       })
@@ -232,7 +241,6 @@ export default function ChatScreen() {
         event: "UPDATE", schema: "public", table: "messages",
         filter: `match_id=eq.${matchId}`,
       }, (payload) => {
-        // Update read_at status for delivery tick
         setMessages((prev) => prev.map((m) =>
           m.id === (payload.new as Message).id ? { ...m, read_at: (payload.new as Message).read_at } : m
         ));
@@ -260,38 +268,26 @@ export default function ChatScreen() {
     userIdRef.current = user.id;
 
     const [{ data: match }, { data: msgs }] = await Promise.all([
-      supabase.from("matches")
-        .select("sender_id, receiver_id")
-        .eq("id", matchId)
-        .single(),
-      supabase.from("messages")
-        .select("id, content, sender_id, created_at, read_at")
-        .eq("match_id", matchId)
-        .order("created_at", { ascending: true }),
+      supabase.from("matches").select("sender_id, receiver_id").eq("id", matchId).single(),
+      supabase.from("messages").select("id, content, sender_id, created_at, read_at")
+        .eq("match_id", matchId).order("created_at", { ascending: true }),
     ]);
 
     if (match) {
       const otherId = (match as any).sender_id === user.id
-        ? (match as any).receiver_id
-        : (match as any).sender_id;
+        ? (match as any).receiver_id : (match as any).sender_id;
       const { data: otherUser } = await supabase
-        .from("users")
-        .select("id, username, full_name, fitness_level, avatar_url")
-        .eq("id", otherId)
-        .single();
+        .from("users").select("id, username, full_name, fitness_level, avatar_url")
+        .eq("id", otherId).single();
       if (otherUser) setOther(otherUser as OtherUser);
     }
 
     setMessages(msgs ?? []);
     setLoading(false);
 
-    // Mark incoming messages as read
     supabase.from("messages")
       .update({ read_at: new Date().toISOString() })
-      .eq("match_id", matchId)
-      .neq("sender_id", user.id)
-      .is("read_at", null)
-      .then(() => {});
+      .eq("match_id", matchId).neq("sender_id", user.id).is("read_at", null).then(() => {});
 
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 100);
     loadSession();
@@ -304,15 +300,18 @@ export default function ChatScreen() {
       .eq("match_id", matchId)
       .not("status", "in", '("declined","cancelled")')
       .order("session_date", { ascending: true })
-      .limit(1)
-      .maybeSingle();
+      .limit(1).maybeSingle();
     setSession(data as BuddySession | null);
   }, [matchId]);
 
   // ── Session actions ───────────────────────────────────────────────────────
-  async function acceptSession()  {
+  async function acceptSession() {
     if (!session) return;
     await supabase.from("buddy_sessions").update({ status: "accepted" }).eq("id", session.id);
+    if (session.session_date) {
+      const partnerName = other?.full_name?.split(" ")[0] ?? other?.username ?? "your partner";
+      scheduleSessionReminder(partnerName, session.session_date);
+    }
     loadSession();
   }
   async function declineSession() {
@@ -330,93 +329,37 @@ export default function ChatScreen() {
   async function proposeSession() {
     if (!userId || !other || !sessionDate.trim() || proposing) return;
     setProposing(true);
-
-    const sportValue = sessionSport === "Other" && sessionTitle.trim()
-      ? sessionTitle.trim()
-      : sessionSport;
-
+    const sportValue = sessionSport === "Other" && sessionTitle.trim() ? sessionTitle.trim() : sessionSport;
     await supabase.from("buddy_sessions").insert({
-      proposer_id:  userId,
-      receiver_id:  other.id,
-      match_id:     matchId,
-      sport:        sportValue,
-      session_date: sessionDate.trim(),
-      session_time: useTime
-        ? `${String(sessionHour).padStart(2,"0")}:${String(sessionMinute).padStart(2,"0")}`
-        : null,
-      location:     sessionLocation.trim() || null,
-      notes:        null,
-      status:       "pending",
+      proposer_id: userId, receiver_id: other.id, match_id: matchId,
+      sport: sportValue, session_date: sessionDate.trim(),
+      session_time: useTime ? `${String(sessionHour).padStart(2,"0")}:${String(sessionMinute).padStart(2,"0")}` : null,
+      location: sessionLocation.trim() || null, notes: null, status: "pending",
     });
-
+    if (sessionDate.trim()) {
+      const partnerName = other?.full_name?.split(" ")[0] ?? other?.username ?? "your partner";
+      scheduleSessionReminder(partnerName, sessionDate.trim());
+    }
     setProposing(false);
-    setShowSchedule(false);
-    setSessionDate("");
-    setSessionTitle("");
-    setSessionLocation("");
-    setUseTime(false);
+    setShowWizard(false);
     loadSession();
   }
 
   // ── Profile popup ────────────────────────────────────────────────────────
   async function openProfile() {
     if (!other) return;
-    const { data } = await supabase
-      .from("users")
+    const { data } = await supabase.from("users")
       .select("id, username, full_name, avatar_url, bio, city, fitness_level, age, sports, current_streak, last_active, is_at_gym, availability")
-      .eq("id", other.id)
-      .single();
+      .eq("id", other.id).single();
     if (!data) return;
     setSheetUser({
-      id:             data.id,
-      username:       data.username,
-      full_name:      data.full_name ?? null,
-      avatar_url:     data.avatar_url ?? null,
-      bio:            data.bio ?? null,
-      city:           data.city ?? null,
-      fitness_level:  data.fitness_level ?? null,
-      age:            data.age ?? null,
-      sports:         data.sports ?? [],
-      current_streak: data.current_streak ?? 0,
-      last_active:    data.last_active ?? null,
-      is_at_gym:      data.is_at_gym ?? false,
-      availability:   data.availability ?? null,
-      matchScore:     0,
-      reasons:        [],
-      isNew:          false,
+      id: data.id, username: data.username, full_name: data.full_name ?? null,
+      avatar_url: data.avatar_url ?? null, bio: data.bio ?? null, city: data.city ?? null,
+      fitness_level: data.fitness_level ?? null, age: data.age ?? null, sports: data.sports ?? [],
+      current_streak: data.current_streak ?? 0, last_active: data.last_active ?? null,
+      is_at_gym: data.is_at_gym ?? false, availability: data.availability ?? null,
+      matchScore: 0, reasons: [], isNew: false,
     });
-  }
-
-  function handleLongPressHeader() {
-    Alert.alert(
-      other?.full_name ?? other?.username ?? "Partner",
-      "What would you like to do?",
-      [
-        {
-          text: "Unmatch",
-          style: "destructive",
-          onPress: () => Alert.alert("Unmatch?", "You won't be able to message each other anymore.", [
-            { text: "Cancel", style: "cancel" },
-            { text: "Unmatch", style: "destructive", onPress: async () => {
-              await supabase.from("matches").update({ status: "declined" }).eq("id", matchId);
-              router.back();
-            }},
-          ]),
-        },
-        {
-          text: "Delete conversation",
-          style: "destructive",
-          onPress: () => Alert.alert("Delete conversation?", "All messages will be deleted.", [
-            { text: "Cancel", style: "cancel" },
-            { text: "Delete", style: "destructive", onPress: async () => {
-              await supabase.from("messages").delete().eq("match_id", matchId);
-              setMessages([]);
-            }},
-          ]),
-        },
-        { text: "Cancel", style: "cancel" },
-      ]
-    );
   }
 
   // ── Messaging ────────────────────────────────────────────────────────────
@@ -426,32 +369,22 @@ export default function ChatScreen() {
     setSending(true);
     setText("");
     await supabase.from("messages").insert({
-      match_id:  matchId,
-      sender_id: userId,
-      content:   trimmed,
-      read_at:   null,
+      match_id: matchId, sender_id: userId, content: trimmed, read_at: null,
     });
     setSending(false);
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 80);
   }
 
   // ── Formatting ────────────────────────────────────────────────────────────
-  function formatTime(iso: string): string {
+  function formatTime(iso: string) {
     return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   }
-  function formatDateLabel(iso: string): string {
-    const d         = new Date(iso);
-    const today     = new Date();
-    const yesterday = new Date();
+  function formatDateLabel(iso: string) {
+    const d = new Date(iso), today = new Date(), yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     if (d.toDateString() === today.toDateString())     return "Today";
     if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
     return d.toLocaleDateString([], { weekday: "long", month: "short", day: "numeric" });
-  }
-  function formatSessionDate(dateStr: string): string {
-    if (!dateStr) return "";
-    const d = new Date(dateStr + "T12:00:00");
-    return d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -466,7 +399,6 @@ export default function ChatScreen() {
   const otherName  = other?.full_name ?? other?.username ?? "Chat";
   const levelColor = other?.fitness_level ? LEVEL_COLOR[other.fitness_level] ?? null : null;
 
-  // Build date-grouped list
   const items: ListItem[] = [];
   let lastDate = "";
   for (const msg of messages) {
@@ -487,13 +419,10 @@ export default function ChatScreen() {
           <Icon name="back" size={24} color={c.textSecondary} />
         </TouchableOpacity>
 
-        {/* Tappable avatar + name → profile popup */}
         <TouchableOpacity
           style={s.headerCenter}
           onPress={openProfile}
-          onLongPress={handleLongPressHeader}
           activeOpacity={0.75}
-          delayLongPress={400}
         >
           <Avatar url={other?.avatar_url} name={otherName} size={38} />
           <View style={s.headerInfo}>
@@ -506,12 +435,13 @@ export default function ChatScreen() {
           </View>
         </TouchableOpacity>
 
+        {/* 3-line menu button */}
         <TouchableOpacity
-          style={[s.scheduleBtn, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}
-          onPress={() => setShowSchedule(true)}
+          style={[s.menuBtn, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}
+          onPress={() => setShowActionMenu(true)}
           hitSlop={{ top:8, bottom:8, left:8, right:8 }}
         >
-          <Icon name="calendar" size={18} color={c.textSecondary} />
+          <Ionicons name="menu-outline" size={20} color={c.textSecondary} />
         </TouchableOpacity>
       </View>
 
@@ -546,35 +476,22 @@ export default function ChatScreen() {
             }
             const { msg } = item;
             const isMine  = msg.sender_id === userId;
-
             return (
               <View style={[s.bubbleRow, isMine && s.bubbleRowMine]}>
-                {/* Other person's avatar */}
-                {!isMine && (
-                  <Avatar url={other?.avatar_url} name={otherName} size={26} />
-                )}
-
+                {!isMine && <Avatar url={other?.avatar_url} name={otherName} size={26} />}
                 <View style={[
                   s.bubble,
                   isMine
                     ? { backgroundColor: c.brand, borderBottomRightRadius: 4 }
                     : { backgroundColor: c.bgCard, borderBottomLeftRadius: 4, borderWidth: 1, borderColor: c.border },
                 ]}>
-                  <Text style={[s.bubbleText, { color: isMine ? "#fff" : c.text }]}>
-                    {msg.content}
-                  </Text>
+                  <Text style={[s.bubbleText, { color: isMine ? "#fff" : c.text }]}>{msg.content}</Text>
                   <View style={s.bubbleMeta}>
                     <Text style={[s.bubbleTime, { color: isMine ? "rgba(255,255,255,0.45)" : c.textFaint }]}>
                       {formatTime(msg.created_at)}
                     </Text>
-                    {/* Delivery ticks — only for my messages */}
                     {isMine && (
-                      <Text style={{
-                        fontSize: 11,
-                        fontWeight: "700",
-                        color: msg.read_at ? "#60A5FA" : "rgba(255,255,255,0.45)",
-                        letterSpacing: -1,
-                      }}>
+                      <Text style={{ fontSize: 11, fontWeight: "700", color: msg.read_at ? "#60A5FA" : "rgba(255,255,255,0.45)", letterSpacing: -1 }}>
                         {msg.read_at ? "✓✓" : "✓"}
                       </Text>
                     )}
@@ -586,8 +503,8 @@ export default function ChatScreen() {
           ListEmptyComponent={
             <View style={s.emptyChat}>
               <Avatar url={other?.avatar_url} name={otherName} size={72} />
-              <Text style={[s.emptyChatName,  { color: c.text }]}>{otherName}</Text>
-              <Text style={[s.emptyChatHint,  { color: c.textMuted }]}>
+              <Text style={[s.emptyChatName, { color: c.text }]}>{otherName}</Text>
+              <Text style={[s.emptyChatHint, { color: c.textMuted }]}>
                 {session
                   ? "Session planned — say hello and coordinate the details"
                   : "Matched — say hello and plan your first session"}
@@ -626,162 +543,114 @@ export default function ChatScreen() {
         </View>
       </KeyboardAvoidingView>
 
-      {/* ── Schedule session — centered modal ───────────────────────── */}
+      {/* ── Action menu — 3-line bottom sheet ───────────────────────── */}
       <Modal
-        visible={showSchedule}
-        animationType="fade"
+        visible={showActionMenu}
+        animationType="slide"
         transparent
-        onRequestClose={() => { if (showMapPicker) setShowMapPicker(false); else setShowSchedule(false); }}
+        onRequestClose={() => setShowActionMenu(false)}
       >
-        <KeyboardAvoidingView
-          style={s.modalOverlay}
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          keyboardVerticalOffset={20}
-        >
-          <View style={[s.modalCard, { backgroundColor: c.bgCard, maxHeight: SCREEN_H * 0.88 }]}>
-            {/* Modal header */}
-            <View style={[s.modalHeader, { borderBottomColor: c.border }]}>
-              <Text style={[s.modalTitle, { color: c.text }]}>
-                Propose a session
-              </Text>
-              <TouchableOpacity onPress={() => setShowSchedule(false)} hitSlop={10}>
-                <Text style={{ color: c.textMuted, fontSize: 20 }}>✕</Text>
-              </TouchableOpacity>
+        <TouchableOpacity
+          style={am.backdrop}
+          activeOpacity={1}
+          onPress={() => setShowActionMenu(false)}
+        />
+        <View style={[am.sheet, { backgroundColor: c.bgCard }]}>
+          {/* Handle */}
+          <View style={[am.handle, { backgroundColor: c.border }]} />
+
+          <Text style={[am.sheetTitle, { color: c.textMuted }]}>Schedule with {other?.full_name?.split(" ")[0] ?? otherName}</Text>
+
+          {/* Today */}
+          <TouchableOpacity
+            style={[am.row, { borderBottomColor: c.border }]}
+            onPress={() => { setShowActionMenu(false); openWizard(todayStr()); }}
+            activeOpacity={0.75}
+          >
+            <View style={[am.iconBox, { backgroundColor: "#FF4500" + "18" }]}>
+              <Text style={am.rowEmoji}>📅</Text>
             </View>
+            <View style={am.rowText}>
+              <Text style={[am.rowLabel, { color: c.text }]}>Today</Text>
+              <Text style={[am.rowSub, { color: c.textMuted }]}>Plan a session for today</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={c.textFaint} />
+          </TouchableOpacity>
 
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={s.modalContent}
-              keyboardShouldPersistTaps="handled"
-              automaticallyAdjustKeyboardInsets
-            >
-              {/* Existing session warning */}
-              {session && session.status !== "declined" && session.status !== "confirmed" && (
-                <View style={[s.existingNote, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}>
-                  <Icon name="clock" size={13} color={c.textMuted} />
-                  <Text style={[s.existingNoteText, { color: c.textMuted }]}>
-                    You already have a {session.sport} session planned. This will be added alongside it.
-                  </Text>
-                </View>
-              )}
+          {/* Tomorrow */}
+          <TouchableOpacity
+            style={[am.row, { borderBottomColor: c.border }]}
+            onPress={() => { setShowActionMenu(false); openWizard(tomorrowStr()); }}
+            activeOpacity={0.75}
+          >
+            <View style={[am.iconBox, { backgroundColor: "#007AFF18" }]}>
+              <Text style={am.rowEmoji}>🗓</Text>
+            </View>
+            <View style={am.rowText}>
+              <Text style={[am.rowLabel, { color: c.text }]}>Tomorrow</Text>
+              <Text style={[am.rowSub, { color: c.textMuted }]}>Plan a session for tomorrow</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={c.textFaint} />
+          </TouchableOpacity>
 
-              {/* Sport chips */}
-              <Text style={[s.fieldLabel, { color: c.textMuted }]}>Sport</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.sportChips}>
-                {SPORTS.map((sp) => (
-                  <TouchableOpacity
-                    key={sp}
-                    style={[
-                      s.sportChip,
-                      sessionSport === sp
-                        ? { backgroundColor: c.brand+"20", borderColor: c.brand }
-                        : { backgroundColor: c.bgCardAlt, borderColor: c.border },
-                    ]}
-                    onPress={() => setSessionSport(sp)}
-                    activeOpacity={0.75}
-                  >
-                    <Text style={[s.sportChipText, { color: sessionSport === sp ? c.brand : c.textSecondary }]}>
-                      {sp}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
+          {/* Propose a session */}
+          <TouchableOpacity
+            style={am.row}
+            onPress={() => { setShowActionMenu(false); openWizard(); }}
+            activeOpacity={0.75}
+          >
+            <View style={[am.iconBox, { backgroundColor: "#22C55E18" }]}>
+              <Text style={am.rowEmoji}>📆</Text>
+            </View>
+            <View style={am.rowText}>
+              <Text style={[am.rowLabel, { color: c.text }]}>Propose a session</Text>
+              <Text style={[am.rowSub, { color: c.textMuted }]}>Pick sport, date and time</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={c.textFaint} />
+          </TouchableOpacity>
 
-              {/* Custom event name for "Other" */}
-              {sessionSport === "Other" && (
-                <>
-                  <Text style={[s.fieldLabel, { color: c.textMuted }]}>Event name</Text>
-                  <TextInput
-                    style={[s.textInput, { backgroundColor: c.bgCardAlt, borderColor: sessionTitle.trim() ? c.brand+"80" : c.border, color: c.text }]}
-                    value={sessionTitle}
-                    onChangeText={setSessionTitle}
-                    placeholder="e.g. Parkour, Volleyball, Pilates…"
-                    placeholderTextColor={c.textFaint}
-                  />
-                </>
-              )}
+          {/* Separator + Unmatch */}
+          <View style={[am.divider, { backgroundColor: c.border }]} />
+          <TouchableOpacity
+            style={am.row}
+            onPress={() => {
+              setShowActionMenu(false);
+              Alert.alert("Unmatch?", "You won't be able to message each other anymore.", [
+                { text: "Cancel", style: "cancel" },
+                { text: "Unmatch", style: "destructive", onPress: async () => {
+                  await supabase.from("matches").update({ status: "declined" }).eq("id", matchId);
+                  router.back();
+                }},
+              ]);
+            }}
+            activeOpacity={0.75}
+          >
+            <View style={[am.iconBox, { backgroundColor: "#FF3B3018" }]}>
+              <Ionicons name="person-remove-outline" size={18} color="#FF3B30" />
+            </View>
+            <View style={am.rowText}>
+              <Text style={[am.rowLabel, { color: "#FF3B30" }]}>Unmatch</Text>
+            </View>
+          </TouchableOpacity>
 
-              {/* Date — calendar picker */}
-              <Text style={[s.fieldLabel, { color: c.textMuted }]}>Date *</Text>
-              {sessionDate ? (
-                <View style={[s.selectedDateRow, { backgroundColor: c.brand+"15", borderColor: c.brand+"60" }]}>
-                  <Icon name="calendar" size={14} color={c.brand} />
-                  <Text style={[s.selectedDateText, { color: c.brand }]}>
-                    {formatSessionDate(sessionDate)}
-                  </Text>
-                  <TouchableOpacity onPress={() => setSessionDate("")} hitSlop={10}>
-                    <Text style={{ color: c.textMuted, fontSize: 14 }}>✕</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <Text style={[s.calHint, { color: c.textFaint }]}>Tap a day below to select</Text>
-              )}
-              <CalendarPicker value={sessionDate} onChange={setSessionDate} colors={c} />
+          <View style={{ height: 24 }} />
+        </View>
+      </Modal>
 
-              {/* Time — optional toggle + spinner */}
-              <View style={s.timeHeaderRow}>
-                <Text style={[s.fieldLabel, { color: c.textMuted, marginBottom: 0 }]}>Time</Text>
-                <TouchableOpacity
-                  style={[s.timeToggle, { backgroundColor: useTime ? c.brand : c.bgCardAlt, borderColor: useTime ? c.brand : c.border }]}
-                  onPress={() => setUseTime((v) => !v)}
-                >
-                  <Text style={[s.timeToggleText, { color: useTime ? "#fff" : c.textMuted }]}>
-                    {useTime ? "Remove time" : "Add time"}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              {useTime && (
-                <View style={[s.timePickerWrap, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}>
-                  <TimePickerInline
-                    hour={sessionHour}
-                    minute={sessionMinute}
-                    onHourChange={setSessionHour}
-                    onMinuteChange={setSessionMinute}
-                    colors={c}
-                  />
-                </View>
-              )}
+      {/* ── Session wizard — step-by-step bottom sheet ───────────────── */}
+      <Modal
+        visible={showWizard}
+        animationType="slide"
+        transparent
+        onRequestClose={() => { if (showMapPicker) setShowMapPicker(false); else setShowWizard(false); }}
+      >
+        <View style={wz.overlay}>
+          <TouchableOpacity style={wz.backdropArea} activeOpacity={1} onPress={() => !showMapPicker && setShowWizard(false)} />
+          <View style={[wz.sheet, { backgroundColor: c.bgCard }]}>
 
-              {/* Location */}
-              <Text style={[s.fieldLabel, { color: c.textMuted }]}>Location</Text>
-              <View style={s.locationRow}>
-                <TextInput
-                  style={[s.textInputFlex, { backgroundColor: c.bgCardAlt, borderColor: c.border, color: c.text }]}
-                  value={sessionLocation}
-                  onChangeText={setSessionLocation}
-                  placeholder="e.g. Planet Fitness, Main St"
-                  placeholderTextColor={c.textFaint}
-                />
-                <TouchableOpacity
-                  style={[s.mapBtn, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}
-                  onPress={() => setShowMapPicker(true)}
-                  hitSlop={8}
-                >
-                  <Text style={{ fontSize: 18 }}>🗺️</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Submit */}
-              <TouchableOpacity
-                style={[s.proposeBtn, { backgroundColor: c.brand }, (!sessionDate.trim() || proposing) && { opacity: 0.4 }]}
-                onPress={proposeSession}
-                disabled={!sessionDate.trim() || proposing}
-                activeOpacity={0.85}
-              >
-                {proposing ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <View style={s.proposeBtnInner}>
-                    <Icon name="calendar" size={18} color="#fff" />
-                    <Text style={s.proposeBtnText}>Propose Session</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            </ScrollView>
-
-            {/* ── Map overlay — absolute, covers modal card ── */}
+            {/* Map picker overlay */}
             {showMapPicker && (
-              <View style={[s.mapOverlay, { backgroundColor: c.bgCard }]}>
+              <View style={[wz.mapOverlay, { backgroundColor: c.bgCard }]}>
                 <MapLocationPicker
                   colors={c}
                   onSelect={(loc) => { setSessionLocation(loc); setShowMapPicker(false); }}
@@ -789,8 +658,222 @@ export default function ChatScreen() {
                 />
               </View>
             )}
+
+            {/* Handle */}
+            <View style={[wz.handle, { backgroundColor: c.border }]} />
+
+            {/* Step header */}
+            <View style={wz.stepHeader}>
+              {wizardStep > 1 && (
+                <TouchableOpacity onPress={() => setWizardStep((s) => (s - 1) as 1|2|3)} hitSlop={10}>
+                  <Ionicons name="arrow-back" size={22} color={c.textSecondary} />
+                </TouchableOpacity>
+              )}
+              <View style={wz.stepTitleBox}>
+                <Text style={[wz.stepTitle, { color: c.text }]}>
+                  {wizardStep === 1 ? "Sport" : wizardStep === 2 ? "Date" : "Details"}
+                </Text>
+                <Text style={[wz.stepIndicator, { color: c.textMuted }]}>{wizardStep} / 3</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowWizard(false)} hitSlop={10}>
+                <Ionicons name="close" size={22} color={c.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Step dots */}
+            <View style={wz.dots}>
+              {[1,2,3].map((i) => (
+                <View key={i} style={[wz.dot, { backgroundColor: i <= wizardStep ? c.brand : c.border }]} />
+              ))}
+            </View>
+
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={wz.content}
+              keyboardShouldPersistTaps="handled"
+            >
+
+              {/* ─ STEP 1: Sport ─ */}
+              {wizardStep === 1 && (
+                <>
+                  <Text style={[wz.hint, { color: c.textMuted }]}>What are you planning to do?</Text>
+                  <View style={wz.sportGrid}>
+                    {SPORTS.map((sp) => (
+                      <TouchableOpacity
+                        key={sp}
+                        style={[
+                          wz.sportChip,
+                          sessionSport === sp
+                            ? { backgroundColor: c.brand, borderColor: c.brand }
+                            : { backgroundColor: c.bgCardAlt, borderColor: c.border },
+                        ]}
+                        onPress={() => setSessionSport(sp)}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={[wz.sportText, { color: sessionSport === sp ? "#fff" : c.textSecondary }]}>
+                          {sp}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  {sessionSport === "Other" && (
+                    <>
+                      <Text style={[wz.fieldLabel, { color: c.textMuted }]}>Event name</Text>
+                      <TextInput
+                        style={[wz.textInput, { backgroundColor: c.bgCardAlt, borderColor: sessionTitle.trim() ? c.brand+"80" : c.border, color: c.text }]}
+                        value={sessionTitle}
+                        onChangeText={setSessionTitle}
+                        placeholder="e.g. Parkour, Volleyball, Pilates…"
+                        placeholderTextColor={c.textFaint}
+                      />
+                    </>
+                  )}
+
+                  <TouchableOpacity
+                    style={[wz.nextBtn, { backgroundColor: c.brand }]}
+                    onPress={() => setWizardStep(2)}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={wz.nextBtnText}>Next — Choose date</Text>
+                    <Ionicons name="arrow-forward" size={18} color="#fff" />
+                  </TouchableOpacity>
+                </>
+              )}
+
+              {/* ─ STEP 2: Date ─ */}
+              {wizardStep === 2 && (
+                <>
+                  <Text style={[wz.hint, { color: c.textMuted }]}>When do you want to meet?</Text>
+
+                  {/* Quick date pills */}
+                  <View style={wz.quickRow}>
+                    {[
+                      { label: "Today",        date: todayStr() },
+                      { label: "Tomorrow",     date: tomorrowStr() },
+                      { label: "This Sat",     date: nextWeekdayStr(6) },
+                      { label: "Next Mon",     date: nextWeekdayStr(1) },
+                    ].map(({ label, date }) => (
+                      <TouchableOpacity
+                        key={label}
+                        style={[wz.quickPill, sessionDate === date
+                          ? { backgroundColor: c.brand, borderColor: c.brand }
+                          : { backgroundColor: c.bgCardAlt, borderColor: c.border }]}
+                        onPress={() => setSessionDate(date)}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={[wz.quickPillText, { color: sessionDate === date ? "#fff" : c.textSecondary }]}>
+                          {label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  {/* Full calendar */}
+                  <CalendarPicker value={sessionDate} onChange={setSessionDate} colors={c} />
+
+                  <TouchableOpacity
+                    style={[wz.nextBtn, { backgroundColor: c.brand }, !sessionDate && { opacity: 0.4 }]}
+                    onPress={() => sessionDate && setWizardStep(3)}
+                    disabled={!sessionDate}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={wz.nextBtnText}>
+                      {sessionDate ? `Next — ${friendlyDate(sessionDate)} ✓` : "Pick a date first"}
+                    </Text>
+                    {!!sessionDate && <Ionicons name="arrow-forward" size={18} color="#fff" />}
+                  </TouchableOpacity>
+                </>
+              )}
+
+              {/* ─ STEP 3: Details ─ */}
+              {wizardStep === 3 && (
+                <>
+                  {/* Summary of choices */}
+                  <View style={[wz.summaryBox, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}>
+                    <Text style={[wz.summaryLabel, { color: c.textMuted }]}>Session summary</Text>
+                    <Text style={[wz.summaryValue, { color: c.text }]}>
+                      {sessionSport === "Other" && sessionTitle.trim() ? sessionTitle.trim() : sessionSport}
+                      {"  ·  "}
+                      {friendlyDate(sessionDate)}
+                    </Text>
+                  </View>
+
+                  {/* Time — optional */}
+                  <View style={wz.rowBetween}>
+                    <Text style={[wz.fieldLabel, { color: c.textMuted }]}>Time (optional)</Text>
+                    <TouchableOpacity
+                      style={[wz.toggleBtn, { backgroundColor: useTime ? c.brand : c.bgCardAlt, borderColor: useTime ? c.brand : c.border }]}
+                      onPress={() => setUseTime((v) => !v)}
+                    >
+                      <Text style={[wz.toggleText, { color: useTime ? "#fff" : c.textMuted }]}>
+                        {useTime ? "Remove" : "Add time"}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {useTime && (
+                    <View style={[wz.timePicker, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}>
+                      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: SPACE[16] }}>
+                        <TimeColumn value={sessionHour}   max={23} step={1} onChange={setSessionHour}   colors={c} />
+                        <Text style={[tp.colon, { color: c.text }]}>:</Text>
+                        <TimeColumn value={sessionMinute} max={55} step={5} onChange={setSessionMinute} colors={c} />
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Location — optional */}
+                  <Text style={[wz.fieldLabel, { color: c.textMuted }]}>Location (optional)</Text>
+                  <View style={wz.locationRow}>
+                    <TextInput
+                      style={[wz.textInputFlex, { backgroundColor: c.bgCardAlt, borderColor: c.border, color: c.text }]}
+                      value={sessionLocation}
+                      onChangeText={setSessionLocation}
+                      placeholder="e.g. Planet Fitness, Main St"
+                      placeholderTextColor={c.textFaint}
+                    />
+                    <TouchableOpacity
+                      style={[wz.mapBtn, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}
+                      onPress={() => setShowMapPicker(true)}
+                      hitSlop={8}
+                    >
+                      <Text style={{ fontSize: 18 }}>🗺️</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Existing session warning */}
+                  {session && session.status !== "declined" && session.status !== "confirmed" && (
+                    <View style={[wz.existingNote, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}>
+                      <Icon name="clock" size={13} color={c.textMuted} />
+                      <Text style={[wz.existingNoteText, { color: c.textMuted }]}>
+                        You already have a {session.sport} session planned.
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Propose button */}
+                  <TouchableOpacity
+                    style={[wz.proposeBtn, { backgroundColor: c.brand }, proposing && { opacity: 0.6 }]}
+                    onPress={proposeSession}
+                    disabled={proposing}
+                    activeOpacity={0.85}
+                  >
+                    {proposing
+                      ? <ActivityIndicator color="#fff" size="small" />
+                      : (
+                        <>
+                          <Ionicons name="calendar-outline" size={18} color="#fff" />
+                          <Text style={wz.proposeBtnText}>Send session proposal</Text>
+                        </>
+                      )
+                    }
+                  </TouchableOpacity>
+                </>
+              )}
+
+            </ScrollView>
           </View>
-        </KeyboardAvoidingView>
+        </View>
       </Modal>
 
       <ProfileSheet
@@ -805,12 +888,11 @@ export default function ChatScreen() {
 }
 
 // ─── Calendar styles ──────────────────────────────────────────────────────────
-const CELL_SIZE = Math.floor((SCREEN_W - 40 - 32 - 6 * 4) / 7); // modal padding 20 + card padding 16
+const CELL_SIZE = Math.floor((SCREEN_W - 48 - 6 * 4) / 7);
 
 const cal = StyleSheet.create({
   root:      { paddingVertical: SPACE[8] },
   nav:       { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: SPACE[10] },
-  navBtn:    { padding: SPACE[4] },
   navArrow:  { fontSize: 26, lineHeight: 30, fontWeight: "300" },
   monthLabel:{ fontSize: FONT.size.base, fontWeight: FONT.weight.extrabold },
   row:       { flexDirection: "row", marginBottom: 2 },
@@ -821,7 +903,6 @@ const cal = StyleSheet.create({
 
 // ─── Time picker styles ───────────────────────────────────────────────────────
 const tp = StyleSheet.create({
-  root:      { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: SPACE[16] },
   col:       { alignItems: "center", gap: SPACE[6] },
   arrow:     { padding: SPACE[8] },
   arrowText: { fontSize: 16, lineHeight: 20 },
@@ -829,68 +910,97 @@ const tp = StyleSheet.create({
   colon:     { fontSize: 36, fontWeight: FONT.weight.black, marginBottom: 2 },
 });
 
+// ─── Action menu styles ───────────────────────────────────────────────────────
+const am = StyleSheet.create({
+  backdrop:   { flex: 1, backgroundColor: "rgba(0,0,0,0.30)" },
+  sheet:      { borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingHorizontal: SPACE[20], paddingTop: SPACE[12] },
+  handle:     { width: 40, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: SPACE[16] },
+  sheetTitle: { fontSize: 13, textAlign: "center", marginBottom: SPACE[16] },
+  row:        { flexDirection: "row", alignItems: "center", paddingVertical: SPACE[14], gap: SPACE[14], borderBottomWidth: StyleSheet.hairlineWidth },
+  iconBox:    { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  rowEmoji:   { fontSize: 18 },
+  rowText:    { flex: 1 },
+  rowLabel:   { fontSize: 16, fontWeight: "600" },
+  rowSub:     { fontSize: 13, marginTop: 1 },
+  divider:    { height: 8, marginHorizontal: -SPACE[20], marginVertical: SPACE[8] },
+});
+
+// ─── Wizard styles ────────────────────────────────────────────────────────────
+const wz = StyleSheet.create({
+  overlay:     { flex: 1, justifyContent: "flex-end" },
+  backdropArea:{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)" },
+  sheet:       { borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: SCREEN_H * 0.88, overflow: "hidden" },
+  mapOverlay:  { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 10, borderTopLeftRadius: 24, borderTopRightRadius: 24 },
+  handle:      { width: 40, height: 4, borderRadius: 2, alignSelf: "center", marginTop: SPACE[12], marginBottom: SPACE[4] },
+  stepHeader:  { flexDirection: "row", alignItems: "center", paddingHorizontal: SPACE[20], paddingVertical: SPACE[12], gap: SPACE[12] },
+  stepTitleBox:{ flex: 1, alignItems: "center" },
+  stepTitle:   { fontSize: 18, fontWeight: "700" },
+  stepIndicator:{ fontSize: 12, marginTop: 2 },
+  dots:        { flexDirection: "row", justifyContent: "center", gap: SPACE[8], marginBottom: SPACE[16] },
+  dot:         { width: 28, height: 3, borderRadius: 2 },
+  content:     { paddingHorizontal: SPACE[20], paddingBottom: SPACE[40], gap: SPACE[16] },
+
+  hint:        { fontSize: 15, marginBottom: -4 },
+  fieldLabel:  { fontSize: 12, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8 },
+
+  sportGrid:   { flexDirection: "row", flexWrap: "wrap", gap: SPACE[8] },
+  sportChip:   { paddingHorizontal: SPACE[14], paddingVertical: SPACE[10], borderRadius: RADIUS.pill, borderWidth: 1 },
+  sportText:   { fontSize: 14, fontWeight: "600" },
+
+  quickRow:    { flexDirection: "row", flexWrap: "wrap", gap: SPACE[8] },
+  quickPill:   { paddingHorizontal: SPACE[12], paddingVertical: SPACE[8], borderRadius: RADIUS.pill, borderWidth: 1 },
+  quickPillText:{ fontSize: 13, fontWeight: "600" },
+
+  summaryBox:  { borderRadius: RADIUS.md, borderWidth: 1, padding: SPACE[14] },
+  summaryLabel:{ fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 4 },
+  summaryValue:{ fontSize: 16, fontWeight: "700" },
+
+  rowBetween:  { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  toggleBtn:   { paddingHorizontal: SPACE[12], paddingVertical: SPACE[8], borderRadius: RADIUS.pill, borderWidth: 1 },
+  toggleText:  { fontSize: 13, fontWeight: "600" },
+  timePicker:  { borderRadius: RADIUS.xl, borderWidth: 1, paddingVertical: SPACE[20] },
+
+  locationRow: { flexDirection: "row", gap: SPACE[8], alignItems: "center" },
+  textInputFlex:{ flex: 1, borderRadius: RADIUS.md, paddingHorizontal: SPACE[14], paddingVertical: SPACE[12], fontSize: FONT.size.md, borderWidth: 1 },
+  textInput:   { borderRadius: RADIUS.md, paddingHorizontal: SPACE[14], paddingVertical: SPACE[12], fontSize: FONT.size.md, borderWidth: 1 },
+  mapBtn:      { width: 46, height: 46, borderRadius: RADIUS.md, alignItems: "center", justifyContent: "center", borderWidth: 1 },
+
+  existingNote:{ flexDirection: "row", alignItems: "flex-start", gap: SPACE[8], padding: SPACE[12], borderRadius: RADIUS.md, borderWidth: 1 },
+  existingNoteText:{ flex: 1, fontSize: FONT.size.xs },
+
+  nextBtn:     { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: SPACE[8], borderRadius: RADIUS.lg, paddingVertical: SPACE[16] },
+  nextBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+  proposeBtn:  { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: SPACE[8], borderRadius: RADIUS.lg, paddingVertical: SPACE[16], marginTop: SPACE[4] },
+  proposeBtnText:{ color: "#fff", fontSize: 16, fontWeight: "700" },
+});
+
 // ─── Main styles ──────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   root: { flex: 1 },
 
-  // Header
-  header:           { flexDirection: "row", alignItems: "center", paddingHorizontal: SPACE[12], paddingVertical: SPACE[10], borderBottomWidth: 1, gap: SPACE[10] },
-  backBtn:          { padding: SPACE[4] },
-  headerCenter:     { flex: 1, flexDirection: "row", alignItems: "center", gap: SPACE[10] },
-  headerInfo:       { flex: 1, gap: 3 },
-  headerName:       { fontSize: FONT.size.md, fontWeight: FONT.weight.extrabold },
-  levelBadge:       { alignSelf: "flex-start", paddingHorizontal: SPACE[6], paddingVertical: 2, borderRadius: RADIUS.pill, borderWidth: 1 },
-  levelText:        { fontSize: FONT.size.xs, fontWeight: FONT.weight.extrabold, textTransform: "capitalize", letterSpacing: 0.3 },
-  scheduleBtn:      { width: 36, height: 36, borderRadius: RADIUS.md, alignItems: "center", justifyContent: "center", borderWidth: 1 },
+  header:       { flexDirection: "row", alignItems: "center", paddingHorizontal: SPACE[12], paddingVertical: SPACE[10], borderBottomWidth: 1, gap: SPACE[10] },
+  backBtn:      { padding: SPACE[4] },
+  headerCenter: { flex: 1, flexDirection: "row", alignItems: "center", gap: SPACE[10] },
+  headerInfo:   { flex: 1, gap: 3 },
+  headerName:   { fontSize: FONT.size.md, fontWeight: FONT.weight.extrabold },
+  levelBadge:   { alignSelf: "flex-start", paddingHorizontal: SPACE[6], paddingVertical: 2, borderRadius: RADIUS.pill, borderWidth: 1 },
+  levelText:    { fontSize: FONT.size.xs, fontWeight: FONT.weight.extrabold, textTransform: "capitalize", letterSpacing: 0.3 },
+  menuBtn:      { width: 36, height: 36, borderRadius: RADIUS.md, alignItems: "center", justifyContent: "center", borderWidth: 1 },
 
-  // Messages
-  messageList:      { padding: SPACE[16], paddingBottom: SPACE[8], gap: 2 },
-  dateLabel:        { textAlign: "center", fontSize: FONT.size.xs, marginVertical: SPACE[16], fontWeight: FONT.weight.semibold },
-  bubbleRow:        { flexDirection: "row", alignItems: "flex-end", gap: SPACE[8], marginVertical: 2 },
-  bubbleRowMine:    { flexDirection: "row-reverse" },
-  bubble:           { maxWidth: "74%", borderRadius: 18, paddingHorizontal: SPACE[14], paddingVertical: SPACE[10], gap: 2 },
-  bubbleText:       { fontSize: FONT.size.md, lineHeight: FONT.size.md * 1.4 },
-  bubbleMeta:       { flexDirection: "row", alignItems: "center", gap: SPACE[4], alignSelf: "flex-end" },
-  bubbleTime:       { fontSize: FONT.size.xs },
+  messageList:  { padding: SPACE[16], paddingBottom: SPACE[8], gap: 2 },
+  dateLabel:    { textAlign: "center", fontSize: FONT.size.xs, marginVertical: SPACE[16], fontWeight: FONT.weight.semibold },
+  bubbleRow:    { flexDirection: "row", alignItems: "flex-end", gap: SPACE[8], marginVertical: 2 },
+  bubbleRowMine:{ flexDirection: "row-reverse" },
+  bubble:       { maxWidth: "74%", borderRadius: 18, paddingHorizontal: SPACE[14], paddingVertical: SPACE[10], gap: 2 },
+  bubbleText:   { fontSize: FONT.size.md, lineHeight: FONT.size.md * 1.4 },
+  bubbleMeta:   { flexDirection: "row", alignItems: "center", gap: SPACE[4], alignSelf: "flex-end" },
+  bubbleTime:   { fontSize: FONT.size.xs },
 
-  // Empty
-  emptyChat:        { alignItems: "center", paddingTop: SPACE[60], gap: SPACE[12] },
-  emptyChatName:    { fontSize: FONT.size.lg, fontWeight: FONT.weight.extrabold },
-  emptyChatHint:    { fontSize: FONT.size.sm, textAlign: "center", paddingHorizontal: SPACE[32] },
+  emptyChat:    { alignItems: "center", paddingTop: SPACE[60], gap: SPACE[12] },
+  emptyChatName:{ fontSize: FONT.size.lg, fontWeight: FONT.weight.extrabold },
+  emptyChatHint:{ fontSize: FONT.size.sm, textAlign: "center", paddingHorizontal: SPACE[32] },
 
-  // Input
-  inputRow:         { flexDirection: "row", alignItems: "flex-end", padding: SPACE[10], gap: SPACE[8], borderTopWidth: 1 },
-  input:            { flex: 1, borderRadius: RADIUS.xl, paddingHorizontal: SPACE[16], paddingVertical: SPACE[10], fontSize: FONT.size.md, maxHeight: 120, borderWidth: 1 },
-  sendBtn:          { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", flexShrink: 0 },
-
-  // Centered modal overlay
-  modalOverlay:     { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "center", alignItems: "center", padding: SPACE[20] },
-  modalCard:        { width: "100%", borderRadius: RADIUS.xxl, overflow: "hidden" },
-  modalHeader:      { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: SPACE[20], paddingVertical: SPACE[16], borderBottomWidth: 1 },
-  modalTitle:       { fontSize: FONT.size.xl, fontWeight: FONT.weight.black },
-  modalContent:     { padding: SPACE[20], gap: SPACE[14], paddingBottom: SPACE[32] },
-
-  // Schedule form
-  existingNote:     { flexDirection: "row", alignItems: "flex-start", gap: SPACE[8], padding: SPACE[12], borderRadius: RADIUS.md, borderWidth: 1 },
-  existingNoteText: { flex: 1, fontSize: FONT.size.xs },
-  fieldLabel:       { fontSize: FONT.size.xs, fontWeight: FONT.weight.extrabold, textTransform: "uppercase", letterSpacing: 1, marginBottom: -4 },
-  sportChips:       { gap: SPACE[8], paddingBottom: SPACE[4] },
-  sportChip:        { paddingHorizontal: SPACE[12], paddingVertical: SPACE[8], borderRadius: RADIUS.pill, borderWidth: 1 },
-  sportChipText:    { fontSize: FONT.size.sm, fontWeight: FONT.weight.semibold },
-  textInput:        { borderRadius: RADIUS.md, paddingHorizontal: SPACE[14], paddingVertical: SPACE[12], fontSize: FONT.size.md, borderWidth: 1 },
-  selectedDateRow:  { flexDirection: "row", alignItems: "center", gap: SPACE[8], paddingHorizontal: SPACE[14], paddingVertical: SPACE[10], borderRadius: RADIUS.md, borderWidth: 1 },
-  selectedDateText: { flex: 1, fontSize: FONT.size.md, fontWeight: FONT.weight.bold },
-  calHint:          { fontSize: FONT.size.xs, marginBottom: -4 },
-  timeHeaderRow:    { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  timeToggle:       { paddingHorizontal: SPACE[12], paddingVertical: SPACE[8], borderRadius: RADIUS.pill, borderWidth: 1 },
-  timeToggleText:   { fontSize: FONT.size.sm, fontWeight: FONT.weight.semibold },
-  timePickerWrap:   { borderRadius: RADIUS.xl, borderWidth: 1, paddingVertical: SPACE[20] },
-  locationRow:      { flexDirection: "row", gap: SPACE[8], alignItems: "center" },
-  textInputFlex:    { flex: 1, borderRadius: RADIUS.md, paddingHorizontal: SPACE[14], paddingVertical: SPACE[12], fontSize: FONT.size.md, borderWidth: 1 },
-  mapBtn:           { width: 46, height: 46, borderRadius: RADIUS.md, alignItems: "center", justifyContent: "center", borderWidth: 1 },
-  proposeBtn:       { borderRadius: RADIUS.lg, paddingVertical: SPACE[16], alignItems: "center", marginTop: SPACE[4] },
-  proposeBtnInner:  { flexDirection: "row", alignItems: "center", gap: SPACE[8] },
-  proposeBtnText:   { color: "#fff", fontSize: FONT.size.md, fontWeight: FONT.weight.extrabold },
-  // Map overlay — covers the entire modal card
-  mapOverlay:       { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 10, borderRadius: RADIUS.xxl, overflow: "hidden" },
+  inputRow:     { flexDirection: "row", alignItems: "flex-end", padding: SPACE[10], gap: SPACE[8], borderTopWidth: 1 },
+  input:        { flex: 1, borderRadius: RADIUS.xl, paddingHorizontal: SPACE[16], paddingVertical: SPACE[10], fontSize: FONT.size.md, maxHeight: 120, borderWidth: 1 },
+  sendBtn:      { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", flexShrink: 0 },
 });
