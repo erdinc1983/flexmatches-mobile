@@ -940,7 +940,7 @@ const s = StyleSheet.create({
 const wiz = StyleSheet.create({
   backdrop: { flex: 1, justifyContent: "center", alignItems: "center",
               backgroundColor: "rgba(0,0,0,0.45)", paddingHorizontal: 16, paddingVertical: 40 },
-  card:     { width: "100%", borderRadius: 24, maxHeight: SCREEN_H * 0.82 },
+  card:     { width: "100%", borderRadius: 24, height: SCREEN_H * 0.78 },
   header:   { flexDirection: "row", alignItems: "center", justifyContent: "space-between",
               paddingHorizontal: SPACE[20], paddingVertical: SPACE[16], borderBottomWidth: 1 },
   title:    { fontSize: FONT.size.xl, fontWeight: FONT.weight.black },
