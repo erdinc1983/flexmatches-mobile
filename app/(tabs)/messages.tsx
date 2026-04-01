@@ -204,8 +204,9 @@ export default function MessagesScreen() {
   }
 
   async function handleDeleteMessages(matchId: string) {
-    await supabase.from("messages").delete().eq("match_id", matchId);
-    // Remove from list — empty conversation is not useful to show
+    // Delete the match entirely — messages cascade or become orphaned
+    // (RLS blocks bulk message delete by match_id; deleting the match is the reliable path)
+    await supabase.from("matches").delete().eq("id", matchId);
     setConversations((prev) => prev.filter((c) => c.matchId !== matchId));
     setSaved((prev) => { const n = new Set(prev); n.delete(matchId); return n; });
   }
