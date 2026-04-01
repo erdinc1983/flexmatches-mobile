@@ -1,21 +1,14 @@
 /**
  * MapLocationPicker
- * Reusable map-based location picker.
- * Renders as a View (no Modal wrapper — parent decides the overlay).
+ * Uses onLayout to measure available space and give MapView exact pixel dimensions.
  */
 
 import { useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Dimensions } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, LayoutChangeEvent } from "react-native";
 import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
 import * as Location from "expo-location";
 import { useTheme, SPACE, FONT, RADIUS } from "../lib/theme";
 import { Icon } from "./Icon";
-
-const SCREEN_H = Dimensions.get("window").height;
-const SCREEN_W = Dimensions.get("window").width;
-
-// Header ~50 + chips ~46 + footer ~110 + safe areas ~88
-const MAP_H = SCREEN_H - 50 - 46 - 110 - 88;
 
 // ─── Venue catalogue ─────────────────────────────────────────────────────────
 export const MAP_VENUES = [
@@ -56,10 +49,11 @@ export function MapLocationPicker({ onSelect, onClose, colors }: Props) {
   const [venues,     setVenues]     = useState<MapVenue[]>([]);
   const [activeKeys, setActiveKeys] = useState<Set<MapVenueKey>>(new Set(["gym"]));
   const [loadingV,   setLoadingV]   = useState(false);
+  // Measured dimensions of the map container
+  const [mapSize,    setMapSize]    = useState<{ w: number; h: number } | null>(null);
   const userLocRef = useRef<{ lat: number; lon: number } | null>(null);
 
   useEffect(() => {
-    // Fetch with default region immediately so categories appear right away
     fetchVenues(DEFAULT_REGION.latitude, DEFAULT_REGION.longitude, new Set(["gym"]));
 
     (async () => {
@@ -153,10 +147,15 @@ export function MapLocationPicker({ onSelect, onClose, colors }: Props) {
 
   const visibleVenues = venues.filter((v) => activeKeys.has(v.key));
 
-  return (
-    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+  function onMapContainerLayout(e: LayoutChangeEvent) {
+    const { width, height } = e.nativeEvent.layout;
+    if (width > 0 && height > 0) setMapSize({ w: width, h: height });
+  }
 
-      {/* Header */}
+  return (
+    <View style={[mp.root, { backgroundColor: colors.bg }]}>
+
+      {/* ── Header ── */}
       <View style={[mp.header, { backgroundColor: colors.bgCard, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={onClose} hitSlop={12} style={mp.backBtn}>
           <Icon name="back" size={22} color={colors.textSecondary} />
@@ -168,7 +167,7 @@ export function MapLocationPicker({ onSelect, onClose, colors }: Props) {
         }
       </View>
 
-      {/* Category chips — fixed height row */}
+      {/* ── Category chips ── */}
       <View style={[mp.chipWrap, { backgroundColor: colors.bg, borderBottomColor: colors.border }]}>
         <ScrollView
           horizontal
@@ -181,7 +180,10 @@ export function MapLocationPicker({ onSelect, onClose, colors }: Props) {
             return (
               <TouchableOpacity
                 key={v.key}
-                style={[mp.chip, { borderColor: active ? v.color : colors.border, backgroundColor: active ? v.color + "18" : colors.bgCard }]}
+                style={[mp.chip, {
+                  borderColor: active ? v.color : colors.border,
+                  backgroundColor: active ? v.color + "18" : colors.bgCard,
+                }]}
                 onPress={() => toggleKey(v.key)}
                 activeOpacity={0.75}
               >
@@ -193,36 +195,40 @@ export function MapLocationPicker({ onSelect, onClose, colors }: Props) {
         </ScrollView>
       </View>
 
-      {/* Map — explicit pixel height */}
-      <MapView
-        ref={mapRef}
-        style={{ width: SCREEN_W, height: MAP_H }}
-        provider={PROVIDER_DEFAULT}
-        initialRegion={DEFAULT_REGION}
-        showsUserLocation
-        showsMyLocationButton
-        userInterfaceStyle={isDark ? "dark" : "light"}
-        onPress={handleMapPress}
-      >
-        {visibleVenues.map((v) => {
-          const cfg = MAP_VENUES.find((c) => c.key === v.key)!;
-          return (
-            <Marker
-              key={v.id}
-              coordinate={{ latitude: v.lat, longitude: v.lon }}
-              tracksViewChanges={false}
-              onPress={() => { setPin({ latitude: v.lat, longitude: v.lon }); setAddress(v.name); }}
-            >
-              <View style={[mp.venueDot, { backgroundColor: cfg.color + "EE", borderColor: cfg.color }]}>
-                <Text style={{ fontSize: 12 }}>{cfg.emoji}</Text>
-              </View>
-            </Marker>
-          );
-        })}
-        {pin && <Marker coordinate={pin} pinColor="#FF4500" tracksViewChanges={false} />}
-      </MapView>
+      {/* ── Map container — fills all remaining space ── */}
+      <View style={mp.mapContainer} onLayout={onMapContainerLayout}>
+        {mapSize && (
+          <MapView
+            ref={mapRef}
+            style={{ width: mapSize.w, height: mapSize.h }}
+            provider={PROVIDER_DEFAULT}
+            initialRegion={DEFAULT_REGION}
+            showsUserLocation
+            showsMyLocationButton
+            userInterfaceStyle={isDark ? "dark" : "light"}
+            onPress={handleMapPress}
+          >
+            {visibleVenues.map((v) => {
+              const cfg = MAP_VENUES.find((c) => c.key === v.key)!;
+              return (
+                <Marker
+                  key={v.id}
+                  coordinate={{ latitude: v.lat, longitude: v.lon }}
+                  tracksViewChanges={false}
+                  onPress={() => { setPin({ latitude: v.lat, longitude: v.lon }); setAddress(v.name); }}
+                >
+                  <View style={[mp.venueDot, { backgroundColor: cfg.color + "EE", borderColor: cfg.color }]}>
+                    <Text style={{ fontSize: 12 }}>{cfg.emoji}</Text>
+                  </View>
+                </Marker>
+              );
+            })}
+            {pin && <Marker coordinate={pin} pinColor="#FF4500" tracksViewChanges={false} />}
+          </MapView>
+        )}
+      </View>
 
-      {/* Footer */}
+      {/* ── Footer ── */}
       <View style={[mp.footer, { backgroundColor: colors.bgCard, borderTopColor: colors.border }]}>
         <Text style={[mp.hint, { color: address ? colors.text : colors.textMuted }]} numberOfLines={2}>
           {address || "Tap a venue or anywhere on the map"}
@@ -236,23 +242,26 @@ export function MapLocationPicker({ onSelect, onClose, colors }: Props) {
           </TouchableOpacity>
         )}
       </View>
+
     </View>
   );
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const mp = StyleSheet.create({
-  header:      { flexDirection: "row", alignItems: "center", paddingHorizontal: SPACE[16], paddingVertical: SPACE[12], gap: SPACE[10], borderBottomWidth: 1, height: 50 },
-  backBtn:     { width: 32, alignItems: "flex-start" },
-  title:       { fontSize: FONT.size.lg, fontWeight: FONT.weight.extrabold, flex: 1 },
-  chipWrap:    { height: 46, borderBottomWidth: StyleSheet.hairlineWidth },
-  chipRow:     { gap: SPACE[8], paddingHorizontal: SPACE[12], alignItems: "center", height: 46 },
-  chip:        { flexDirection: "row", alignItems: "center", gap: SPACE[4], paddingHorizontal: SPACE[10], paddingVertical: SPACE[5], borderRadius: RADIUS.pill, borderWidth: 1.5 },
-  chipEmoji:   { fontSize: 12 },
-  chipLabel:   { fontSize: FONT.size.xs, fontWeight: FONT.weight.semibold },
-  venueDot:    { paddingHorizontal: 5, paddingVertical: 3, borderRadius: 10, borderWidth: 1.5 },
-  footer:      { padding: SPACE[16], gap: SPACE[10], borderTopWidth: 1 },
-  hint:        { fontSize: FONT.size.sm, lineHeight: FONT.size.sm * 1.5, minHeight: 40 },
-  confirmBtn:  { borderRadius: RADIUS.lg, paddingVertical: SPACE[14], alignItems: "center" },
-  confirmText: { color: "#fff", fontSize: FONT.size.md, fontWeight: FONT.weight.extrabold },
+  root:         { flex: 1 },
+  header:       { flexDirection: "row", alignItems: "center", paddingHorizontal: SPACE[16], paddingVertical: 0, gap: SPACE[10], borderBottomWidth: 1, height: 52 },
+  backBtn:      { width: 36, height: 52, alignItems: "flex-start", justifyContent: "center" },
+  title:        { fontSize: FONT.size.lg, fontWeight: FONT.weight.extrabold, flex: 1 },
+  chipWrap:     { height: 48, borderBottomWidth: StyleSheet.hairlineWidth },
+  chipRow:      { flexDirection: "row", alignItems: "center", paddingHorizontal: SPACE[12], gap: SPACE[8], height: 48 },
+  chip:         { flexDirection: "row", alignItems: "center", gap: SPACE[4], paddingHorizontal: SPACE[10], paddingVertical: SPACE[6], borderRadius: RADIUS.pill, borderWidth: 1.5 },
+  chipEmoji:    { fontSize: 13 },
+  chipLabel:    { fontSize: FONT.size.xs, fontWeight: FONT.weight.semibold },
+  mapContainer: { flex: 1 },
+  venueDot:     { paddingHorizontal: 5, paddingVertical: 3, borderRadius: 10, borderWidth: 1.5 },
+  footer:       { paddingHorizontal: SPACE[16], paddingVertical: SPACE[12], gap: SPACE[10], borderTopWidth: 1 },
+  hint:         { fontSize: FONT.size.sm, lineHeight: FONT.size.sm * 1.5, minHeight: 36 },
+  confirmBtn:   { borderRadius: RADIUS.lg, paddingVertical: SPACE[14], alignItems: "center" },
+  confirmText:  { color: "#fff", fontSize: FONT.size.md, fontWeight: FONT.weight.extrabold },
 });
