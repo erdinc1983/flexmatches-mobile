@@ -184,6 +184,7 @@ export default function CirclesScreen() {
   const [formEmoji,      setFormEmoji]      = useState("🏋️");
   const [saving,         setSaving]         = useState(false);
   const [showMapPicker,  setShowMapPicker]  = useState(false);
+  const [createStep,     setCreateStep]     = useState<1|2|3|4>(1);
 
   // ── Data ──────────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
@@ -306,6 +307,7 @@ export default function CirclesScreen() {
 
   function resetCreate() {
     setShowCreate(false);
+    setCreateStep(1);
     setFormName(""); setFormDesc(""); setFormActivity("Gym");
     setFormCatTab("fitness"); setFormCity(""); setFormField(""); setFormMaxMembers("");
     setFormEventDate(""); setFormEventHour(9); setFormEventMin(0); setFormUseTime(false); setFormEmoji("🏋️");
@@ -535,204 +537,245 @@ export default function CirclesScreen() {
         </TouchableOpacity>
       )}
 
-      {/* ── Create Circle Modal ───────────────────────────────────────────── */}
-      <Modal visible={showCreate} animationType="slide" presentationStyle="pageSheet">
-        <SafeAreaView style={[s.modal, { backgroundColor: c.bg }]}>
-          {/* Modal header */}
-          <View style={[s.modalHeader, { borderBottomColor: c.border }]}>
-            <Text style={[s.modalTitle, { color: c.text }]}>New Circle</Text>
-            <TouchableOpacity onPress={resetCreate} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Icon name="close" size={22} color={c.textMuted} />
-            </TouchableOpacity>
-          </View>
+      {/* ── Create Circle Wizard ─────────────────────────────────────────────── */}
+      <Modal visible={showCreate && !showMapPicker} transparent animationType="slide" onRequestClose={resetCreate}>
+        <View style={wiz.backdrop}>
+          <KeyboardAvoidingView
+            style={[wiz.card, { backgroundColor: c.bg }]}
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+          >
+            {/* Header */}
+            <View style={[wiz.header, { borderBottomColor: c.border }]}>
+              <TouchableOpacity onPress={resetCreate} hitSlop={12}>
+                <Icon name="close" size={20} color={c.textMuted} />
+              </TouchableOpacity>
+              <Text style={[wiz.title, { color: c.text }]}>New Circle</Text>
+              <View style={{ width: 20 }} />
+            </View>
 
-          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+            {/* Step dots */}
+            <View style={wiz.dots}>
+              {([1,2,3,4] as const).map((i) => (
+                <View key={i} style={[wiz.dot, { backgroundColor: i <= createStep ? c.brand : c.border }]} />
+              ))}
+            </View>
+
+            {/* Content */}
             <ScrollView
-              contentContainerStyle={s.modalBody}
+              style={{ flex: 1 }}
+              contentContainerStyle={wiz.body}
               keyboardShouldPersistTaps="handled"
-              automaticallyAdjustKeyboardInsets
+              showsVerticalScrollIndicator={false}
             >
-              {/* Emoji picker */}
-              <Text style={[s.fieldLabel, { color: c.textMuted }]}>Icon</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: SPACE[20] }}>
-                <View style={s.emojiRow}>
-                  {EMOJIS.map((e) => (
+              {/* Step 1 — Name & Icon */}
+              {createStep === 1 && (
+                <>
+                  <Text style={[wiz.label, { color: c.textMuted }]}>Icon</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: SPACE[20] }}>
+                    <View style={s.emojiRow}>
+                      {EMOJIS.map((e) => (
+                        <TouchableOpacity
+                          key={e}
+                          style={[s.emojiOpt, { backgroundColor: c.bgCard, borderColor: formEmoji === e ? c.brand : c.border },
+                            formEmoji === e && { backgroundColor: c.brandSubtle }]}
+                          onPress={() => setFormEmoji(e)}
+                        >
+                          <Text style={s.emojiText}>{e}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </ScrollView>
+                  <Text style={[wiz.label, { color: c.textMuted }]}>Circle Name *</Text>
+                  <TextInput
+                    style={[s.input, { backgroundColor: c.bgInput, borderColor: c.border, color: c.text }]}
+                    value={formName}
+                    onChangeText={setFormName}
+                    placeholder="e.g. Sunday Soccer, Morning Runners"
+                    placeholderTextColor={c.textMuted}
+                  />
+                </>
+              )}
+
+              {/* Step 2 — Activity & Description */}
+              {createStep === 2 && (
+                <>
+                  <Text style={[wiz.label, { color: c.textMuted }]}>Activity</Text>
+                  <View style={[s.catTabRow, { borderColor: c.border }]}>
+                    {ACTIVITY_CATEGORIES.map((cat) => {
+                      const active = formCatTab === cat.key;
+                      return (
+                        <TouchableOpacity
+                          key={cat.key}
+                          style={[s.catTab, active && { borderBottomColor: c.brand }]}
+                          onPress={() => {
+                            setFormCatTab(cat.key);
+                            if (!(cat.activities as readonly string[]).includes(formActivity)) {
+                              setFormActivity(cat.activities[0]);
+                            }
+                          }}
+                        >
+                          <Text style={[s.catTabText, { color: active ? c.brand : c.textMuted }]}>{cat.label}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                  <View style={[s.actGrid, { marginBottom: SPACE[16] }]}>
+                    {(tabActivities as readonly string[]).map((a) => {
+                      const active = formActivity === a;
+                      return (
+                        <TouchableOpacity
+                          key={a}
+                          style={[s.actChip, { backgroundColor: active ? c.brandSubtle : "transparent", borderColor: active ? c.brand : c.borderMedium }]}
+                          onPress={() => setFormActivity(a)}
+                        >
+                          <Text style={[s.actChipText, { color: active ? c.brand : c.textSecondary }]}>{a}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                  <Text style={[wiz.label, { color: c.textMuted }]}>Description (optional)</Text>
+                  <TextInput
+                    style={[s.input, s.textArea, { backgroundColor: c.bgInput, borderColor: c.border, color: c.text }]}
+                    value={formDesc}
+                    onChangeText={setFormDesc}
+                    placeholder="What's this circle about?"
+                    placeholderTextColor={c.textMuted}
+                    multiline
+                  />
+                </>
+              )}
+
+              {/* Step 3 — Location & Size */}
+              {createStep === 3 && (
+                <>
+                  <Text style={[wiz.label, { color: c.textMuted }]}>City (optional)</Text>
+                  <TextInput
+                    style={[s.input, { backgroundColor: c.bgInput, borderColor: c.border, color: c.text, marginBottom: SPACE[16] }]}
+                    value={formCity}
+                    onChangeText={setFormCity}
+                    placeholder="e.g. Istanbul, New York"
+                    placeholderTextColor={c.textMuted}
+                  />
+                  <Text style={[wiz.label, { color: c.textMuted }]}>Field / Venue (optional)</Text>
+                  <View style={[s.locationRow, { marginBottom: SPACE[16] }]}>
+                    <TextInput
+                      style={[s.inputFlex, { backgroundColor: c.bgInput, borderColor: c.border, color: c.text }]}
+                      value={formField}
+                      onChangeText={setFormField}
+                      placeholder="e.g. Central Park, Fenerbahçe Stadium"
+                      placeholderTextColor={c.textMuted}
+                    />
                     <TouchableOpacity
-                      key={e}
-                      style={[s.emojiOpt, { backgroundColor: c.bgCard, borderColor: formEmoji === e ? c.brand : c.border },
-                        formEmoji === e && { backgroundColor: c.brandSubtle }]}
-                      onPress={() => setFormEmoji(e)}
+                      style={[s.mapBtn, { backgroundColor: c.bgInput, borderColor: c.border }]}
+                      onPress={() => setShowMapPicker(true)}
+                      hitSlop={8}
                     >
-                      <Text style={s.emojiText}>{e}</Text>
+                      <Icon name="map" size={18} color={c.textMuted} />
                     </TouchableOpacity>
-                  ))}
-                </View>
-              </ScrollView>
+                  </View>
+                  <Text style={[wiz.label, { color: c.textMuted }]}>Max Members (optional)</Text>
+                  <TextInput
+                    style={[s.input, { backgroundColor: c.bgInput, borderColor: c.border, color: c.text }]}
+                    value={formMaxMembers}
+                    onChangeText={(v) => setFormMaxMembers(v.replace(/[^0-9]/g, ""))}
+                    placeholder="e.g. 10, 20 — unlimited if empty"
+                    placeholderTextColor={c.textMuted}
+                    keyboardType="number-pad"
+                  />
+                </>
+              )}
 
-              {/* Name */}
-              <Text style={[s.fieldLabel, { color: c.textMuted }]}>Circle Name *</Text>
-              <TextInput
-                style={[s.input, { backgroundColor: c.bgInput, borderColor: c.border, color: c.text }]}
-                value={formName}
-                onChangeText={setFormName}
-                placeholder="e.g. Sunday Soccer, Morning Runners"
-                placeholderTextColor={c.textMuted}
-              />
-
-              {/* Activity — category tabs + filtered activities */}
-              <Text style={[s.fieldLabel, { color: c.textMuted, marginTop: SPACE[16] }]}>Activity</Text>
-              {/* Category tabs */}
-              <View style={[s.catTabRow, { borderColor: c.border }]}>
-                {ACTIVITY_CATEGORIES.map((cat) => {
-                  const active = formCatTab === cat.key;
-                  return (
+              {/* Step 4 — Date & Time */}
+              {createStep === 4 && (
+                <>
+                  <Text style={[wiz.label, { color: c.textMuted }]}>Date (optional)</Text>
+                  {formEventDate ? (
+                    <View style={[s.selectedDateRow, { backgroundColor: c.brand+"15", borderColor: c.brand+"60", marginBottom: SPACE[8] }]}>
+                      <Icon name="calendar" size={14} color={c.brand} />
+                      <Text style={[s.selectedDateText, { color: c.brand }]}>{formatCircleDate(formEventDate)}</Text>
+                      <TouchableOpacity onPress={() => setFormEventDate("")} hitSlop={10}>
+                        <Text style={{ color: c.textMuted, fontSize: 14 }}>✕</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <Text style={{ fontSize: FONT.size.xs, color: c.textFaint, marginBottom: SPACE[4] }}>Tap a day to select</Text>
+                  )}
+                  <CalendarPicker value={formEventDate} onChange={setFormEventDate} colors={c} />
+                  <View style={[s.timeHeaderRow, { marginTop: SPACE[12] }]}>
+                    <Text style={[wiz.label, { color: c.textMuted, marginBottom: 0 }]}>Time</Text>
                     <TouchableOpacity
-                      key={cat.key}
-                      style={[s.catTab, active && { borderBottomColor: c.brand }]}
-                      onPress={() => {
-                        setFormCatTab(cat.key);
-                        // Auto-select first activity in tab if current is not in this tab
-                        if (!cat.activities.includes(formActivity as any)) {
-                          setFormActivity(cat.activities[0]);
-                        }
-                      }}
+                      style={[s.timeToggle, { backgroundColor: formUseTime ? c.brand : c.bgInput, borderColor: formUseTime ? c.brand : c.border }]}
+                      onPress={() => setFormUseTime((v) => !v)}
                     >
-                      <Text style={[s.catTabText, { color: active ? c.brand : c.textMuted }]}>
-                        {cat.label}
+                      <Text style={[s.timeToggleText, { color: formUseTime ? "#fff" : c.textMuted }]}>
+                        {formUseTime ? "Remove time" : "Add time"}
                       </Text>
                     </TouchableOpacity>
-                  );
-                })}
-              </View>
-              {/* Activities for selected tab */}
-              <View style={[s.actGrid, { marginBottom: SPACE[16] }]}>
-                {(tabActivities as readonly string[]).map((a) => {
-                  const active = formActivity === a;
-                  return (
-                    <TouchableOpacity
-                      key={a}
-                      style={[s.actChip, { backgroundColor: active ? c.brandSubtle : "transparent", borderColor: active ? c.brand : c.borderMedium }]}
-                      onPress={() => setFormActivity(a)}
-                    >
-                      <Text style={[s.actChipText, { color: active ? c.brand : c.textSecondary }]}>{a}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              {/* Description */}
-              <Text style={[s.fieldLabel, { color: c.textMuted }]}>Description (optional)</Text>
-              <TextInput
-                style={[s.input, s.textArea, { backgroundColor: c.bgInput, borderColor: c.border, color: c.text }]}
-                value={formDesc}
-                onChangeText={setFormDesc}
-                placeholder="What's this circle about?"
-                placeholderTextColor={c.textMuted}
-                multiline
-              />
-
-              {/* City */}
-              <Text style={[s.fieldLabel, { color: c.textMuted, marginTop: SPACE[16] }]}>City (optional)</Text>
-              <TextInput
-                style={[s.input, { backgroundColor: c.bgInput, borderColor: c.border, color: c.text }]}
-                value={formCity}
-                onChangeText={setFormCity}
-                placeholder="e.g. Istanbul, New York"
-                placeholderTextColor={c.textMuted}
-              />
-
-              {/* Field / Venue */}
-              <Text style={[s.fieldLabel, { color: c.textMuted, marginTop: SPACE[16] }]}>Field / Venue (optional)</Text>
-              <View style={s.locationRow}>
-                <TextInput
-                  style={[s.inputFlex, { backgroundColor: c.bgInput, borderColor: c.border, color: c.text }]}
-                  value={formField}
-                  onChangeText={setFormField}
-                  placeholder="e.g. Central Park, Fenerbahçe Stadium"
-                  placeholderTextColor={c.textMuted}
-                />
-                <TouchableOpacity
-                  style={[s.mapBtn, { backgroundColor: c.bgInput, borderColor: c.border }]}
-                  onPress={() => setShowMapPicker(true)}
-                  hitSlop={8}
-                >
-                  <Icon name="map" size={18} color={c.textMuted} />
-                </TouchableOpacity>
-              </View>
-
-              {/* Max members */}
-              <Text style={[s.fieldLabel, { color: c.textMuted, marginTop: SPACE[16] }]}>Max Members (optional)</Text>
-              <TextInput
-                style={[s.input, { backgroundColor: c.bgInput, borderColor: c.border, color: c.text }]}
-                value={formMaxMembers}
-                onChangeText={(v) => setFormMaxMembers(v.replace(/[^0-9]/g, ""))}
-                placeholder="e.g. 10, 20, unlimited if empty"
-                placeholderTextColor={c.textMuted}
-                keyboardType="number-pad"
-              />
-
-              {/* Date */}
-              <Text style={[s.fieldLabel, { color: c.textMuted, marginTop: SPACE[16] }]}>Date (optional)</Text>
-              {formEventDate ? (
-                <View style={[s.selectedDateRow, { backgroundColor: c.brand+"15", borderColor: c.brand+"60" }]}>
-                  <Icon name="calendar" size={14} color={c.brand} />
-                  <Text style={[s.selectedDateText, { color: c.brand }]}>{formatCircleDate(formEventDate)}</Text>
-                  <TouchableOpacity onPress={() => setFormEventDate("")} hitSlop={10}>
-                    <Text style={{ color: c.textMuted, fontSize: 14 }}>✕</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <Text style={[{ fontSize: FONT.size.xs, color: c.textFaint, marginBottom: -4 }]}>Tap a day to select</Text>
+                  </View>
+                  {formUseTime && (
+                    <View style={[s.timePickerWrap, { backgroundColor: c.bgCardAlt, borderColor: c.border, marginTop: SPACE[8] }]}>
+                      <TimePickerInline
+                        hour={formEventHour} minute={formEventMin}
+                        onHourChange={setFormEventHour} onMinuteChange={setFormEventMin}
+                        colors={c}
+                      />
+                    </View>
+                  )}
+                </>
               )}
-              <CalendarPicker value={formEventDate} onChange={setFormEventDate} colors={c} />
-
-              {/* Time */}
-              <View style={[s.timeHeaderRow, { marginTop: SPACE[4] }]}>
-                <Text style={[s.fieldLabel, { color: c.textMuted, marginBottom: 0 }]}>Time</Text>
-                <TouchableOpacity
-                  style={[s.timeToggle, { backgroundColor: formUseTime ? c.brand : c.bgInput, borderColor: formUseTime ? c.brand : c.border }]}
-                  onPress={() => setFormUseTime((v) => !v)}
-                >
-                  <Text style={[s.timeToggleText, { color: formUseTime ? "#fff" : c.textMuted }]}>
-                    {formUseTime ? "Remove time" : "Add time"}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              {formUseTime && (
-                <View style={[s.timePickerWrap, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}>
-                  <TimePickerInline
-                    hour={formEventHour} minute={formEventMin}
-                    onHourChange={setFormEventHour} onMinuteChange={setFormEventMin}
-                    colors={c}
-                  />
-                </View>
-              )}
-
-              <TouchableOpacity
-                style={[s.createBtn, { backgroundColor: c.brand }, (!formName.trim() || saving) && { opacity: 0.45 }]}
-                onPress={createCircle}
-                disabled={!formName.trim() || saving}
-                activeOpacity={0.85}
-              >
-                {saving
-                  ? <ActivityIndicator color="#fff" size="small" />
-                  : <Text style={s.createBtnText}>Create Circle</Text>
-                }
-              </TouchableOpacity>
             </ScrollView>
-          </KeyboardAvoidingView>
 
-          {/* Map overlay inside modal */}
-          {showMapPicker && (
-            <View style={[s.mapOverlay, { backgroundColor: c.bg }]}>
-              <MapLocationPicker
-                colors={c}
-                onSelect={(loc) => { setFormField(loc); setShowMapPicker(false); }}
-                onClose={() => setShowMapPicker(false)}
-              />
+            {/* Nav buttons */}
+            <View style={[wiz.nav, { borderTopColor: c.border }]}>
+              {createStep > 1 ? (
+                <TouchableOpacity
+                  style={[wiz.backBtn, { borderColor: c.border }]}
+                  onPress={() => setCreateStep((p) => (p - 1) as 1|2|3|4)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[wiz.backText, { color: c.textMuted }]}>Back</Text>
+                </TouchableOpacity>
+              ) : (
+                <View style={{ flex: 1 }} />
+              )}
+              {createStep < 4 ? (
+                <TouchableOpacity
+                  style={[wiz.nextBtn, { backgroundColor: c.brand }, createStep === 1 && !formName.trim() && { opacity: 0.4 }]}
+                  onPress={() => setCreateStep((p) => (p + 1) as 1|2|3|4)}
+                  disabled={createStep === 1 && !formName.trim()}
+                  activeOpacity={0.85}
+                >
+                  <Text style={wiz.nextText}>Next →</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={[wiz.nextBtn, { backgroundColor: c.brand }, saving && { opacity: 0.6 }]}
+                  onPress={createCircle}
+                  disabled={saving}
+                  activeOpacity={0.85}
+                >
+                  {saving
+                    ? <ActivityIndicator color="#fff" size="small" />
+                    : <Text style={wiz.nextText}>Create Circle</Text>
+                  }
+                </TouchableOpacity>
+              )}
             </View>
-          )}
-        </SafeAreaView>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      {/* ── Map Picker Modal ──────────────────────────────────────────────────── */}
+      <Modal visible={showMapPicker} transparent animationType="slide" onRequestClose={() => setShowMapPicker(false)}>
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end", paddingHorizontal: 12, paddingBottom: 36 }}>
+          <View style={{ borderRadius: 20, overflow: "hidden", height: SCREEN_H * 0.75 }}>
+            <MapLocationPicker
+              colors={c}
+              onSelect={(loc) => { setFormField(loc); setShowMapPicker(false); }}
+              onClose={() => setShowMapPicker(false)}
+            />
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -894,6 +937,26 @@ const s = StyleSheet.create({
   timeToggle:      { paddingHorizontal: SPACE[12], paddingVertical: SPACE[8], borderRadius: RADIUS.pill, borderWidth: 1 },
   timeToggleText:  { fontSize: FONT.size.sm, fontWeight: FONT.weight.semibold },
   timePickerWrap:  { borderRadius: RADIUS.xl, borderWidth: 1, paddingVertical: SPACE[20] },
+});
+
+// ─── Wizard styles ────────────────────────────────────────────────────────────
+const wiz = StyleSheet.create({
+  backdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.45)" },
+  card:     { borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: SCREEN_H * 0.88 },
+  header:   { flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+              paddingHorizontal: SPACE[20], paddingVertical: SPACE[16], borderBottomWidth: 1 },
+  title:    { fontSize: FONT.size.xl, fontWeight: FONT.weight.black },
+  dots:     { flexDirection: "row", gap: 6, justifyContent: "center", paddingVertical: SPACE[12] },
+  dot:      { width: 8, height: 8, borderRadius: 4 },
+  body:     { padding: SPACE[20], paddingBottom: SPACE[8], gap: SPACE[8] },
+  label:    { fontSize: FONT.size.xs, fontWeight: FONT.weight.bold, textTransform: "uppercase",
+              letterSpacing: 0.8, marginBottom: SPACE[8] },
+  nav:      { flexDirection: "row", gap: SPACE[10], paddingHorizontal: SPACE[20],
+              paddingVertical: SPACE[16], borderTopWidth: 1 },
+  backBtn:  { flex: 1, paddingVertical: SPACE[14], borderRadius: RADIUS.pill, borderWidth: 1.5, alignItems: "center" },
+  backText: { fontSize: FONT.size.md, fontWeight: FONT.weight.semibold },
+  nextBtn:  { flex: 2, paddingVertical: SPACE[14], borderRadius: RADIUS.pill, alignItems: "center" },
+  nextText: { fontSize: FONT.size.md, fontWeight: FONT.weight.extrabold, color: "#fff" },
 });
 
 // ─── Calendar styles ──────────────────────────────────────────────────────────
