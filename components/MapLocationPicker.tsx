@@ -5,7 +5,9 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Dimensions } from "react-native";
+
+const SCREEN_H = Dimensions.get("window").height;
 import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
 import * as Location from "expo-location";
 import { useTheme, SPACE, FONT, RADIUS } from "../lib/theme";
@@ -225,16 +227,16 @@ export function MapLocationPicker({ onSelect, onClose, colors }: Props) {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const mp = StyleSheet.create({
-  root:        { flex: 1, flexDirection: "column" },
-  header:      { flexDirection: "row", alignItems: "center", paddingHorizontal: SPACE[16], paddingVertical: SPACE[12], gap: SPACE[10], borderBottomWidth: 1, flexShrink: 0 },
+  root:        { flex: 1 },
+  header:      { flexDirection: "row", alignItems: "center", paddingHorizontal: SPACE[16], paddingVertical: SPACE[12], gap: SPACE[10], borderBottomWidth: 1 },
   title:       { fontSize: FONT.size.lg, fontWeight: FONT.weight.extrabold, flex: 1 },
-  chipBar:     { flexShrink: 0, height: 48 },
-  chipRow:     { gap: SPACE[8], paddingHorizontal: SPACE[12], paddingVertical: SPACE[8], alignItems: "center" },
+  chipBar:     { height: 46 },
+  chipRow:     { gap: SPACE[8], paddingHorizontal: SPACE[12], paddingVertical: SPACE[8], alignItems: "center", height: 46 },
   chip:        { flexDirection: "row", alignItems: "center", gap: SPACE[4], paddingHorizontal: SPACE[10], paddingVertical: SPACE[5], borderRadius: RADIUS.pill, borderWidth: 1.5 },
   chipEmoji:   { fontSize: 12 },
   chipLabel:   { fontSize: FONT.size.xs, fontWeight: FONT.weight.semibold },
   venueDot:    { paddingHorizontal: 5, paddingVertical: 3, borderRadius: 10, borderWidth: 1.5 },
-  map:         { flex: 1 },
+  map:         { flex: 1, minHeight: SCREEN_H * 0.5 },
   footer:      { padding: SPACE[16], gap: SPACE[10], borderTopWidth: 1 },
   hint:        { fontSize: FONT.size.sm, lineHeight: FONT.size.sm * 1.5, minHeight: 40 },
   confirmBtn:  { borderRadius: RADIUS.lg, paddingVertical: SPACE[14], alignItems: "center" },
