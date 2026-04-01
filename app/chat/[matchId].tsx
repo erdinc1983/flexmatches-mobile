@@ -996,19 +996,22 @@ export default function ChatScreen() {
         </View>
       </Modal>
 
-      {/* ── Map picker — standalone modal (no parent modal = works on iOS) ── */}
+      {/* ── Map picker — centered card with ~1cm margin top/bottom ─────── */}
       <Modal
         visible={showMapPicker}
-        animationType="slide"
+        animationType="fade"
+        transparent
         onRequestClose={() => setShowMapPicker(false)}
       >
-        <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
-          <MapLocationPicker
-            colors={c}
-            onSelect={(loc) => { setSessionLocation(loc); setShowMapPicker(false); }}
-            onClose={() => setShowMapPicker(false)}
-          />
-        </SafeAreaView>
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", paddingHorizontal: 12, paddingVertical: 36, justifyContent: "center" }}>
+          <View style={{ flex: 1, borderRadius: 20, overflow: "hidden" }}>
+            <MapLocationPicker
+              colors={c}
+              onSelect={(loc) => { setSessionLocation(loc); setShowMapPicker(false); }}
+              onClose={() => setShowMapPicker(false)}
+            />
+          </View>
+        </View>
       </Modal>
 
       <ProfileSheet
