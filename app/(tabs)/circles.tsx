@@ -19,7 +19,10 @@ const DAY_LABELS = ["Su","Mo","Tu","We","Th","Fr","Sa"];
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
+import { ImageBackground } from "react-native";
 import { supabase } from "../../lib/supabase";
+
+const HERO_IMG = require("../../assets/images/circles-hero.jpeg");
 import { useTheme, SPACE, FONT, RADIUS } from "../../lib/theme";
 import { Icon } from "../../components/Icon";
 import { Avatar } from "../../components/Avatar";
@@ -344,28 +347,28 @@ export default function CirclesScreen() {
 
   return (
     <SafeAreaView style={[s.root, { backgroundColor: c.bg }]}>
-      {/* ── Hero gradient header ── */}
-      <LinearGradient
-        colors={["#FF4500", "#C0320A"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={s.hero}
-      >
-        <View style={s.heroContent}>
-          <View style={{ flex: 1 }}>
-            <Text style={s.heroTitle}>Circles</Text>
-            <Text style={s.heroSub}>Your local activity communities</Text>
+      {/* ── Hero image header ── */}
+      <ImageBackground source={HERO_IMG} style={s.hero} resizeMode="cover">
+        <LinearGradient
+          colors={["rgba(0,0,0,0.18)", "rgba(0,0,0,0.62)"]}
+          style={s.heroGradient}
+        >
+          <View style={s.heroContent}>
+            <View style={{ flex: 1 }}>
+              <Text style={s.heroTitle}>Circles</Text>
+              <Text style={s.heroSub}>Your local activity communities</Text>
+            </View>
+            <TouchableOpacity
+              style={s.newBtn}
+              onPress={() => setShowCreate(true)}
+              activeOpacity={0.85}
+            >
+              <Icon name="add" size={16} color="#FF4500" />
+              <Text style={s.newBtnText}>New</Text>
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity
-            style={s.newBtn}
-            onPress={() => setShowCreate(true)}
-            activeOpacity={0.85}
-          >
-            <Icon name="add" size={16} color="#FF4500" />
-            <Text style={s.newBtnText}>New</Text>
-          </TouchableOpacity>
-        </View>
-      </LinearGradient>
+        </LinearGradient>
+      </ImageBackground>
 
       {/* Search */}
       <View style={[s.searchWrap, { paddingHorizontal: SPACE[16] }]}>
@@ -848,10 +851,11 @@ function CircleCard({ item, onPress, onJoin }: { item: Community; onPress: () =>
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   root:            { flex: 1 },
-  hero:            { paddingHorizontal: SPACE[20], paddingTop: SPACE[16], paddingBottom: SPACE[20] },
+  hero:            { height: 160, overflow: "hidden" },
+  heroGradient:    { flex: 1, paddingHorizontal: SPACE[20], justifyContent: "flex-end", paddingBottom: SPACE[18] },
   heroContent:     { flexDirection: "row", alignItems: "center" },
   heroTitle:       { fontSize: FONT.size.xxxl, fontWeight: FONT.weight.black, color: "#fff", letterSpacing: -0.5 },
-  heroSub:         { fontSize: FONT.size.xs, color: "rgba(255,255,255,0.75)", marginTop: 3 },
+  heroSub:         { fontSize: FONT.size.xs, color: "rgba(255,255,255,0.80)", marginTop: 3 },
   newBtn:          { flexDirection: "row", alignItems: "center", gap: SPACE[4],
                      borderRadius: RADIUS.pill, paddingHorizontal: SPACE[14], paddingVertical: SPACE[8],
                      backgroundColor: "#fff" },
