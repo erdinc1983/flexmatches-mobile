@@ -18,6 +18,7 @@ const MONTHS = ["January","February","March","April","May","June","July","August
 const DAY_LABELS = ["Su","Mo","Tu","We","Th","Fr","Sa"];
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
 import { supabase } from "../../lib/supabase";
 import { useTheme, SPACE, FONT, RADIUS } from "../../lib/theme";
 import { Icon } from "../../components/Icon";
@@ -343,21 +344,28 @@ export default function CirclesScreen() {
 
   return (
     <SafeAreaView style={[s.root, { backgroundColor: c.bg }]}>
-      {/* Header */}
-      <View style={s.header}>
-        <View>
-          <Text style={[s.title, { color: c.text }]}>Circles</Text>
-          <Text style={[s.subtitle, { color: c.textMuted }]}>Your local activity communities</Text>
+      {/* ── Hero gradient header ── */}
+      <LinearGradient
+        colors={["#FF4500", "#C0320A"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={s.hero}
+      >
+        <View style={s.heroContent}>
+          <View style={{ flex: 1 }}>
+            <Text style={s.heroTitle}>Circles</Text>
+            <Text style={s.heroSub}>Your local activity communities</Text>
+          </View>
+          <TouchableOpacity
+            style={s.newBtn}
+            onPress={() => setShowCreate(true)}
+            activeOpacity={0.85}
+          >
+            <Icon name="add" size={16} color="#FF4500" />
+            <Text style={s.newBtnText}>New</Text>
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity
-          style={[s.newBtn, { backgroundColor: c.brand }]}
-          onPress={() => setShowCreate(true)}
-          activeOpacity={0.85}
-        >
-          <Icon name="add" size={16} color="#fff" />
-          <Text style={s.newBtnText}>New</Text>
-        </TouchableOpacity>
-      </View>
+      </LinearGradient>
 
       {/* Search */}
       <View style={[s.searchWrap, { paddingHorizontal: SPACE[16] }]}>
@@ -840,13 +848,14 @@ function CircleCard({ item, onPress, onJoin }: { item: Community; onPress: () =>
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   root:            { flex: 1 },
-  header:          { flexDirection: "row", justifyContent: "space-between", alignItems: "center",
-                     paddingHorizontal: SPACE[20], paddingTop: SPACE[12], paddingBottom: SPACE[8] },
-  title:           { fontSize: FONT.size.xxxl, fontWeight: FONT.weight.black, letterSpacing: -0.5 },
-  subtitle:        { fontSize: FONT.size.xs, marginTop: 2 },
+  hero:            { paddingHorizontal: SPACE[20], paddingTop: SPACE[16], paddingBottom: SPACE[20] },
+  heroContent:     { flexDirection: "row", alignItems: "center" },
+  heroTitle:       { fontSize: FONT.size.xxxl, fontWeight: FONT.weight.black, color: "#fff", letterSpacing: -0.5 },
+  heroSub:         { fontSize: FONT.size.xs, color: "rgba(255,255,255,0.75)", marginTop: 3 },
   newBtn:          { flexDirection: "row", alignItems: "center", gap: SPACE[4],
-                     borderRadius: RADIUS.pill, paddingHorizontal: SPACE[14], paddingVertical: SPACE[8] },
-  newBtnText:      { color: "#fff", fontWeight: FONT.weight.extrabold, fontSize: FONT.size.sm },
+                     borderRadius: RADIUS.pill, paddingHorizontal: SPACE[14], paddingVertical: SPACE[8],
+                     backgroundColor: "#fff" },
+  newBtnText:      { color: "#FF4500", fontWeight: FONT.weight.extrabold, fontSize: FONT.size.sm },
   searchWrap:      { marginBottom: SPACE[10] },
   searchBar:       { flexDirection: "row", alignItems: "center", gap: SPACE[8],
                      borderRadius: RADIUS.lg, paddingHorizontal: SPACE[14], paddingVertical: SPACE[12], borderWidth: 1 },
