@@ -205,13 +205,9 @@ export default function MessagesScreen() {
 
   async function handleDeleteMessages(matchId: string) {
     await supabase.from("messages").delete().eq("match_id", matchId);
-    setConversations((prev) =>
-      prev.map((c) =>
-        c.matchId === matchId
-          ? { ...c, lastMessage: null, lastMessageAt: null, unreadCount: 0 }
-          : c
-      )
-    );
+    // Remove from list — empty conversation is not useful to show
+    setConversations((prev) => prev.filter((c) => c.matchId !== matchId));
+    setSaved((prev) => { const n = new Set(prev); n.delete(matchId); return n; });
   }
 
   async function handleUnmatch(matchId: string) {
