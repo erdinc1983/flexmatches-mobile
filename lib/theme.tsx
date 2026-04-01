@@ -66,17 +66,24 @@ export const RADIUS = {
 } as const;
 
 // ─── Typography ──────────────────────────────────────────────────────────────
+//
+// Two-tier font system:
+//   DISPLAY tier — headings, titles, section names   → heavy weight, large size
+//   TEXT tier    — body, meta, captions              → regular weight, comfortable size
+//
+// Minimum sizes: body 15px, caption 13px — readable for ages 10–70.
+
 export const FONT = {
   size: {
-    xs:      10,
-    sm:      12,
-    base:    14,
-    md:      15,
-    lg:      17,
-    xl:      20,
-    xxl:     24,
-    xxxl:    28,
-    display: 34,
+    xs:      13,   // captions — min readable
+    sm:      15,   // meta, badges, helper text
+    base:    17,   // body text — comfortable reading
+    md:      18,   // card titles, prominent body
+    lg:      20,   // section headings
+    xl:      24,   // screen subtitles
+    xxl:     28,   // screen titles
+    xxxl:    32,   // hero text
+    display: 38,   // splash / large numbers
   },
   weight: {
     regular:   "400" as const,
@@ -88,9 +95,39 @@ export const FONT = {
   },
   lineHeight: {
     tight:  1.2,
-    normal: 1.4,
-    loose:  1.6,
+    normal: 1.5,   // was 1.4 — slightly more open for readability
+    loose:  1.7,
   },
+} as const;
+
+/**
+ * Semantic typography roles.
+ *
+ * DISPLAY tier (headings — heavy, large):
+ *   screenTitle  — page title        28px / 900
+ *   sectionTitle — section header    18px / 800
+ *   cardTitle    — card heading      16px / 700
+ *
+ * TEXT tier (content — regular, comfortable):
+ *   body         — main readable text  15px / 400
+ *   bodyMedium   — emphasized body     15px / 600
+ *   caption      — meta / timestamps   13px / 400
+ *   label        — uppercase badge     11px / 700
+ *   button       — CTA label           16px / 700
+ */
+export const TYPE = {
+  // ── Display tier ─────────────────────────────────────────
+  screenTitle:  { fontSize: 30, fontWeight: "900" as const, letterSpacing: -0.5, lineHeight: 37 },
+  sectionTitle: { fontSize: 20, fontWeight: "800" as const, letterSpacing: -0.2, lineHeight: 26 },
+  cardTitle:    { fontSize: 18, fontWeight: "700" as const, letterSpacing: -0.1, lineHeight: 24 },
+
+  // ── Text tier ─────────────────────────────────────────────
+  body:         { fontSize: 16, fontWeight: "400" as const, lineHeight: 24 },
+  bodyMedium:   { fontSize: 16, fontWeight: "600" as const, lineHeight: 24 },
+  caption:      { fontSize: 14, fontWeight: "400" as const, lineHeight: 20 },
+  label:        { fontSize: 12, fontWeight: "700" as const, textTransform: "uppercase" as const, letterSpacing: 0.9 },
+  button:       { fontSize: 17, fontWeight: "700" as const, letterSpacing: -0.2 },
+  buttonSm:     { fontSize: 15, fontWeight: "600" as const },
 } as const;
 
 // ─── Shadows ─────────────────────────────────────────────────────────────────
@@ -164,11 +201,11 @@ const darkColors: ColorTokens = {
   borderMedium: "#2A2A2A",
   borderStrong: "#3A3A3A",
 
-  // Text
-  text:          "#FFFFFF",
-  textSecondary: "#CCCCCC",
-  textMuted:     "#666666",
-  textFaint:     "#3A3A3A",
+  // Text — dark mode 3-tier hierarchy
+  text:          "#F5F5F5",   // Tier 1 — neredeyse beyaz
+  textSecondary: "#C8C8C8",   // Tier 2 — açık gri
+  textMuted:     "#888888",   // Tier 3 — orta gri
+  textFaint:     "#555555",   // Tier 4 — koyu gri
   textInverted:  "#0A0A0A",
 
   // Tab bar
@@ -198,11 +235,15 @@ const lightColors: ColorTokens = {
   borderMedium: "#CFC8BF",
   borderStrong: "#B8B0A7",
 
-  // Text
-  text:          "#1A1A1A",
-  textSecondary: "#3A3A3A",
-  textMuted:     "#777777",
-  textFaint:     "#ABABAB",
+  // Text — 3-tier contrast hierarchy
+  // Tier 1: Koyu siyah  — başlıklar, önemli içerik     ~20:1 kontrast
+  // Tier 2: Siyah       — body metin, kart içerikleri   ~12:1 kontrast
+  // Tier 3: Açık siyah  — yardımcı bilgi, meta          ~5.5:1 kontrast (WCAG AA ✓)
+  // Tier 4: Daha açık   — placeholder, disabled         ~3.5:1 kontrast
+  text:          "#0D0D0D",   // Tier 1 — koyu siyah
+  textSecondary: "#2D2D2D",   // Tier 2 — siyah
+  textMuted:     "#666666",   // Tier 3 — açık siyah
+  textFaint:     "#999999",   // Tier 4 — daha açık siyah
   textInverted:  "#FFFFFF",
 
   // Tab bar — slightly darker cream for definition

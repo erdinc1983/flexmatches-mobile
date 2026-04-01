@@ -75,6 +75,43 @@ export async function notifyCircleEvent(circleName: string, dateLabel: string): 
   );
 }
 
+export async function notifyPartnerWorkout(body: string): Promise<void> {
+  await _fire("💪 Training buddy is active!", body);
+}
+
+/**
+ * Schedule a "Did you meet?" reminder for 9am the morning after the session date.
+ * Call this when a session is proposed or accepted.
+ */
+export async function scheduleSessionReminder(
+  partnerName: string,
+  sessionDateStr: string,  // "YYYY-MM-DD"
+): Promise<string | null> {
+  try {
+    const granted = await requestNotificationPermission();
+    if (!granted) return null;
+
+    const [y, m, d] = sessionDateStr.split("-").map(Number);
+    const fireAt = new Date(y, m - 1, d + 1, 9, 0, 0); // 9am next day
+    if (fireAt <= new Date()) return null;
+
+    const id = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: "Did you meet up? 🤝",
+        body:  `How did your session with ${partnerName} go? Mark it done in chat!`,
+        sound: true,
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        date: fireAt,
+      },
+    });
+    return id;
+  } catch {
+    return null;
+  }
+}
+
 // ─── Scheduled notifications ──────────────────────────────────────────────────
 
 /**

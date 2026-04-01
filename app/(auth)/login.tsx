@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, ActivityIndicator, Alert, KeyboardAvoidingView,
@@ -6,13 +6,21 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
+import * as AppleAuthentication from "expo-apple-authentication";
 import { supabase } from "../../lib/supabase";
+import { signInWithApple, isAppleAuthAvailable } from "../../lib/appleAuth";
 
 export default function LoginScreen() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [focusedField, setFocusedField] = useState<string | null>(null);
+  const [email,          setEmail]          = useState("");
+  const [password,       setPassword]       = useState("");
+  const [loading,        setLoading]        = useState(false);
+  const [appleLoading,   setAppleLoading]   = useState(false);
+  const [appleAvailable, setAppleAvailable] = useState(false);
+  const [focusedField,   setFocusedField]   = useState<string | null>(null);
+
+  useEffect(() => {
+    isAppleAuthAvailable().then(setAppleAvailable);
+  }, []);
 
   async function handleLogin() {
     if (!email || !password) {
@@ -23,6 +31,18 @@ export default function LoginScreen() {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (error) Alert.alert("Login Failed", error.message);
+  }
+
+  async function handleAppleSignIn() {
+    setAppleLoading(true);
+    const result = await signInWithApple();
+    setAppleLoading(false);
+    if (result.status === "error") {
+      Alert.alert("Apple Sign In Failed", result.message);
+    } else if (result.status === "success" && result.isNewUser) {
+      router.replace("/(auth)/onboarding");
+    }
+    // if success + existing user → auth listener in _layout redirects automatically
   }
 
   return (
@@ -94,6 +114,32 @@ export default function LoginScreen() {
               }
             </TouchableOpacity>
 
+            {/* Apple Sign In */}
+            {appleAvailable && (
+              <>
+                <View style={styles.divider}>
+                  <View style={styles.dividerLine} />
+                  <Text style={styles.dividerText}>or</Text>
+                  <View style={styles.dividerLine} />
+                </View>
+
+                {appleLoading ? (
+                  <View style={styles.appleLoading}>
+                    <ActivityIndicator color="#fff" size="small" />
+                    <Text style={styles.appleLoadingText}>Signing in with Apple...</Text>
+                  </View>
+                ) : (
+                  <AppleAuthentication.AppleAuthenticationButton
+                    buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+                    buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+                    cornerRadius={18}
+                    style={styles.appleBtn}
+                    onPress={handleAppleSignIn}
+                  />
+                )}
+              </>
+            )}
+
             <View style={styles.divider}>
               <View style={styles.dividerLine} />
               <Text style={styles.dividerText}>or</Text>
@@ -158,7 +204,10 @@ const styles = StyleSheet.create({
   divider: { flexDirection: "row", alignItems: "center", gap: 12 },
   dividerLine: { flex: 1, height: 1, backgroundColor: "#1a1a1a" },
   dividerText: { color: "#333", fontSize: 13, fontWeight: "600" },
-  registerBtn: { alignItems: "center", paddingVertical: 4 },
-  registerText: { color: "#555", fontSize: 14 },
-  registerLink: { color: "#FF4500", fontWeight: "700" },
+  registerBtn:      { alignItems: "center", paddingVertical: 4 },
+  registerText:     { color: "#555", fontSize: 14 },
+  registerLink:     { color: "#FF4500", fontWeight: "700" },
+  appleBtn:         { width: "100%", height: 56 },
+  appleLoading:     { height: 56, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, backgroundColor: "#111", borderRadius: 18, borderWidth: 1, borderColor: "#222" },
+  appleLoadingText: { color: "#888", fontSize: 15, fontWeight: "600" },
 });
