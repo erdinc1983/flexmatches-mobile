@@ -6,8 +6,8 @@
  *   2. Conversations with unread messages
  *   3. Everything else by recency
  *
- * Each row shows the session state pill when a session exists —
- * so users can coordinate at a glance without opening the chat.
+ * Swipe actions on each row:
+ *   Save · Delete messages · Unmatch
  *
  * Real-time: Supabase Realtime channel refreshes the list on new messages.
  */
@@ -18,6 +18,7 @@ import {
   ActivityIndicator, RefreshControl, Vibration,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { router, useFocusEffect } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import { notifyNewMessage, requestNotificationPermission } from "../../lib/notifications";
@@ -48,10 +49,10 @@ export default function MessagesScreen() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading,       setLoading]       = useState(true);
   const [refreshing,    setRefreshing]    = useState(false);
+  const [saved,         setSaved]         = useState<Set<string>>(new Set());
 
-  // Refs so realtime callbacks always see the latest values
-  const myIdRef        = useRef<string | null>(null);
-  const conversationsRef = useRef<Conversation[]>([]);
+  const myIdRef           = useRef<string | null>(null);
+  const conversationsRef  = useRef<Conversation[]>([]);
 
   const load = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -68,7 +69,6 @@ export default function MessagesScreen() {
 
     if (!matches || matches.length === 0) { setLoading(false); return; }
 
-    // Fetch other-user profiles separately to avoid FK join RLS issues
     const otherIds = matches.map((m: any) =>
       m.sender_id === user.id ? m.receiver_id : m.sender_id
     );
@@ -122,7 +122,6 @@ export default function MessagesScreen() {
       })
     );
 
-    // Sort: session pending response → unread → recency
     convos.sort((a, b) => {
       const aNeedsAction = a.session?.status === "pending" && a.session.receiver_id === user.id;
       const bNeedsAction = b.session?.status === "pending" && b.session.receiver_id === user.id;
@@ -140,10 +139,8 @@ export default function MessagesScreen() {
     setLoading(false);
   }, []);
 
-  // Reload whenever the tab is focused (e.g. navigating back from a chat)
   useFocusEffect(useCallback(() => {
     load();
-    // Request notification permission the first time the user sees the chat tab
     requestNotificationPermission();
   }, [load]));
 
@@ -154,14 +151,12 @@ export default function MessagesScreen() {
         const msg = payload.new as { sender_id: string; match_id: string; content: string; created_at: string };
         const isIncoming = myIdRef.current && msg.sender_id !== myIdRef.current;
 
-        // Vibration + notification — same as before
         if (isIncoming) {
           Vibration.vibrate(300);
           const convo = conversationsRef.current.find((c) => c.matchId === msg.match_id);
           notifyNewMessage(convo?.name ?? "New message", msg.content);
         }
 
-        // Optimistic update only when conversations are already loaded
         const current = conversationsRef.current;
         if (current.length > 0 && current.some((c) => c.matchId === msg.match_id)) {
           const updated = current.map((c) => {
@@ -183,7 +178,6 @@ export default function MessagesScreen() {
           conversationsRef.current = updated;
           setConversations([...updated]);
         } else {
-          // Fallback: full reload (new conversation or not yet loaded)
           load();
         }
       })
@@ -199,6 +193,34 @@ export default function MessagesScreen() {
     setRefreshing(false);
   }, [load]);
 
+  // ── Swipe action handlers ────────────────────────────────────────────────────
+  function handleSave(matchId: string) {
+    setSaved((prev) => {
+      const next = new Set(prev);
+      if (next.has(matchId)) next.delete(matchId);
+      else next.add(matchId);
+      return next;
+    });
+  }
+
+  async function handleDeleteMessages(matchId: string) {
+    await supabase.from("messages").delete().eq("match_id", matchId);
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.matchId === matchId
+          ? { ...c, lastMessage: null, lastMessageAt: null, unreadCount: 0 }
+          : c
+      )
+    );
+  }
+
+  async function handleUnmatch(matchId: string) {
+    await supabase.from("matches").delete().eq("id", matchId);
+    setConversations((prev) => prev.filter((c) => c.matchId !== matchId));
+    setSaved((prev) => { const n = new Set(prev); n.delete(matchId); return n; });
+  }
+
+  // ── Render ───────────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <SafeAreaView style={[s.root, { backgroundColor: c.bg }]}>
@@ -208,54 +230,64 @@ export default function MessagesScreen() {
   }
 
   return (
-    <SafeAreaView style={[s.root, { backgroundColor: c.bg }]}>
-      <FlatList
-        data={conversations}
-        keyExtractor={(item) => item.matchId}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.brand} />}
-        ListHeaderComponent={
-          <View style={s.header}>
-            <Text style={[s.title, { color: c.text }]}>Chat</Text>
-          </View>
-        }
-        ItemSeparatorComponent={() => (
-          <View style={[s.separator, { backgroundColor: c.border }]} />
-        )}
-        renderItem={({ item }) => (
-          <ConversationRow
-            name={item.name}
-            username={item.username}
-            avatarUrl={item.avatarUrl}
-            lastMessage={item.lastMessage}
-            lastMessageAt={item.lastMessageAt}
-            unreadCount={item.unreadCount}
-            session={item.session}
-            myId={myId ?? ""}
-            onPress={() => router.push(`/chat/${item.matchId}` as any)}
-          />
-        )}
-        ListEmptyComponent={
-          <View style={s.emptyWrapper}>
-            <EmptyState
-              icon="chatActive"
-              title="No conversations yet"
-              subtitle="Match with a training partner to start coordinating."
-              action={{ label: "Go to Discover", onPress: () => router.push("/(tabs)/discover") }}
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaView style={[s.root, { backgroundColor: "#fff" }]}>
+        <FlatList
+          data={conversations}
+          keyExtractor={(item) => item.matchId}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.brand} />}
+          ListHeaderComponent={
+            <View style={s.header}>
+              <Text style={s.title}>Chat</Text>
+              {conversations.length > 0 && (
+                <Text style={s.subtitle}>{conversations.length} conversation{conversations.length !== 1 ? "s" : ""}</Text>
+              )}
+            </View>
+          }
+          ItemSeparatorComponent={() => (
+            <View style={s.separator} />
+          )}
+          renderItem={({ item }) => (
+            <ConversationRow
+              name={item.name}
+              username={item.username}
+              avatarUrl={item.avatarUrl}
+              lastMessage={item.lastMessage}
+              lastMessageAt={item.lastMessageAt}
+              unreadCount={item.unreadCount}
+              session={item.session}
+              saved={saved.has(item.matchId)}
+              myId={myId ?? ""}
+              onPress={() => router.push(`/chat/${item.matchId}` as any)}
+              onSave={() => handleSave(item.matchId)}
+              onDeleteMessages={() => handleDeleteMessages(item.matchId)}
+              onUnmatch={() => handleUnmatch(item.matchId)}
             />
-          </View>
-        }
-      />
-    </SafeAreaView>
+          )}
+          ListEmptyComponent={
+            <View style={s.emptyWrapper}>
+              <EmptyState
+                icon="chatActive"
+                title="No conversations yet"
+                subtitle="Match with a training partner to start coordinating."
+                action={{ label: "Go to Discover", onPress: () => router.push("/(tabs)/discover") }}
+              />
+            </View>
+          }
+        />
+      </SafeAreaView>
+    </GestureHandlerRootView>
   );
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  root:         { flex: 1 },
-  header:       { paddingHorizontal: SPACE[20], paddingTop: SPACE[16], paddingBottom: SPACE[8] },
-  title:        { fontSize: FONT.size.xxxl, fontWeight: FONT.weight.black, letterSpacing: -0.5 },
-  // Separator indented to align under text, not avatar
-  separator:    { height: 1, marginLeft: SPACE[20] + 52 + SPACE[12] },
+  root:         { flex: 1, backgroundColor: "#fff" },
+  header:       { paddingHorizontal: SPACE[20], paddingTop: SPACE[20], paddingBottom: SPACE[12] },
+  title:        { fontSize: 34, fontWeight: "700", color: "#000", letterSpacing: 0.37 },
+  subtitle:     { fontSize: 13, color: "#8E8E93", marginTop: 2 },
+  // Separator starts after: dotCol(20) + gap(0) + avatar(50) + gap(12) = 82px
+  separator:    { height: StyleSheet.hairlineWidth, backgroundColor: "#C6C6C8", marginLeft: 82 },
   emptyWrapper: { paddingTop: 80 },
 });
