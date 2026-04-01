@@ -320,8 +320,14 @@ export default function ChatScreen() {
     setSession(null);
   }
   async function confirmSession() {
-    if (!session) return;
-    await supabase.from("buddy_sessions").update({ status: "completed" }).eq("id", session.id);
+    if (!session || !userId) return;
+    // Mark session completed — both participants get +1 sessions_kept
+    await supabase.from("buddy_sessions").update({ status: "completed", completed_at: new Date().toISOString() }).eq("id", session.id);
+    // Increment sessions_kept for both users (fire-and-forget, best-effort)
+    supabase.rpc("increment_sessions_kept", { uid: userId }).then(() => {});
+    if (other?.id) {
+      supabase.rpc("increment_sessions_kept", { uid: other.id }).then(() => {});
+    }
     loadSession();
   }
 
@@ -543,10 +549,10 @@ export default function ChatScreen() {
         </View>
       </KeyboardAvoidingView>
 
-      {/* ── Action menu — 3-line bottom sheet ───────────────────────── */}
+      {/* ── Action menu — centered card ──────────────────────────────── */}
       <Modal
         visible={showActionMenu}
-        animationType="slide"
+        animationType="fade"
         transparent
         onRequestClose={() => setShowActionMenu(false)}
       >
@@ -556,10 +562,9 @@ export default function ChatScreen() {
           onPress={() => setShowActionMenu(false)}
         />
         <View style={[am.sheet, { backgroundColor: c.bgCard }]}>
-          {/* Handle */}
-          <View style={[am.handle, { backgroundColor: c.border }]} />
-
-          <Text style={[am.sheetTitle, { color: c.textMuted }]}>Schedule with {other?.full_name?.split(" ")[0] ?? otherName}</Text>
+          <Text style={[am.sheetTitle, { color: c.text }]}>
+            Plan with {other?.full_name?.split(" ")[0] ?? otherName}
+          </Text>
 
           {/* Today */}
           <TouchableOpacity
@@ -633,7 +638,6 @@ export default function ChatScreen() {
             </View>
           </TouchableOpacity>
 
-          <View style={{ height: 24 }} />
         </View>
       </Modal>
 
@@ -916,17 +920,16 @@ const tp = StyleSheet.create({
 
 // ─── Action menu styles ───────────────────────────────────────────────────────
 const am = StyleSheet.create({
-  backdrop:   { flex: 1, backgroundColor: "rgba(0,0,0,0.30)" },
-  sheet:      { borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingHorizontal: SPACE[20], paddingTop: SPACE[12] },
-  handle:     { width: 40, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: SPACE[16] },
-  sheetTitle: { fontSize: 13, textAlign: "center", marginBottom: SPACE[16] },
+  backdrop:   { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", alignItems: "center" },
+  sheet:      { position: "absolute", left: SPACE[24], right: SPACE[24], borderRadius: 20, paddingHorizontal: SPACE[20], paddingTop: SPACE[20], paddingBottom: SPACE[8], top: "30%" },
+  sheetTitle: { fontSize: 15, fontWeight: "700", textAlign: "center", marginBottom: SPACE[16] },
   row:        { flexDirection: "row", alignItems: "center", paddingVertical: SPACE[14], gap: SPACE[14], borderBottomWidth: StyleSheet.hairlineWidth },
   iconBox:    { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   rowEmoji:   { fontSize: 18 },
   rowText:    { flex: 1 },
   rowLabel:   { fontSize: 16, fontWeight: "600" },
   rowSub:     { fontSize: 13, marginTop: 1 },
-  divider:    { height: 8, marginHorizontal: -SPACE[20], marginVertical: SPACE[8] },
+  divider:    { height: StyleSheet.hairlineWidth, marginVertical: SPACE[4] },
 });
 
 // ─── Wizard styles ────────────────────────────────────────────────────────────
