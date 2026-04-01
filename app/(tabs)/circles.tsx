@@ -24,6 +24,7 @@ import { Icon } from "../../components/Icon";
 import { Avatar } from "../../components/Avatar";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { MapLocationPicker } from "../../components/MapLocationPicker";
+import { scheduleEventReminder } from "../../lib/notifications";
 
 const { height: SCREEN_H } = Dimensions.get("window");
 
@@ -256,6 +257,14 @@ export default function CirclesScreen() {
     } else {
       await supabase.from("community_members")
         .insert({ community_id: communityId, user_id: userId });
+
+      // Schedule event reminder 24h before the event (if circle has a date)
+      const circle = communities.find((c) => c.id === communityId) ?? selectedCircle;
+      if (circle?.event_date) {
+        const [y, m, d] = circle.event_date.split("-").map(Number);
+        const eventDate = new Date(y, m - 1, d, 10, 0, 0); // 10am on event day
+        scheduleEventReminder(circle.name, eventDate);
+      }
     }
     setCommunities((prev) => prev.map((c) =>
       c.id === communityId
@@ -273,7 +282,7 @@ export default function CirclesScreen() {
   async function createCircle() {
     if (!formName.trim() || !userId) return;
     setSaving(true);
-    const { error } = await supabase.from("communities").insert({
+    const { data: created, error } = await supabase.from("communities").insert({
       name:         formName.trim(),
       description:  formDesc.trim() || null,
       sport:        formActivity,
@@ -284,9 +293,13 @@ export default function CirclesScreen() {
       event_time:   formUseTime ? `${String(formEventHour).padStart(2,"0")}:${String(formEventMin).padStart(2,"0")}` : null,
       avatar_emoji: formEmoji,
       creator_id:   userId,
-    });
+    }).select("id").single();
+    if (error) { setSaving(false); Alert.alert("Error", error.message); return; }
+    // Auto-join creator
+    if (created?.id) {
+      await supabase.from("community_members").insert({ community_id: created.id, user_id: userId });
+    }
     setSaving(false);
-    if (error) { Alert.alert("Error", error.message); return; }
     resetCreate();
     await load();
   }
@@ -370,17 +383,17 @@ export default function CirclesScreen() {
         style={s.catScroll}
         contentContainerStyle={[s.catRow, { paddingHorizontal: SPACE[16] }]}
       >
-        {[{ key: "", label: "All", emoji: "" }, ...ACTIVITY_CATEGORIES.map((c) => ({ key: c.key, label: c.label, emoji: c.emoji }))].map(({ key, label, emoji }) => {
+        {[{ key: "", label: "All" }, ...ACTIVITY_CATEGORIES.map((cat) => ({ key: cat.key, label: cat.label }))].map(({ key, label }) => {
           const active = filterCat === key;
           return (
             <TouchableOpacity
               key={key}
-              style={[s.catChip, { backgroundColor: active ? c.brandSubtle : c.bgCard, borderColor: active ? c.brand : c.border }]}
+              style={[s.catChip, { backgroundColor: active ? c.brand : "transparent", borderColor: active ? c.brand : c.borderMedium }]}
               onPress={() => setFilterCat(active && key !== "" ? "" : key)}
               activeOpacity={0.8}
             >
-              <Text style={[s.catChipText, { color: active ? c.brand : c.textMuted }]}>
-                {emoji ? `${emoji} ` : ""}{label}
+              <Text style={[s.catChipText, { color: active ? "#fff" : c.textSecondary }]}>
+                {label}
               </Text>
             </TouchableOpacity>
           );
@@ -463,7 +476,7 @@ export default function CirclesScreen() {
               </View>
               {selectedCircle.field && (
                 <View style={[s.popupField, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}>
-                  <Text style={{ fontSize: 14 }}>📍</Text>
+                  <Icon name="location" size={14} color={c.textMuted} />
                   <Text style={[s.popupFieldText, { color: c.textSecondary }]} numberOfLines={2}>
                     {selectedCircle.field}
                   </Text>
@@ -471,7 +484,7 @@ export default function CirclesScreen() {
               )}
               {selectedCircle.event_date && (
                 <View style={[s.popupField, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}>
-                  <Text style={{ fontSize: 14 }}>📅</Text>
+                  <Icon name="calendar" size={14} color={c.textMuted} />
                   <Text style={[s.popupFieldText, { color: c.textSecondary }]}>
                     {formatCircleDate(selectedCircle.event_date)}
                     {selectedCircle.event_time ? `  ·  ${selectedCircle.event_time}` : ""}
@@ -584,7 +597,6 @@ export default function CirclesScreen() {
                         }
                       }}
                     >
-                      <Text style={{ fontSize: 14 }}>{cat.emoji}</Text>
                       <Text style={[s.catTabText, { color: active ? c.brand : c.textMuted }]}>
                         {cat.label}
                       </Text>
@@ -599,10 +611,10 @@ export default function CirclesScreen() {
                   return (
                     <TouchableOpacity
                       key={a}
-                      style={[s.actChip, { backgroundColor: active ? c.brandSubtle : c.bgCard, borderColor: active ? c.brand : c.border }]}
+                      style={[s.actChip, { backgroundColor: active ? c.brandSubtle : "transparent", borderColor: active ? c.brand : c.borderMedium }]}
                       onPress={() => setFormActivity(a)}
                     >
-                      <Text style={[s.actChipText, { color: active ? c.brand : c.textMuted }]}>{a}</Text>
+                      <Text style={[s.actChipText, { color: active ? c.brand : c.textSecondary }]}>{a}</Text>
                     </TouchableOpacity>
                   );
                 })}
@@ -644,7 +656,7 @@ export default function CirclesScreen() {
                   onPress={() => setShowMapPicker(true)}
                   hitSlop={8}
                 >
-                  <Text style={{ fontSize: 18 }}>🗺️</Text>
+                  <Icon name="map" size={18} color={c.textMuted} />
                 </TouchableOpacity>
               </View>
 
@@ -663,7 +675,7 @@ export default function CirclesScreen() {
               <Text style={[s.fieldLabel, { color: c.textMuted, marginTop: SPACE[16] }]}>Date (optional)</Text>
               {formEventDate ? (
                 <View style={[s.selectedDateRow, { backgroundColor: c.brand+"15", borderColor: c.brand+"60" }]}>
-                  <Text style={{ fontSize: 14 }}>📅</Text>
+                  <Icon name="calendar" size={14} color={c.brand} />
                   <Text style={[s.selectedDateText, { color: c.brand }]}>{formatCircleDate(formEventDate)}</Text>
                   <TouchableOpacity onPress={() => setFormEventDate("")} hitSlop={10}>
                     <Text style={{ color: c.textMuted, fontSize: 14 }}>✕</Text>
@@ -817,7 +829,7 @@ const s = StyleSheet.create({
   chipText:        { fontSize: FONT.size.xs, fontWeight: FONT.weight.semibold },
   memberCountRow:  { flexDirection: "row", alignItems: "center", gap: 4 },
   memberCountText: { fontSize: FONT.size.xs },
-  joinBtn:         { borderRadius: RADIUS.md, paddingHorizontal: SPACE[14], paddingVertical: SPACE[8],
+  joinBtn:         { borderRadius: RADIUS.pill, paddingHorizontal: SPACE[14], paddingVertical: SPACE[8],
                      minWidth: 60, alignItems: "center" },
   joinText:        { fontWeight: FONT.weight.bold, fontSize: FONT.size.sm },
 
@@ -842,7 +854,7 @@ const s = StyleSheet.create({
   memberList:      { maxHeight: 180 },
   memberRow:       { flexDirection: "row", alignItems: "center", gap: SPACE[10], paddingVertical: SPACE[6] },
   memberName:      { fontSize: FONT.size.md, fontWeight: FONT.weight.semibold },
-  popupJoinBtn:    { borderRadius: RADIUS.lg, paddingVertical: SPACE[14], alignItems: "center", marginTop: SPACE[12] },
+  popupJoinBtn:    { borderRadius: RADIUS.pill, paddingVertical: SPACE[14], alignItems: "center", marginTop: SPACE[12] },
   popupJoinText:   { fontSize: FONT.size.md, fontWeight: FONT.weight.extrabold },
 
   // Create modal
@@ -873,7 +885,7 @@ const s = StyleSheet.create({
                      fontSize: FONT.size.md, borderWidth: 1.5 },
   mapBtn:          { width: 50, height: 50, borderRadius: RADIUS.lg, alignItems: "center",
                      justifyContent: "center", borderWidth: 1.5 },
-  createBtn:       { borderRadius: RADIUS.xl, paddingVertical: SPACE[16], alignItems: "center", marginTop: SPACE[8] },
+  createBtn:       { borderRadius: RADIUS.pill, paddingVertical: SPACE[16], alignItems: "center", marginTop: SPACE[8] },
   createBtnText:   { color: "#fff", fontWeight: FONT.weight.extrabold, fontSize: FONT.size.lg },
   mapOverlay:      { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 10 },
   selectedDateRow: { flexDirection: "row", alignItems: "center", gap: SPACE[8], paddingHorizontal: SPACE[14], paddingVertical: SPACE[10], borderRadius: RADIUS.md, borderWidth: 1 },
