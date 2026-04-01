@@ -6,12 +6,16 @@
 
 import { useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Dimensions } from "react-native";
-
-const SCREEN_H = Dimensions.get("window").height;
 import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
 import * as Location from "expo-location";
 import { useTheme, SPACE, FONT, RADIUS } from "../lib/theme";
 import { Icon } from "./Icon";
+
+const SCREEN_H = Dimensions.get("window").height;
+const SCREEN_W = Dimensions.get("window").width;
+
+// Header ~50 + chips ~46 + footer ~110 + safe areas ~88
+const MAP_H = SCREEN_H - 50 - 46 - 110 - 88;
 
 // ─── Venue catalogue ─────────────────────────────────────────────────────────
 export const MAP_VENUES = [
@@ -55,7 +59,7 @@ export function MapLocationPicker({ onSelect, onClose, colors }: Props) {
   const userLocRef = useRef<{ lat: number; lon: number } | null>(null);
 
   useEffect(() => {
-    // Immediately fetch with default region so categories appear right away
+    // Fetch with default region immediately so categories appear right away
     fetchVenues(DEFAULT_REGION.latitude, DEFAULT_REGION.longitude, new Set(["gym"]));
 
     (async () => {
@@ -150,38 +154,49 @@ export function MapLocationPicker({ onSelect, onClose, colors }: Props) {
   const visibleVenues = venues.filter((v) => activeKeys.has(v.key));
 
   return (
-    <View style={mp.root}>
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+
       {/* Header */}
       <View style={[mp.header, { backgroundColor: colors.bgCard, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={onClose} hitSlop={10}>
+        <TouchableOpacity onPress={onClose} hitSlop={12} style={mp.backBtn}>
           <Icon name="back" size={22} color={colors.textSecondary} />
         </TouchableOpacity>
         <Text style={[mp.title, { color: colors.text }]}>Pick location</Text>
-        {loadingV && <ActivityIndicator size="small" color={colors.brand} />}
+        {loadingV
+          ? <ActivityIndicator size="small" color={colors.brand} />
+          : <View style={{ width: 22 }} />
+        }
       </View>
 
-      {/* Category chips */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[mp.chipBar, { backgroundColor: colors.bg }]} contentContainerStyle={mp.chipRow}>
-        {MAP_VENUES.map((v) => {
-          const active = activeKeys.has(v.key);
-          return (
-            <TouchableOpacity
-              key={v.key}
-              style={[mp.chip, { borderColor: active ? v.color : colors.border, backgroundColor: active ? v.color + "18" : colors.bgCard }]}
-              onPress={() => toggleKey(v.key)}
-              activeOpacity={0.75}
-            >
-              <Text style={mp.chipEmoji}>{v.emoji}</Text>
-              <Text style={[mp.chipLabel, { color: active ? v.color : colors.textMuted }]}>{v.label}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
+      {/* Category chips — fixed height row */}
+      <View style={[mp.chipWrap, { backgroundColor: colors.bg, borderBottomColor: colors.border }]}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={mp.chipRow}
+          keyboardShouldPersistTaps="handled"
+        >
+          {MAP_VENUES.map((v) => {
+            const active = activeKeys.has(v.key);
+            return (
+              <TouchableOpacity
+                key={v.key}
+                style={[mp.chip, { borderColor: active ? v.color : colors.border, backgroundColor: active ? v.color + "18" : colors.bgCard }]}
+                onPress={() => toggleKey(v.key)}
+                activeOpacity={0.75}
+              >
+                <Text style={mp.chipEmoji}>{v.emoji}</Text>
+                <Text style={[mp.chipLabel, { color: active ? v.color : colors.textMuted }]}>{v.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
 
-      {/* Map */}
+      {/* Map — explicit pixel height */}
       <MapView
         ref={mapRef}
-        style={mp.map}
+        style={{ width: SCREEN_W, height: MAP_H }}
         provider={PROVIDER_DEFAULT}
         initialRegion={DEFAULT_REGION}
         showsUserLocation
@@ -227,16 +242,15 @@ export function MapLocationPicker({ onSelect, onClose, colors }: Props) {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const mp = StyleSheet.create({
-  root:        { flex: 1 },
-  header:      { flexDirection: "row", alignItems: "center", paddingHorizontal: SPACE[16], paddingVertical: SPACE[12], gap: SPACE[10], borderBottomWidth: 1 },
+  header:      { flexDirection: "row", alignItems: "center", paddingHorizontal: SPACE[16], paddingVertical: SPACE[12], gap: SPACE[10], borderBottomWidth: 1, height: 50 },
+  backBtn:     { width: 32, alignItems: "flex-start" },
   title:       { fontSize: FONT.size.lg, fontWeight: FONT.weight.extrabold, flex: 1 },
-  chipBar:     { height: 46 },
-  chipRow:     { gap: SPACE[8], paddingHorizontal: SPACE[12], paddingVertical: SPACE[8], alignItems: "center", height: 46 },
+  chipWrap:    { height: 46, borderBottomWidth: StyleSheet.hairlineWidth },
+  chipRow:     { gap: SPACE[8], paddingHorizontal: SPACE[12], alignItems: "center", height: 46 },
   chip:        { flexDirection: "row", alignItems: "center", gap: SPACE[4], paddingHorizontal: SPACE[10], paddingVertical: SPACE[5], borderRadius: RADIUS.pill, borderWidth: 1.5 },
   chipEmoji:   { fontSize: 12 },
   chipLabel:   { fontSize: FONT.size.xs, fontWeight: FONT.weight.semibold },
   venueDot:    { paddingHorizontal: 5, paddingVertical: 3, borderRadius: 10, borderWidth: 1.5 },
-  map:         { flex: 1, minHeight: SCREEN_H * 0.5 },
   footer:      { padding: SPACE[16], gap: SPACE[10], borderTopWidth: 1 },
   hint:        { fontSize: FONT.size.sm, lineHeight: FONT.size.sm * 1.5, minHeight: 40 },
   confirmBtn:  { borderRadius: RADIUS.lg, paddingVertical: SPACE[14], alignItems: "center" },
