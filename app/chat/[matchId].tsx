@@ -653,19 +653,8 @@ export default function ChatScreen() {
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           keyboardVerticalOffset={20}
         >
-          <TouchableOpacity style={wz.backdropArea} activeOpacity={1} onPress={() => !showMapPicker && setShowWizard(false)} />
+          <TouchableOpacity style={wz.backdropArea} activeOpacity={1} onPress={() => setShowWizard(false)} />
           <View style={[wz.sheet, { backgroundColor: c.bgCard }]}>
-
-            {/* Map picker overlay */}
-            {showMapPicker && (
-              <View style={[wz.mapOverlay, { backgroundColor: c.bgCard }]}>
-                <MapLocationPicker
-                  colors={c}
-                  onSelect={(loc) => { setSessionLocation(loc); setShowMapPicker(false); }}
-                  onClose={() => setShowMapPicker(false)}
-                />
-              </View>
-            )}
 
             {/* Handle */}
             <View style={[wz.handle, { backgroundColor: c.border }]} />
@@ -884,6 +873,22 @@ export default function ChatScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
+      {/* ── Map picker — full-screen modal ───────────────────────────── */}
+      <Modal
+        visible={showMapPicker}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={() => setShowMapPicker(false)}
+      >
+        <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
+          <MapLocationPicker
+            colors={c}
+            onSelect={(loc) => { setSessionLocation(loc); setShowMapPicker(false); }}
+            onClose={() => setShowMapPicker(false)}
+          />
+        </SafeAreaView>
+      </Modal>
+
       <ProfileSheet
         user={sheetUser}
         status="accepted"
@@ -936,8 +941,7 @@ const am = StyleSheet.create({
 const wz = StyleSheet.create({
   overlay:     { flex: 1, justifyContent: "center", alignItems: "center", padding: SPACE[20], backgroundColor: "rgba(0,0,0,0.50)" },
   backdropArea:{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
-  sheet:       { width: "100%", borderRadius: 24, maxHeight: SCREEN_H * 0.82, overflow: "hidden" },
-  mapOverlay:  { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 10, borderRadius: 24 },
+  sheet:       { width: "100%", borderRadius: 24, maxHeight: SCREEN_H * 0.90, overflow: "hidden" },
   handle:      { width: 0, height: 0 }, // not needed for centered card
   stepHeader:  { flexDirection: "row", alignItems: "center", paddingHorizontal: SPACE[20], paddingVertical: SPACE[16], gap: SPACE[12] },
   stepTitleBox:{ flex: 1, alignItems: "center" },

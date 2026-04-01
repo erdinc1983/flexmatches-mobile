@@ -53,6 +53,9 @@ export function MapLocationPicker({ onSelect, onClose, colors }: Props) {
   const userLocRef = useRef<{ lat: number; lon: number } | null>(null);
 
   useEffect(() => {
+    // Immediately fetch with default region so categories appear right away
+    fetchVenues(DEFAULT_REGION.latitude, DEFAULT_REGION.longitude, new Set(["gym"]));
+
     (async () => {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
@@ -85,8 +88,13 @@ export function MapLocationPicker({ onSelect, onClose, colors }: Props) {
       const d = 0.025;
       const bbox = `${lat - d},${lon - d},${lat + d},${lon + d}`;
       const parts = MAP_VENUES.filter((v) => keys.has(v.key)).map((v) => v.q.replace(/BBOX/g, bbox)).join("");
-      const body = `[out:json][timeout:8];(${parts});out center;`;
-      const res = await Promise.any(OVERPASS_MIRRORS.map((url) => fetch(url, { method: "POST", body })));
+      const body = `[out:json][timeout:20];(${parts});out center;`;
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 18000);
+      const res = await Promise.any(
+        OVERPASS_MIRRORS.map((url) => fetch(url, { method: "POST", body, signal: ctrl.signal }))
+      );
+      clearTimeout(timer);
       const json = await res.json();
       const parsed: MapVenue[] = (json.elements ?? []).map((el: any): MapVenue | null => {
         const elLat = el.lat ?? el.center?.lat;
