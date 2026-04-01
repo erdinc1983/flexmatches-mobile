@@ -537,6 +537,23 @@ export default function ProfileScreen() {
   );
 }
 
+// ─── Accordion Section ────────────────────────────────────────────────────────
+function AccordionSection({ title, emoji, defaultOpen = false, colors, children }: {
+  title: string; emoji: string; defaultOpen?: boolean; colors: any; children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <View style={[acc.wrap, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
+      <TouchableOpacity style={acc.header} onPress={() => setOpen(o => !o)} activeOpacity={0.7}>
+        <Text style={acc.emoji}>{emoji}</Text>
+        <Text style={[acc.title, { color: colors.text }]}>{title}</Text>
+        <Text style={[acc.chevron, { color: colors.textMuted }]}>{open ? "▲" : "▽"}</Text>
+      </TouchableOpacity>
+      {open && <View style={[acc.body, { borderTopColor: colors.border }]}>{children}</View>}
+    </View>
+  );
+}
+
 // ─── View Mode ────────────────────────────────────────────────────────────────
 function ViewMode({ profile, workoutsThisMonth, levelColor, earnedBadges, userTier, userPoints, onEdit }: {
   profile: Profile;
@@ -556,12 +573,18 @@ function ViewMode({ profile, workoutsThisMonth, levelColor, earnedBadges, userTi
   const { pct: completePct, missing } = calcCompleteness(profile);
   const completeColor = completePct >= 80 ? PALETTE.success : completePct >= 50 ? PALETTE.warning : c.brand;
   const activeDays = getAvailabilityDays(profile.availability);
-
   const nextTier = TIERS.find(t => t.minPoints > userPoints);
+
+  const hasTraining = (profile.sports ?? []).length > 0 || activeDays.length > 0;
+  const hasProgress = true;
+  const hasDetails  = !!(profile.training_intent || (profile.certifications ?? []).length > 0 || profile.target_weight || profile.weight || profile.gender);
+  const hasCareer   = !!(profile.company || profile.industry || profile.education_level || profile.career_goals);
 
   return (
     <>
-      {/* Profile completeness */}
+      {/* ── Always visible ────────────────────────────────────────────────── */}
+
+      {/* Completeness bar */}
       {completePct < 100 && (
         <View style={[s.completeCard, { backgroundColor: c.bgCard, borderColor: c.border }]}>
           <View style={s.completeHeader}>
@@ -572,9 +595,7 @@ function ViewMode({ profile, workoutsThisMonth, levelColor, earnedBadges, userTi
             <View style={[s.completeFill, { width: `${completePct}%` as any, backgroundColor: completeColor }]} />
           </View>
           {missing.length > 0 && (
-            <Text style={[s.completeMissing, { color: c.textMuted }]}>
-              Next: {missing[0]}
-            </Text>
+            <Text style={[s.completeMissing, { color: c.textMuted }]}>Next: {missing[0]}</Text>
           )}
         </View>
       )}
@@ -589,9 +610,7 @@ function ViewMode({ profile, workoutsThisMonth, levelColor, earnedBadges, userTi
         {profile.city       && <InfoChip icon="location" label={profile.city} />}
         {profile.gym_name   && <InfoChip icon="gym"      label={profile.gym_name} />}
         {profile.age        && <InfoChip icon="calendar" label={`${profile.age} yo`} />}
-        {profile.gender     && <InfoChip icon="info"     label={profile.gender.charAt(0).toUpperCase() + profile.gender.slice(1)} />}
         {profile.occupation && <InfoChip icon="info"     label={profile.occupation} />}
-        {profile.weight     && <InfoChip icon="info"     label={`${profile.weight} kg`} />}
       </View>
 
       {/* 2×2 info grid */}
@@ -602,113 +621,103 @@ function ViewMode({ profile, workoutsThisMonth, levelColor, earnedBadges, userTi
         <InfoCard label="BEST STREAK" value={`${profile.longest_streak ?? profile.current_streak ?? 0} days`} />
       </View>
 
-      {/* Availability days */}
-      {activeDays.length > 0 && (
-        <View style={[s.availCard, { backgroundColor: c.bgCard, borderColor: c.border }]}>
-          <Text style={[s.availTitle, { color: c.text }]}>Availability</Text>
-          <View style={s.daysRow}>
-            {DAYS.map(d => {
-              const active = activeDays.includes(d);
-              return (
-                <View key={d} style={[s.dayDot, { backgroundColor: active ? c.brand : c.bgCardAlt, borderColor: active ? c.brand : c.border }]}>
-                  <Text style={[s.dayDotText, { color: active ? "#fff" : c.textMuted }]}>{d[0]}</Text>
+      {/* ── Accordion sections ────────────────────────────────────────────── */}
+
+      {/* 1 — Training */}
+      {hasTraining && (
+        <AccordionSection title="Training" emoji="⚽" colors={c}>
+          {(profile.sports ?? []).length > 0 && (
+            <View style={[s.sportsWrap, { marginBottom: SPACE[12] }]}>
+              {(profile.sports ?? []).map(sport => (
+                <View key={sport} style={[s.sportChip, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}>
+                  <Text style={[s.sportChipText, { color: c.textSecondary }]}>{sport}</Text>
                 </View>
-              );
-            })}
-          </View>
-          {getBestTime(profile.availability) !== "Not set" && (
-            <Text style={[s.availTime, { color: c.textMuted }]}>{getBestTime(profile.availability)}</Text>
+              ))}
+            </View>
           )}
-        </View>
+          {activeDays.length > 0 && (
+            <>
+              <Text style={[acc.subLabel, { color: c.textMuted }]}>Availability</Text>
+              <View style={s.daysRow}>
+                {DAYS.map(d => {
+                  const active = activeDays.includes(d);
+                  return (
+                    <View key={d} style={[s.dayDot, { backgroundColor: active ? c.brand : c.bgCardAlt, borderColor: active ? c.brand : c.border }]}>
+                      <Text style={[s.dayDotText, { color: active ? "#fff" : c.textMuted }]}>{d[0]}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+              {getBestTime(profile.availability) !== "Not set" && (
+                <Text style={[s.availTime, { color: c.textMuted, marginTop: SPACE[6] }]}>{getBestTime(profile.availability)}</Text>
+              )}
+            </>
+          )}
+        </AccordionSection>
       )}
 
-      {/* Consistency score */}
-      <View style={[s.consistencyCard, { backgroundColor: c.bgCard, borderColor: c.border }]}>
-        <View style={s.consistencyHeader}>
-          <View>
-            <Text style={[s.consistencyTitle, { color: c.text }]}>Consistency Score</Text>
-            <Text style={[s.consistencySub, { color: c.textMuted }]}>Activity · Streak · Profile</Text>
+      {/* 2 — Progress */}
+      <AccordionSection title="Progress" emoji="📈" colors={c}>
+        {/* Consistency score */}
+        <View style={[acc.innerCard, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}>
+          <View style={s.consistencyHeader}>
+            <View>
+              <Text style={[s.consistencyTitle, { color: c.text }]}>Consistency Score</Text>
+              <Text style={[s.consistencySub, { color: c.textMuted }]}>Activity · Streak · Profile</Text>
+            </View>
+            <Text style={[s.consistencyScore, { color: scoreColor }]}>{score}</Text>
           </View>
-          <Text style={[s.consistencyScore, { color: scoreColor }]}>{score}</Text>
+          <View style={[s.consistencyTrack, { backgroundColor: c.bgCard }]}>
+            <View style={[s.consistencyFill, { width: `${score}%` as any, backgroundColor: scoreColor }]} />
+          </View>
+          <Text style={[s.consistencyLabel, { color: c.textMuted }]}>{scoreLabel}</Text>
         </View>
-        <View style={[s.consistencyTrack, { backgroundColor: c.bgCardAlt }]}>
-          <View style={[s.consistencyFill, { width: `${score}%` as any, backgroundColor: scoreColor }]} />
-        </View>
-        <Text style={[s.consistencyLabel, { color: c.textMuted }]}>{scoreLabel}</Text>
-      </View>
 
-      {/* Tier card */}
-      <View style={[s.tierCard, { backgroundColor: userTier.color + "18", borderColor: userTier.color + "55" }]}>
-        <View style={s.tierLeft}>
-          <Text style={s.tierEmoji}>{userTier.emoji}</Text>
-          <View>
-            <Text style={[s.tierLabel, { color: userTier.color }]}>{userTier.label} Tier</Text>
-            <Text style={[s.tierPoints, { color: userTier.color + "aa" }]}>{userPoints} pts</Text>
+        {/* Tier */}
+        <View style={[acc.innerCard, { backgroundColor: userTier.color + "14", borderColor: userTier.color + "44", marginTop: SPACE[10] }]}>
+          <View style={s.tierLeft}>
+            <Text style={s.tierEmoji}>{userTier.emoji}</Text>
+            <View>
+              <Text style={[s.tierLabel, { color: userTier.color }]}>{userTier.label} Tier</Text>
+              <Text style={[s.tierPoints, { color: userTier.color + "aa" }]}>{userPoints} pts</Text>
+            </View>
           </View>
+          {nextTier && (
+            <View style={s.tierRight}>
+              <Text style={[s.tierNextLabel, { color: userTier.color + "99" }]}>
+                {nextTier.minPoints - userPoints} pts to {nextTier.label}
+              </Text>
+              <View style={[s.tierTrack, { backgroundColor: userTier.color + "33" }]}>
+                <View style={[s.tierFill, {
+                  width: `${Math.min(((userPoints - userTier.minPoints) / (nextTier.minPoints - userTier.minPoints)) * 100, 100)}%` as any,
+                  backgroundColor: userTier.color,
+                }]} />
+              </View>
+            </View>
+          )}
         </View>
-        {nextTier && (
-          <View style={s.tierRight}>
-            <Text style={[s.tierNextLabel, { color: userTier.color + "99" }]}>
-              {nextTier.minPoints - userPoints} pts to {nextTier.label}
-            </Text>
-            <View style={[s.tierTrack, { backgroundColor: userTier.color + "33" }]}>
-              <View style={[s.tierFill, {
-                width: `${Math.min(((userPoints - userTier.minPoints) / (nextTier.minPoints - userTier.minPoints)) * 100, 100)}%` as any,
-                backgroundColor: userTier.color,
-              }]} />
+
+        {/* Badges */}
+        {earnedBadges.length > 0 && (
+          <View style={{ marginTop: SPACE[10] }}>
+            <Text style={[acc.subLabel, { color: c.textMuted, marginBottom: SPACE[8] }]}>Badges</Text>
+            <View style={s.badgesGrid}>
+              {earnedBadges.map(key => {
+                const b = BADGE_MAP[key];
+                if (!b) return null;
+                return (
+                  <View key={key} style={[s.badge, { backgroundColor: b.color + "18", borderColor: b.color + "55" }]}>
+                    <Text style={s.badgeEmoji}>{b.emoji}</Text>
+                    <Text style={[s.badgeTitle, { color: b.color }]} numberOfLines={1}>{b.title}</Text>
+                  </View>
+                );
+              })}
             </View>
           </View>
         )}
-      </View>
 
-      {/* Badges */}
-      {earnedBadges.length > 0 && (
-        <View style={[s.badgesCard, { backgroundColor: c.bgCard, borderColor: c.border }]}>
-          <Text style={[s.badgesTitle, { color: c.text }]}>Badges</Text>
-          <View style={s.badgesGrid}>
-            {earnedBadges.map(key => {
-              const b = BADGE_MAP[key];
-              if (!b) return null;
-              return (
-                <View key={key} style={[s.badge, { backgroundColor: b.color + "18", borderColor: b.color + "55" }]}>
-                  <Text style={s.badgeEmoji}>{b.emoji}</Text>
-                  <Text style={[s.badgeTitle, { color: b.color }]} numberOfLines={1}>{b.title}</Text>
-                </View>
-              );
-            })}
-          </View>
-        </View>
-      )}
-
-      {/* Sports */}
-      {(profile.sports ?? []).length > 0 && (
-        <View style={s.sportsWrap}>
-          {(profile.sports ?? []).map(sport => (
-            <View key={sport} style={[s.sportChip, { backgroundColor: c.bgCard, borderColor: c.border }]}>
-              <Text style={[s.sportChipText, { color: c.textSecondary }]}>{sport}</Text>
-            </View>
-          ))}
-        </View>
-      )}
-
-      {/* Certifications */}
-      {(profile.certifications ?? []).length > 0 && (
-        <View style={[s.certCard, { backgroundColor: c.bgCard, borderColor: c.border }]}>
-          <Text style={[s.certTitle, { color: c.text }]}>Certifications</Text>
-          <View style={s.sportsWrap}>
-            {(profile.certifications ?? []).map(cert => (
-              <View key={cert} style={[s.sportChip, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}>
-                <Text style={[s.sportChipText, { color: c.textSecondary }]}>✓ {cert}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-      )}
-
-      {/* Trust signals */}
-      {(profile.sessions_completed > 0 || profile.response_rate !== null) && (
-        <View style={[s.trustCard, { backgroundColor: c.bgCard, borderColor: c.border }]}>
-          <Text style={[s.trustTitle, { color: c.text }]}>Trust & Reliability</Text>
+        {/* Trust signals */}
+        {(profile.sessions_completed > 0 || profile.response_rate !== null) && (
           <View style={s.trustRow}>
             {profile.sessions_completed > 0 && (
               <View style={[s.trustPill, { backgroundColor: "#22C55E18", borderColor: "#22C55E44" }]}>
@@ -733,39 +742,50 @@ function ViewMode({ profile, workoutsThisMonth, levelColor, earnedBadges, userTi
                 </View>
               </View>
             )}
-            {profile.match_count >= 5 && (
-              <View style={[s.trustPill, { backgroundColor: "#3B82F618", borderColor: "#3B82F644" }]}>
-                <Text style={{ fontSize: 14 }}>✓</Text>
-                <View>
-                  <Text style={[s.trustPillValue, { color: "#3B82F6" }]}>Active</Text>
-                  <Text style={[s.trustPillLabel, { color: c.textMuted }]}>community</Text>
-                </View>
-              </View>
-            )}
           </View>
-        </View>
+        )}
+      </AccordionSection>
+
+      {/* 3 — Details */}
+      {hasDetails && (
+        <AccordionSection title="Details" emoji="ℹ️" colors={c}>
+          {profile.training_intent && (
+            <View style={[s.intentRow, { backgroundColor: c.brandSubtle, borderColor: c.brandBorder, marginBottom: SPACE[10] }]}>
+              <Text style={[s.intentText, { color: c.brand }]}>
+                {profile.training_intent === "guidance" ? "I want guidance" :
+                 profile.training_intent === "teaching" ? "I enjoy helping others" :
+                                                          "Equal training partner"}
+              </Text>
+            </View>
+          )}
+          <View style={s.chipsRow}>
+            {profile.gender        && <InfoChip icon="info" label={profile.gender.charAt(0).toUpperCase() + profile.gender.slice(1)} />}
+            {profile.weight        && <InfoChip icon="info" label={`${profile.weight} kg`} />}
+            {profile.target_weight && <InfoChip icon="info" label={`Target: ${profile.target_weight} kg`} />}
+          </View>
+          {(profile.certifications ?? []).length > 0 && (
+            <View style={{ marginTop: SPACE[10] }}>
+              <Text style={[acc.subLabel, { color: c.textMuted, marginBottom: SPACE[8] }]}>Certifications</Text>
+              <View style={s.sportsWrap}>
+                {(profile.certifications ?? []).map(cert => (
+                  <View key={cert} style={[s.sportChip, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}>
+                    <Text style={[s.sportChipText, { color: c.textSecondary }]}>✓ {cert}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+        </AccordionSection>
       )}
 
-      {/* Training intent chip */}
-      {profile.training_intent && (
-        <View style={[s.intentRow, { backgroundColor: c.brandSubtle, borderColor: c.brandBorder }]}>
-          <Text style={[s.intentText, { color: c.brand }]}>
-            {profile.training_intent === "guidance" ? "I want guidance" :
-             profile.training_intent === "teaching" ? "I enjoy helping others" :
-                                                      "Equal training partner"}
-          </Text>
-        </View>
-      )}
-
-      {/* Career info */}
-      {(profile.company || profile.industry || profile.education_level || profile.career_goals) && (
-        <View style={[s.careerCard, { backgroundColor: c.bgCard, borderColor: c.border }]}>
-          <Text style={[s.careerTitle, { color: c.text }]}>Career</Text>
+      {/* 4 — Career */}
+      {hasCareer && (
+        <AccordionSection title="Career" emoji="💼" colors={c}>
           {profile.company         && <Text style={[s.careerRow, { color: c.textSecondary }]}>{profile.company}</Text>}
           {profile.industry        && <Text style={[s.careerRow, { color: c.textSecondary }]}>{profile.industry}</Text>}
           {profile.education_level && <Text style={[s.careerRow, { color: c.textSecondary }]}>{profile.education_level}</Text>}
           {profile.career_goals    && <Text style={[s.careerRow, { color: c.textMuted }]}>{profile.career_goals}</Text>}
-        </View>
+        </AccordionSection>
       )}
 
       {/* Edit button */}
@@ -1296,4 +1316,16 @@ const s = StyleSheet.create({
   proUpgradeBtnText: { color: "#fff", fontWeight: FONT.weight.black, fontSize: FONT.size.base },
   proManageBtn:   { borderRadius: RADIUS.xl, paddingVertical: SPACE[14], alignItems: "center", borderWidth: 1 },
   proManageBtnText: { fontWeight: FONT.weight.bold, fontSize: FONT.size.sm },
+});
+
+// ─── Accordion styles ─────────────────────────────────────────────────────────
+const acc = StyleSheet.create({
+  wrap:      { borderRadius: RADIUS.xl, borderWidth: 1, marginBottom: SPACE[10], overflow: "hidden" },
+  header:    { flexDirection: "row", alignItems: "center", paddingHorizontal: SPACE[16], paddingVertical: SPACE[14], gap: SPACE[10] },
+  emoji:     { fontSize: 18 },
+  title:     { flex: 1, fontSize: FONT.size.md, fontWeight: FONT.weight.bold },
+  chevron:   { fontSize: 11 },
+  body:      { borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: SPACE[16], paddingVertical: SPACE[14] },
+  subLabel:  { fontSize: FONT.size.xs, fontWeight: FONT.weight.bold, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: SPACE[6] },
+  innerCard: { borderRadius: RADIUS.lg, borderWidth: 1, padding: SPACE[12] },
 });
