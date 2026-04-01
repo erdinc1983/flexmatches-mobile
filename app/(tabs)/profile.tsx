@@ -538,10 +538,10 @@ export default function ProfileScreen() {
 }
 
 // ─── Accordion Section ────────────────────────────────────────────────────────
-function AccordionSection({ title, emoji, defaultOpen = false, colors, children }: {
+function AccordionSection({ title, emoji, defaultOpen, colors, children }: {
   title: string; emoji: string; defaultOpen?: boolean; colors: any; children: React.ReactNode;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
+  const [open, setOpen] = useState(!!defaultOpen);
   return (
     <View style={[acc.wrap, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
       <TouchableOpacity style={acc.header} onPress={() => setOpen(o => !o)} activeOpacity={0.7}>
@@ -614,12 +614,14 @@ function ViewMode({ profile, workoutsThisMonth, levelColor, earnedBadges, userTi
       </View>
 
       {/* 2×2 info grid */}
-      <View style={s.infoGrid}>
-        <InfoCard label="ACTIVITIES"  value={(profile.sports ?? []).length > 0 ? (profile.sports ?? []).slice(0, 3).join(", ") : "Not set"} />
-        <InfoCard label="BEST TIME"   value={getBestTime(profile.availability)} />
-        <InfoCard label="LEVEL"       value={profile.fitness_level ? profile.fitness_level.charAt(0).toUpperCase() + profile.fitness_level.slice(1) : "Not set"} valueColor={profile.fitness_level ? levelColor : undefined} />
-        <InfoCard label="BEST STREAK" value={`${profile.longest_streak ?? profile.current_streak ?? 0} days`} />
-      </View>
+      <AccordionSection title="Stats" emoji="📊" defaultOpen colors={c}>
+        <View style={s.infoGrid}>
+          <InfoCard label="Activities"  value={(profile.sports ?? []).length > 0 ? (profile.sports ?? []).slice(0, 3).join(", ") : "Not set"} />
+          <InfoCard label="Best Time"   value={getBestTime(profile.availability)} />
+          <InfoCard label="Level"       value={profile.fitness_level ? profile.fitness_level.charAt(0).toUpperCase() + profile.fitness_level.slice(1) : "Not set"} valueColor={profile.fitness_level ? levelColor : undefined} />
+          <InfoCard label="Best Streak" value={`${profile.longest_streak ?? profile.current_streak ?? 0} days`} />
+        </View>
+      </AccordionSection>
 
       {/* ── Accordion sections ────────────────────────────────────────────── */}
 
@@ -1202,9 +1204,9 @@ const s = StyleSheet.create({
   chipsRow:         { flexDirection: "row", flexWrap: "wrap", gap: SPACE[8], justifyContent: "center" },
   infoChip:         { flexDirection: "row", alignItems: "center", gap: SPACE[6], borderRadius: RADIUS.pill, paddingHorizontal: SPACE[14], paddingVertical: SPACE[8], borderWidth: 1 },
   chipLabel:        { fontSize: FONT.size.sm, fontWeight: FONT.weight.semibold },
-  infoGrid:         { flexDirection: "row", flexWrap: "wrap", gap: SPACE[10] },
-  infoCard:         { flex: 1, minWidth: "45%", borderRadius: RADIUS.lg, padding: SPACE[14], borderWidth: 1, gap: SPACE[4] },
-  infoCardLabel:    { fontSize: 10, fontWeight: FONT.weight.bold, textTransform: "uppercase", letterSpacing: 0.8 },
+  infoGrid:         { flexDirection: "row", flexWrap: "wrap", gap: SPACE[8] },
+  infoCard:         { flex: 1, minWidth: "45%", borderRadius: RADIUS.lg, padding: SPACE[10], borderWidth: 1, gap: SPACE[2] },
+  infoCardLabel:    { fontSize: 10, fontWeight: FONT.weight.semibold, letterSpacing: 0.3 },
   infoCardValue:    { fontSize: FONT.size.base, fontWeight: FONT.weight.bold },
 
   // Availability
