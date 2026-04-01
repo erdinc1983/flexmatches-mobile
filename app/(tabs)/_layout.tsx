@@ -53,7 +53,14 @@ export default function TabsLayout() {
         options={{
           title: "Chat",
           tabBarIcon: ({ focused, color }) => (
-            <Icon name={focused ? "chatActive" : "chat"} size={24} color={color} />
+            <View>
+              <Icon name={focused ? "chatActive" : "chat"} size={24} color={color} />
+              {unreadCount > 0 && (
+                <View style={[badge.dot, { backgroundColor: c.brand }]}>
+                  <Text style={badge.dotText}>{unreadCount > 9 ? "9+" : unreadCount}</Text>
+                </View>
+              )}
+            </View>
           ),
         }}
       />
@@ -71,14 +78,7 @@ export default function TabsLayout() {
         options={{
           title: "Profile",
           tabBarIcon: ({ focused, color }) => (
-            <View>
-              <Icon name={focused ? "profileActive" : "profile"} size={24} color={color} />
-              {unreadCount > 0 && (
-                <View style={[badge.dot, { backgroundColor: c.brand }]}>
-                  <Text style={badge.dotText}>{unreadCount > 9 ? "9+" : unreadCount}</Text>
-                </View>
-              )}
-            </View>
+            <Icon name={focused ? "profileActive" : "profile"} size={24} color={color} />
           ),
         }}
       />

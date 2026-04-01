@@ -155,6 +155,7 @@ export default function SettingsScreen() {
     setDeleting(true);
     await supabase.from("users").delete().eq("id", userId);
     await supabase.auth.signOut();
+    router.replace("/(auth)/welcome");
   }
 
   async function resetPassword() {
@@ -187,13 +188,16 @@ export default function SettingsScreen() {
 
         {/* ── Account ── */}
         <SettingCard title="Account" description={userEmail} c={c}>
-          <ActionRow label="✏️  Edit Profile"     onPress={() => router.back()} c={c} />
+          <ActionRow label="✏️  Edit Profile"     onPress={() => router.push("/(tabs)/profile")} c={c} />
           <ActionRow label="📧  Change Email"      onPress={() => setEmailModal(true)} c={c} />
           <ActionRow label="🔑  Change Password"   onPress={resetPassword} c={c} />
           <ActionRow label="🚪  Sign Out"          onPress={() => {
             Alert.alert("Sign Out", "Are you sure?", [
               { text: "Cancel", style: "cancel" },
-              { text: "Sign Out", style: "destructive", onPress: () => supabase.auth.signOut() },
+              { text: "Sign Out", style: "destructive", onPress: async () => {
+                await supabase.auth.signOut();
+                router.replace("/(auth)/welcome");
+              }},
             ]);
           }} c={c} />
         </SettingCard>
