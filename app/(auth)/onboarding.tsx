@@ -39,8 +39,9 @@ const TIME_OPTIONS = [
 ];
 
 export default function OnboardingScreen() {
-  const [step, setStep] = useState(1);
-  const [saving, setSaving] = useState(false);
+  const [step,        setStep]        = useState(1);
+  const [saving,      setSaving]      = useState(false);
+  const [nameBlurred, setNameBlurred] = useState(false);
 
   // Step 1
   const [fullName, setFullName] = useState("");
@@ -93,9 +94,29 @@ export default function OnboardingScreen() {
     }
   }
 
+  async function savePartial() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from("users").update({
+      full_name:       fullName.trim() || null,
+      bio:             bio.trim() || null,
+      sports:          sports.length > 0 ? sports : null,
+      fitness_level:   fitnessLevel || null,
+      availability:    preferredTimes.length > 0 ? preferredTimes : null,
+      city:            city.trim() || null,
+      training_intent: trainingIntent || null,
+    }).eq("id", user.id);
+  }
+
   function next() {
     if (step < TOTAL_STEPS) setStep((s) => s + 1);
     else finish();
+  }
+
+  async function skip() {
+    await savePartial();
+    if (step < TOTAL_STEPS) setStep((s) => s + 1);
+    else router.replace("/(tabs)/home");
   }
 
   function back() {
@@ -104,7 +125,7 @@ export default function OnboardingScreen() {
   }
 
   const canNext = () => {
-    if (step === 1) return fullName.trim().length > 0;
+    if (step === 1) return fullName.trim().length >= 2;
     if (step === 2) return sports.length > 0;
     if (step === 3) return fitnessLevel.length > 0;
     return true; // steps 4 & 5 are optional
@@ -125,9 +146,13 @@ export default function OnboardingScreen() {
           <Text style={s.backText}>←</Text>
         </TouchableOpacity>
         <Text style={s.stepLabel}>{step} of {TOTAL_STEPS}</Text>
-        <TouchableOpacity onPress={() => router.replace("/(tabs)/home")} hitSlop={8}>
-          <Text style={s.skipText}>Skip</Text>
-        </TouchableOpacity>
+        {step === 1 ? (
+          <View style={{ width: 36 }} />
+        ) : (
+          <TouchableOpacity onPress={skip} hitSlop={8}>
+            <Text style={s.skipText}>Skip</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
@@ -145,10 +170,15 @@ export default function OnboardingScreen() {
                 style={s.input}
                 value={fullName}
                 onChangeText={setFullName}
+                onBlur={() => setNameBlurred(true)}
                 placeholder="e.g. Alex Johnson"
                 placeholderTextColor="#444"
                 autoFocus
+                maxLength={50}
               />
+              {nameBlurred && fullName.trim().length < 2 && (
+                <Text style={s.fieldError}>Name is required</Text>
+              )}
             </View>
             <View style={s.field}>
               <Text style={s.fieldLabel}>Short Bio <Text style={s.optional}>(optional)</Text></Text>
@@ -348,6 +378,7 @@ const s = StyleSheet.create({
   optional:        { color: "#3a3a3a", fontWeight: "400", textTransform: "none" as any },
   input:           { backgroundColor: "#111", borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, color: "#fff", fontSize: 15, borderWidth: 1, borderColor: "#222" },
   charCount:       { fontSize: 11, color: "#3a3a3a", textAlign: "right" },
+  fieldError:      { fontSize: 12, color: "#FF4500", marginTop: 4 },
 
   // Chips — Nextdoor style: border-only unselected, filled active
   chipGrid:        { flexDirection: "row", flexWrap: "wrap", gap: 8 },
