@@ -11,7 +11,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.flexmatches.app",
-      "buildNumber": "3",
+      "buildNumber": "4",
       "infoPlist": {
         "UIBackgroundModes": [
           "remote-notification"
@@ -131,7 +131,6 @@
       ],
       "expo-secure-store",
       "expo-apple-authentication",
-      "react-native-iap",
       [
         "expo-notifications",
         {
