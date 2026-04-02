@@ -470,7 +470,17 @@ export default function DiscoverScreen() {
     const { data } = await supabase.from("matches")
       .insert({ sender_id: uid, receiver_id: userId, status: "pending" })
       .select("id").single();
-    if (data) setLastSwipe({ userId, dbId: data.id, action: "like" });
+    if (data) {
+      setLastSwipe({ userId, dbId: data.id, action: "like" });
+      const senderName = myProfile?.full_name ?? myProfile?.username ?? "Someone";
+      notifyUser(userId, {
+        type: "match_request",
+        title: "New Match Request 🤝",
+        body: `${senderName} wants to connect with you!`,
+        relatedId: data.id,
+        data: { type: "match_request", relatedId: data.id },
+      });
+    }
   }
 
   // ── Pass (swipe left) ──────────────────────────────────────────────────────
@@ -505,7 +515,7 @@ export default function DiscoverScreen() {
         title: "New Match Request 🤝",
         body: `${me?.full_name ?? me?.username ?? "Someone"} wants to train with you!`,
         relatedId: data.id,
-        data: { type: "match_request", matchId: data.id },
+        data: { type: "match_request", relatedId: data.id },
       });
     }
   }
