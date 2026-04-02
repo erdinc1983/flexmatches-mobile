@@ -2,8 +2,11 @@ import { useEffect, useState } from "react";
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, ActivityIndicator, Alert, KeyboardAvoidingView,
-  Platform, ScrollView, StatusBar,
+  Platform, ScrollView, StatusBar, Linking,
 } from "react-native";
+
+const TERMS_URL   = "https://www.flexmatches.com/terms";
+const PRIVACY_URL = "https://www.flexmatches.com/privacy-policy";
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as AppleAuthentication from "expo-apple-authentication";
@@ -243,7 +246,12 @@ export default function RegisterScreen() {
               </Text>
             </TouchableOpacity>
 
-            <Text style={styles.legal}>By signing up, you agree to our Terms & Privacy Policy</Text>
+            <Text style={styles.legal}>
+              By signing up, you agree to our{" "}
+              <Text style={styles.legalLink} onPress={() => Linking.openURL(TERMS_URL)}>Terms</Text>
+              {" & "}
+              <Text style={styles.legalLink} onPress={() => Linking.openURL(PRIVACY_URL)}>Privacy Policy</Text>
+            </Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -293,6 +301,7 @@ const styles = StyleSheet.create({
   loginText:        { color: "#555", fontSize: 14 },
   loginLink:        { color: "#FF4500", fontWeight: "700" },
   legal:            { textAlign: "center", fontSize: 11, color: "#2a2a2a", marginTop: 4 },
+  legalLink:        { color: "#FF4500", textDecorationLine: "underline" },
   divider:          { flexDirection: "row", alignItems: "center", gap: 12 },
   dividerLine:      { flex: 1, height: 1, backgroundColor: "#1a1a1a" },
   dividerText:      { color: "#333", fontSize: 13, fontWeight: "600" },

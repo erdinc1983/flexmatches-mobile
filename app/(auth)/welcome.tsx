@@ -1,6 +1,9 @@
-import { View, Text, StyleSheet, TouchableOpacity, StatusBar } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, StatusBar, Linking } from "react-native";
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+const TERMS_URL   = "https://www.flexmatches.com/terms";
+const PRIVACY_URL = "https://www.flexmatches.com/privacy-policy";
 
 const FEATURES = [
   { emoji: "🔍", text: "Swipe to find gym partners" },
@@ -55,7 +58,10 @@ export default function WelcomeScreen() {
         </TouchableOpacity>
 
         <Text style={styles.legal}>
-          By continuing you agree to our Terms & Privacy Policy
+          By continuing you agree to our{" "}
+          <Text style={styles.legalLink} onPress={() => Linking.openURL(TERMS_URL)}>Terms</Text>
+          {" & "}
+          <Text style={styles.legalLink} onPress={() => Linking.openURL(PRIVACY_URL)}>Privacy Policy</Text>
         </Text>
       </View>
     </SafeAreaView>
@@ -145,5 +151,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#111",
   },
   secondaryButtonText: { color: "#888", fontSize: 15, fontWeight: "600" },
-  legal: { textAlign: "center", fontSize: 11, color: "#333", marginTop: 4 },
+  legal:     { textAlign: "center", fontSize: 11, color: "#333", marginTop: 4 },
+  legalLink: { color: "#FF4500", textDecorationLine: "underline" },
 });
