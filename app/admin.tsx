@@ -15,6 +15,30 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { supabase } from "../lib/supabase";
 import { useTheme, SPACE, FONT, RADIUS, PALETTE, BRAND } from "../lib/theme";
+
+const ADMIN_ACTION_URL = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/admin-action`;
+
+async function callAdminAction(
+  body: { userId: string; action: string; updates?: Record<string, unknown> }
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return { ok: false, error: "Not authenticated" };
+    const res = await fetch(ADMIN_ACTION_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) return { ok: false, error: data.error ?? `HTTP ${res.status}` };
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, error: e.message ?? "Network error" };
+  }
+}
 import { Avatar } from "../components/Avatar";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -91,30 +115,22 @@ export default function AdminScreen() {
     setActionLoading(userId + action);
     setConfirmModal(null);
 
-    let error: any = null;
+    const { ok, error } = await callAdminAction({ userId, action });
 
-    if (action === "delete") {
-      // Soft-delete: set banned_at so user is hidden everywhere.
-      // Hard DELETE fails silently due to RLS; Auth user must be removed via Supabase dashboard.
-      const { error: e } = await supabase.from("users").update({ banned_at: new Date().toISOString() }).eq("id", userId);
-      error = e;
-      if (!e) {
+    if (ok) {
+      if (action === "delete") {
         setUsers(prev => prev.filter(u => u.id !== userId));
         showToast("User deleted.");
-      }
-    } else {
-      const updates: Partial<AdminUser> = {};
-      if (action === "ban")        updates.banned_at  = new Date().toISOString();
-      if (action === "unban")      updates.banned_at  = null;
-      if (action === "promote")    updates.is_admin   = true;
-      if (action === "demote")     updates.is_admin   = false;
-      if (action === "make_pro")   updates.is_pro     = true;
-      if (action === "remove_pro") updates.is_pro     = false;
-
-      const { error: e } = await supabase.from("users").update(updates).eq("id", userId);
-      error = e;
-      if (!e) {
-        setUsers(prev => prev.map(u => u.id === userId ? { ...u, ...updates } : u));
+      } else {
+        // Optimistically update local state to reflect the change
+        const patch: Partial<AdminUser> = {};
+        if (action === "ban")        patch.banned_at = new Date().toISOString();
+        if (action === "unban")      patch.banned_at = null;
+        if (action === "promote")    patch.is_admin  = true;
+        if (action === "demote")     patch.is_admin  = false;
+        if (action === "make_pro")   patch.is_pro    = true;
+        if (action === "remove_pro") patch.is_pro    = false;
+        setUsers(prev => prev.map(u => u.id === userId ? { ...u, ...patch } : u));
         showToast(
           action === "ban"        ? "User banned." :
           action === "unban"      ? "User unbanned." :
@@ -124,22 +140,27 @@ export default function AdminScreen() {
           action === "remove_pro" ? "Pro removed." : "Done."
         );
       }
+    } else {
+      showToast(error ?? "Action failed.", false);
     }
 
-    if (error) showToast(error.message, false);
     setActionLoading(null);
   }
 
   async function saveEdit() {
     if (!editModal) return;
     setEditSaving(true);
-    const { error } = await supabase.from("users").update({
-      full_name:     editModal.full_name || null,
-      city:          editModal.city || null,
-      fitness_level: editModal.fitness_level || null,
-    }).eq("id", editModal.userId);
+    const { ok, error } = await callAdminAction({
+      userId: editModal.userId,
+      action: "edit",
+      updates: {
+        full_name:     editModal.full_name || null,
+        city:          editModal.city || null,
+        fitness_level: editModal.fitness_level || null,
+      },
+    });
     setEditSaving(false);
-    if (error) { showToast(error.message, false); return; }
+    if (!ok) { showToast(error ?? "Save failed.", false); return; }
     setUsers(prev => prev.map(u =>
       u.id === editModal.userId
         ? { ...u, full_name: editModal.full_name || null, city: editModal.city || null, fitness_level: editModal.fitness_level || null }
