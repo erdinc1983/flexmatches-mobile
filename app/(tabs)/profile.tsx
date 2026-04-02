@@ -17,6 +17,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
+import { CityAutocomplete } from "../../components/CityAutocomplete";
 import * as ImagePicker from "expo-image-picker";
 import { supabase } from "../../lib/supabase";
 import { useTheme, SPACE, FONT, RADIUS, PALETTE, BRAND } from "../../lib/theme";
@@ -869,7 +870,6 @@ function EditForm({ form, setForm, saving, onSave, onCancel, toggleSport, toggle
 
   const basicFields: { label: string; key: keyof Profile; multiline?: boolean; numeric?: boolean }[] = [
     { label: "Full Name",      key: "full_name" },
-    { label: "City",           key: "city" },
     { label: "Gym / Facility", key: "gym_name" },
     { label: "Occupation",     key: "occupation" },
     { label: "Bio",            key: "bio", multiline: true },
@@ -886,6 +886,16 @@ function EditForm({ form, setForm, saving, onSave, onCancel, toggleSport, toggle
   return (
     <>
       <Text style={[s.sectionTitle, { color: c.text }]}>Edit Profile</Text>
+
+      {/* City — autocomplete */}
+      <View style={[s.field, { zIndex: 20 }]}>
+        <Text style={[s.fieldLabel, { color: c.textMuted }]}>City</Text>
+        <CityAutocomplete
+          value={form.city ?? ""}
+          onChangeText={(v) => setForm({ ...form, city: v || null })}
+          accessibilityLabel="City"
+        />
+      </View>
 
       {/* Basic fields */}
       {basicFields.map(({ label, key, multiline, numeric }) => (

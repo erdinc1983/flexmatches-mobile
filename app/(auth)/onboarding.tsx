@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { supabase } from "../../lib/supabase";
+import { CityAutocomplete } from "../../components/CityAutocomplete";
 
 const { width } = Dimensions.get("window");
 const TOTAL_STEPS = 5;
@@ -281,14 +282,12 @@ export default function OnboardingScreen() {
               <Text style={s.stepTitle}>Where do you train?</Text>
               <Text style={s.stepSub}>Connect with partners in your city</Text>
             </View>
-            <View style={s.field}>
+            <View style={[s.field, { zIndex: 20 }]}>
               <Text style={s.fieldLabel}>City <Text style={s.optional}>(optional)</Text></Text>
-              <TextInput
-                style={s.input}
+              <CityAutocomplete
                 value={city}
                 onChangeText={setCity}
-                placeholder="e.g. New York, London, Istanbul"
-                placeholderTextColor="#444"
+                inputStyle={s.input}
                 autoFocus
               />
             </View>
