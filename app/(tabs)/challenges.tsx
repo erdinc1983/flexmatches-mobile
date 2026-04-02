@@ -20,6 +20,7 @@ import { supabase } from "../../lib/supabase";
 import { useTheme, SPACE, FONT, RADIUS } from "../../lib/theme";
 import { Avatar } from "../../components/Avatar";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { CalendarPicker } from "../../components/CalendarPicker";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -59,7 +60,9 @@ const GOAL_TYPES = [
 
 function daysLeft(endDate: string | null): number | null {
   if (!endDate) return null;
-  const diff = Math.ceil((new Date(endDate).getTime() - Date.now()) / 86_400_000);
+  const ms = new Date(endDate).getTime();
+  if (isNaN(ms)) return null;
+  const diff = Math.ceil((ms - Date.now()) / 86_400_000);
   return diff > 0 ? diff : 0;
 }
 
@@ -518,12 +521,10 @@ export default function ChallengesScreen() {
 
               {/* End date */}
               <Text style={[s.formLabel, { color: c.textMuted }]}>End Date (optional)</Text>
-              <TextInput
-                style={[s.formInput, { color: c.text, backgroundColor: c.bgInput, borderColor: c.border }]}
+              <CalendarPicker
                 value={formEnd}
-                onChangeText={setFormEnd}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor={c.textFaint}
+                onChange={setFormEnd}
+                colors={c}
               />
 
               {/* Description */}

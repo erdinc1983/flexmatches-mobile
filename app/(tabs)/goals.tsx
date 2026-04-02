@@ -8,6 +8,7 @@ import { supabase } from "../../lib/supabase";
 import { ErrorState } from "../../components/ui/ErrorState";
 import { useTheme, SPACE, FONT, RADIUS, PALETTE } from "../../lib/theme";
 import { Icon } from "../../components/Icon";
+import { CalendarPicker } from "../../components/CalendarPicker";
 
 type Goal = {
   id: string;
@@ -145,7 +146,9 @@ export default function GoalsScreen() {
   }
 
   function getDaysLeft(deadline: string): string {
-    const days = Math.ceil((new Date(deadline).getTime() - Date.now()) / 86400000);
+    const ms = new Date(deadline).getTime();
+    if (isNaN(ms)) return "";
+    const days = Math.ceil((ms - Date.now()) / 86400000);
     if (days < 0) return "overdue";
     if (days === 0) return "today";
     return `${days}d left`;
@@ -357,12 +360,10 @@ export default function GoalsScreen() {
 
                 <View>
                   <Text style={[s.fieldLabel, { color: c.textMuted }]}>Deadline (optional)</Text>
-                  <TextInput
-                    style={[s.input, { backgroundColor: c.bgInput, borderColor: c.border, color: c.text }]}
+                  <CalendarPicker
                     value={form.deadline}
-                    onChangeText={v => setForm({ ...form, deadline: v })}
-                    placeholder="YYYY-MM-DD"
-                    placeholderTextColor={c.textFaint}
+                    onChange={v => setForm({ ...form, deadline: v })}
+                    colors={c}
                   />
                 </View>
 
