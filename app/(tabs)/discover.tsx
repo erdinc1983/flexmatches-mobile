@@ -105,6 +105,35 @@ function intentBonus(myIntent: string | null, theirIntent: string | null): numbe
   return 2; // same intent but not complementary (both want guidance)
 }
 const NEW_THRESHOLD = 7 * 24 * 60 * 60 * 1000;
+const PAGE_SIZE     = 40;
+const SELECT_FIELDS = "id, username, full_name, bio, city, fitness_level, age, gender, sports, current_streak, last_active, avatar_url, is_at_gym, availability, training_intent, lat, lng, created_at, sessions_completed, reliability_score";
+
+function mapUser(u: any): DiscoverUser {
+  return {
+    id:                 u.id,
+    username:           u.username,
+    full_name:          u.full_name ?? null,
+    avatar_url:         u.avatar_url ?? null,
+    bio:                u.bio ?? null,
+    city:               u.city ?? null,
+    fitness_level:      u.fitness_level ?? null,
+    gender:             u.gender ?? null,
+    training_intent:    u.training_intent ?? null,
+    lat:                u.lat ?? null,
+    lng:                u.lng ?? null,
+    age:                u.age ?? null,
+    sports:             u.sports ?? null,
+    current_streak:     u.current_streak ?? 0,
+    last_active:        u.last_active ?? null,
+    is_at_gym:          u.is_at_gym ?? false,
+    availability:       u.availability ?? null,
+    sessions_completed: u.sessions_completed ?? 0,
+    reliability_score:  u.reliability_score ?? 100,
+    matchScore:         0,
+    reasons:            [],
+    isNew:              !!(u.created_at && Date.now() - new Date(u.created_at).getTime() < NEW_THRESHOLD),
+  };
+}
 
 const LEVEL_ORDER: Record<string, number> = { beginner: 0, intermediate: 1, advanced: 2 };
 const SCHEDULE_LABELS: Record<string, string> = {
@@ -289,9 +318,15 @@ export default function DiscoverScreen() {
   const [lastSwipe,       setLastSwipe]       = useState<SwipeAction>(null);  // persistent undo
   const [connectUndo,     setConnectUndo]     = useState<UndoState>(null);    // toast undo
 
-  const swipeDeckRef   = useRef<SwipeDeckRef>(null);
-  const connectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [rawOffset,    setRawOffset]    = useState(0);
+  const [hasMore,      setHasMore]      = useState(true);
+  const [loadingMore,  setLoadingMore]  = useState(false);
+
+  const swipeDeckRef     = useRef<SwipeDeckRef>(null);
+  const connectTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentUserIdRef = useRef<string>("");
+  const excludedRef      = useRef<Set<string>>(new Set());
+  const myProfileRef     = useRef<MyProfile | null>(null);
 
   // ── Data loading ────────────────────────────────────────────────────────────
   const load = useCallback(async (isRefresh = false) => {
@@ -359,45 +394,23 @@ export default function DiscoverScreen() {
     }
     setMatchIds(initialMatchIds);
 
+    // ── Persist excluded + myProfile for loadMore() ─────────────────────────
+    excludedRef.current = excluded;
+    myProfileRef.current = me;
+
     // ── Pending sent requests — shown in list view with cancel option ───────
     const pendingSentIds = (matchData ?? [])
       .filter((m: any) => m.status === "pending" && m.sender_id === user.id)
       .map((m: any) => m.receiver_id);
 
-    const SELECT_FIELDS = "id, username, full_name, bio, city, fitness_level, age, gender, sports, current_streak, last_active, avatar_url, is_at_gym, availability, training_intent, lat, lng, created_at, sessions_completed, reliability_score";
-
     const [{ data: candidates }, { data: pendingProfiles }] = await Promise.all([
-      supabase.from("users").select(SELECT_FIELDS).neq("id", user.id).is("banned_at", null).limit(80),
+      supabase.from("users").select(SELECT_FIELDS).neq("id", user.id).is("banned_at", null)
+        .order("created_at", { ascending: false })
+        .range(0, PAGE_SIZE - 1),
       pendingSentIds.length > 0
         ? supabase.from("users").select(SELECT_FIELDS).in("id", pendingSentIds).is("banned_at", null)
         : Promise.resolve({ data: [] }),
     ]);
-
-    function mapUser(u: any): DiscoverUser {
-      return {
-        id:              u.id,
-        username:        u.username,
-        full_name:       u.full_name ?? null,
-        avatar_url:      u.avatar_url ?? null,
-        bio:             u.bio ?? null,
-        city:            u.city ?? null,
-        fitness_level:   u.fitness_level ?? null,
-        gender:          u.gender ?? null,
-        training_intent: u.training_intent ?? null,
-        lat:             u.lat ?? null,
-        lng:             u.lng ?? null,
-        age:            u.age ?? null,
-        sports:         u.sports ?? null,
-        current_streak: u.current_streak ?? 0,
-        last_active:    u.last_active ?? null,
-        is_at_gym:           u.is_at_gym ?? false,
-        availability:        u.availability ?? null,
-        sessions_completed:  u.sessions_completed ?? 0,
-        reliability_score:   u.reliability_score ?? 100,
-        matchScore:          0,
-        reasons:        [],
-        isNew:          !!(u.created_at && Date.now() - new Date(u.created_at).getTime() < NEW_THRESHOLD),
-      };
     }
 
     // Pending users for list view (already liked, awaiting response)
@@ -418,6 +431,8 @@ export default function DiscoverScreen() {
 
     setUsers(scored);
     setStatuses(initialStatuses);
+    setRawOffset(PAGE_SIZE);
+    setHasMore((candidates?.length ?? 0) >= PAGE_SIZE);
     } catch (err) {
       console.error("[Discover] load failed:", err);
       if (isRefresh) {
@@ -429,6 +444,43 @@ export default function DiscoverScreen() {
       setLoading(false);
     }
   }, []);
+
+  // ── Load next page ───────────────────────────────────────────────────────────
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const { data: nextPage } = await supabase
+        .from("users")
+        .select(SELECT_FIELDS)
+        .neq("id", currentUserIdRef.current)
+        .is("banned_at", null)
+        .order("created_at", { ascending: false })
+        .range(rawOffset, rawOffset + PAGE_SIZE - 1);
+
+      if (!nextPage || nextPage.length === 0) { setHasMore(false); return; }
+
+      const me = myProfileRef.current;
+      const newUsers: DiscoverUser[] = nextPage
+        .filter((u: any) => !excludedRef.current.has(u.id))
+        .map((u: any) => {
+          const partial = mapUser(u);
+          if (me) {
+            partial.matchScore = calcMatchScore(me, partial);
+            partial.reasons    = buildReasons(me, partial);
+          }
+          return partial;
+        });
+
+      setUsers((prev) => [...prev, ...newUsers]);
+      setRawOffset((prev) => prev + PAGE_SIZE);
+      setHasMore(nextPage.length >= PAGE_SIZE);
+    } catch (err) {
+      console.error("[Discover] loadMore failed:", err);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loadingMore, hasMore, rawOffset]);
 
   // Load once on mount
   useEffect(() => { load(); }, [load]);
@@ -465,6 +517,7 @@ export default function DiscoverScreen() {
   async function onLike(userId: string) {
     const uid = currentUserIdRef.current;
     if (!uid) return;
+    excludedRef.current.add(userId);
     setStatuses((prev) => ({ ...prev, [userId]: "pending" }));
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const { data } = await supabase.from("matches")
@@ -487,6 +540,7 @@ export default function DiscoverScreen() {
   async function onPass(userId: string) {
     const uid = currentUserIdRef.current;
     if (!uid) return;
+    excludedRef.current.add(userId);
     Haptics.selectionAsync();
     const { data } = await supabase.from("passes")
       .insert({ user_id: uid, passed_id: userId })
@@ -658,6 +712,9 @@ export default function DiscoverScreen() {
           onCardPress={(u) => setSelectedUser(u)}
           canUndo={!!lastSwipe}
           onUndo={doSwipeUndo}
+          hasMore={hasMore}
+          loadingMore={loadingMore}
+          onDeckLow={() => { if (hasMore && !loadingMore) loadMore(); }}
         />
       </View>
 
@@ -745,6 +802,13 @@ export default function DiscoverScreen() {
               matchId={matchIds[item.id]}
             />
           )}
+          onEndReached={() => { if (hasMore && !loadingMore) loadMore(); }}
+          onEndReachedThreshold={0.4}
+          ListFooterComponent={
+            loadingMore
+              ? <ActivityIndicator color={c.brand} style={{ paddingVertical: SPACE[20] }} />
+              : null
+          }
           ListEmptyComponent={
             <EmptyState
               icon="search"

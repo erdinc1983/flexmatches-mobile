@@ -13,7 +13,7 @@
 import React, { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, Animated, PanResponder,
-  TouchableOpacity, Dimensions,
+  TouchableOpacity, Dimensions, ActivityIndicator,
 } from "react-native";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
@@ -51,21 +51,27 @@ const LEVEL_COLOR: Record<string, string> = {
 };
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+const DECK_LOW_THRESHOLD = 5; // trigger onDeckLow when this many cards remain
+
 type Props = {
-  users:       DiscoverUser[];
-  statuses:    Record<string, RequestStatus>;
-  onLike:      (userId: string) => void;
-  onPass:      (userId: string) => void;
-  onCardPress: (user: DiscoverUser) => void;
-  canUndo?:    boolean;
-  onUndo?:     () => void;
+  users:        DiscoverUser[];
+  statuses:     Record<string, RequestStatus>;
+  onLike:       (userId: string) => void;
+  onPass:       (userId: string) => void;
+  onCardPress:  (user: DiscoverUser) => void;
+  canUndo?:     boolean;
+  onUndo?:      () => void;
+  hasMore?:     boolean;
+  loadingMore?: boolean;
+  onDeckLow?:   () => void;
 };
 
 export type SwipeDeckRef = { undoLast: () => void };
 
 // ─── SwipeDeck ────────────────────────────────────────────────────────────────
 export const SwipeDeck = forwardRef<SwipeDeckRef, Props>(function SwipeDeck(
-  { users, statuses, onLike, onPass, onCardPress, canUndo = false, onUndo }, ref
+  { users, statuses, onLike, onPass, onCardPress, canUndo = false, onUndo,
+    hasMore = false, loadingMore = false, onDeckLow }, ref
 ) {
   const { theme } = useTheme();
   const c = theme.colors;
@@ -127,17 +133,32 @@ export const SwipeDeck = forwardRef<SwipeDeckRef, Props>(function SwipeDeck(
         if (direction === "right") onLike(user.id);
         else onPass(user.id);
       }
-      setCurrentIndex((i) => i + 1);
+      const nextIndex = currentIndex + 1;
+      setCurrentIndex(nextIndex);
+      // Proactively fetch the next page when few cards remain
+      if (users.length - nextIndex <= DECK_LOW_THRESHOLD) {
+        onDeckLow?.();
+      }
     });
   }
   commitSwipeRef.current = commitSwipe;
 
   if (currentIndex >= users.length) {
+    if (loadingMore) {
+      return (
+        <View style={[deck.empty, { backgroundColor: c.bg }]}>
+          <ActivityIndicator color={c.brand} size="large" />
+          <Text style={[deck.emptySub, { color: c.textMuted }]}>Loading more partners…</Text>
+        </View>
+      );
+    }
     return (
       <View style={[deck.empty, { backgroundColor: c.bg }]}>
         <Text style={deck.emptyEmoji}>🎉</Text>
         <Text style={[deck.emptyTitle, { color: c.text }]}>You've seen everyone!</Text>
-        <Text style={[deck.emptySub, { color: c.textMuted }]}>Pull to refresh for new matches.</Text>
+        <Text style={[deck.emptySub, { color: c.textMuted }]}>
+          {hasMore ? "Loading more…" : "Pull to refresh for new matches."}
+        </Text>
       </View>
     );
   }
