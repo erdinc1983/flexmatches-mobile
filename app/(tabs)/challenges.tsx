@@ -388,49 +388,64 @@ export default function ChallengesScreen() {
               ) : null}
 
               {/* Join / Progress update */}
-              {!selected.joined ? (
-                <TouchableOpacity
-                  style={[s.joinBtn, { backgroundColor: "#FF4500" }]}
-                  onPress={() => joinChallenge(selected.id)}
-                  activeOpacity={0.85}
-                >
-                  <Text style={s.joinBtnText}>Join Challenge</Text>
-                </TouchableOpacity>
-              ) : (
-                <View style={[s.progressCard, { backgroundColor: c.bgCard, borderColor: c.border }]}>
-                  <Text style={[s.progressCardTitle, { color: c.text }]}>Update My Progress</Text>
-                  <View style={s.progressInputRow}>
-                    <TextInput
-                      style={[s.progressInput, { color: c.text, backgroundColor: c.bgInput, borderColor: c.border }]}
-                      value={progressInput}
-                      onChangeText={setProgressInput}
-                      keyboardType="decimal-pad"
-                      placeholder="0"
-                      placeholderTextColor={c.textFaint}
-                    />
-                    <Text style={[s.progressUnit, { color: c.textMuted }]}>{selected.unit}</Text>
+              {(() => {
+                const isEnded = !!selected.end_date && daysLeft(selected.end_date) === 0;
+                if (isEnded) {
+                  return (
+                    <View style={[s.progressCard, { backgroundColor: c.bgCard, borderColor: c.border }]}>
+                      <Text style={[s.progressCardTitle, { color: c.textMuted }]}>
+                        Challenge ended — final results below
+                      </Text>
+                    </View>
+                  );
+                }
+                if (!selected.joined) {
+                  return (
                     <TouchableOpacity
-                      style={[s.saveBtn, { backgroundColor: "#FF4500" }]}
-                      onPress={updateProgress}
-                      disabled={savingProg}
+                      style={[s.joinBtn, { backgroundColor: "#FF4500" }]}
+                      onPress={() => joinChallenge(selected.id)}
                       activeOpacity={0.85}
                     >
-                      {savingProg
-                        ? <ActivityIndicator color="#fff" size="small" />
-                        : <Text style={s.saveBtnText}>Save</Text>
-                      }
+                      <Text style={s.joinBtnText}>Join Challenge</Text>
                     </TouchableOpacity>
-                  </View>
-                  {selected.target_value != null && (
-                    <View style={[s.progressTrack, { backgroundColor: c.border, marginTop: SPACE[12] }]}>
-                      <View style={[
-                        s.progressFill,
-                        { width: `${Math.min(((selected.my_value ?? 0) / selected.target_value) * 100, 100)}%` as any, backgroundColor: "#FF4500" },
-                      ]} />
+                  );
+                }
+                return (
+                  <View style={[s.progressCard, { backgroundColor: c.bgCard, borderColor: c.border }]}>
+                    <Text style={[s.progressCardTitle, { color: c.text }]}>Update My Progress</Text>
+                    <View style={s.progressInputRow}>
+                      <TextInput
+                        style={[s.progressInput, { color: c.text, backgroundColor: c.bgInput, borderColor: c.border }]}
+                        value={progressInput}
+                        onChangeText={setProgressInput}
+                        keyboardType="decimal-pad"
+                        placeholder="0"
+                        placeholderTextColor={c.textFaint}
+                      />
+                      <Text style={[s.progressUnit, { color: c.textMuted }]}>{selected.unit}</Text>
+                      <TouchableOpacity
+                        style={[s.saveBtn, { backgroundColor: "#FF4500" }]}
+                        onPress={updateProgress}
+                        disabled={savingProg}
+                        activeOpacity={0.85}
+                      >
+                        {savingProg
+                          ? <ActivityIndicator color="#fff" size="small" />
+                          : <Text style={s.saveBtnText}>Save</Text>
+                        }
+                      </TouchableOpacity>
                     </View>
-                  )}
-                </View>
-              )}
+                    {selected.target_value != null && (
+                      <View style={[s.progressTrack, { backgroundColor: c.border, marginTop: SPACE[12] }]}>
+                        <View style={[
+                          s.progressFill,
+                          { width: `${Math.min(((selected.my_value ?? 0) / selected.target_value) * 100, 100)}%` as any, backgroundColor: "#FF4500" },
+                        ]} />
+                      </View>
+                    )}
+                  </View>
+                );
+              })()}
 
               {/* Leaderboard */}
               <Text style={[s.lbTitle, { color: c.text }]}>Leaderboard</Text>
