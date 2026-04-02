@@ -538,7 +538,7 @@ export default function HomeScreen() {
       setProfile((p) => p ? { ...p, match_count: p.match_count + 1 } : p);
       const myName = profile?.full_name ?? profile?.username ?? "Someone";
       // Local notification for myself
-      notifyMatchAccepted(req.full_name ?? req.username);
+      notifyMatchAccepted(req.full_name ?? req.username, matchId);
       // Notify the sender
       notifyUser(req.sender_id, {
         type: "match_accepted",

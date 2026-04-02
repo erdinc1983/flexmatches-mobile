@@ -11,14 +11,36 @@
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 
-// Show banners + play sound while the app is in the foreground
+// Show banners + play sound while the app is in the foreground.
+// Suppress remote push display when foregrounded — the Supabase realtime
+// handler fires a local notification for the same event, so showing the
+// remote push too would produce a duplicate alert.
+// Foreground notification handler.
+// Suppress remote push for chat messages only — the Supabase realtime
+// handler already fires a local notification for the same event.
+// All other push types (match_request, session, etc.) are shown normally.
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList:   true,
-    shouldPlaySound:  true,
-    shouldSetBadge:   false,
-  }),
+  handleNotification: async (notification) => {
+    const isRemotePush = notification.request.trigger?.type === "push";
+    const data = notification.request.content.data ?? {};
+    const isChatMessagePush = data?.type === "message";
+
+    if (isRemotePush && isChatMessagePush) {
+      return {
+        shouldShowBanner: false,
+        shouldShowList:   false,
+        shouldPlaySound:  false,
+        shouldSetBadge:   false,
+      };
+    }
+
+    return {
+      shouldShowBanner: true,
+      shouldShowList:   true,
+      shouldPlaySound:  true,
+      shouldSetBadge:   false,
+    };
+  },
 });
 
 let _permissionGranted: boolean | null = null;
@@ -40,24 +62,27 @@ export async function requestNotificationPermission(): Promise<boolean> {
 
 // ─── Immediate local notifications ────────────────────────────────────────────
 
-export async function notifyNewMessage(senderName: string, preview: string): Promise<void> {
+export async function notifyNewMessage(senderName: string, preview: string, matchId?: string): Promise<void> {
   await _fire(
     senderName,
     preview.length > 80 ? preview.slice(0, 77) + "…" : preview,
+    matchId ? { type: "message", relatedId: matchId } : undefined,
   );
 }
 
-export async function notifyMatchRequest(senderName: string): Promise<void> {
+export async function notifyMatchRequest(senderName: string, matchId?: string): Promise<void> {
   await _fire(
     "New Match Request 🤝",
     `${senderName} wants to train with you!`,
+    { type: "match_request", relatedId: matchId },
   );
 }
 
-export async function notifyMatchAccepted(partnerName: string): Promise<void> {
+export async function notifyMatchAccepted(partnerName: string, matchId?: string): Promise<void> {
   await _fire(
     "Match Accepted ✅",
     `You and ${partnerName} are now connected. Say hi!`,
+    matchId ? { type: "match_accepted", relatedId: matchId } : undefined,
   );
 }
 
@@ -77,6 +102,10 @@ export async function notifyCircleEvent(circleName: string, dateLabel: string): 
 
 export async function notifyPartnerWorkout(body: string): Promise<void> {
   await _fire("💪 Training buddy is active!", body);
+}
+
+export async function notifyGeneric(title: string, body: string): Promise<void> {
+  await _fire(title, body);
 }
 
 /**
@@ -182,12 +211,12 @@ export async function scheduleEventReminder(
 
 // ─── Internal ─────────────────────────────────────────────────────────────────
 
-async function _fire(title: string, body: string): Promise<void> {
+async function _fire(title: string, body: string, data?: Record<string, any>): Promise<void> {
   try {
     const granted = await requestNotificationPermission();
     if (!granted) return;
     await Notifications.scheduleNotificationAsync({
-      content: { title, body, sound: true },
+      content: { title, body, sound: true, data: data ?? {} },
       trigger: null, // immediate
     });
   } catch { /* ignore */ }

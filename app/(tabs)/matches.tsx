@@ -193,7 +193,7 @@ export default function MatchesScreen() {
     await supabase.from("matches").update({ status }).eq("id", matchId);
     if (status === "accepted" && match) {
       const partnerName = match.other_user.full_name ?? match.other_user.username;
-      notifyMatchAccepted(partnerName);
+      notifyMatchAccepted(partnerName, matchId);
       // Push to the sender who sent the request
       const { data: { user } } = await supabase.auth.getUser();
       const myName = user ? (await supabase.from("users").select("full_name, username").eq("id", user.id).single()).data : null;

@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { Stack, router } from "expo-router";
+import * as Notifications from "expo-notifications";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
 import { ThemeProvider, useTheme, FONT, SPACE, PALETTE } from "../lib/theme";
@@ -92,6 +93,20 @@ const ebStyles = StyleSheet.create({
 // ─── App routing state ────────────────────────────────────────────────────────
 type AppState = "loading" | "unauthenticated" | "needs_onboarding" | "ready";
 
+function extractRoute(response: Notifications.NotificationResponse): string | null {
+  const data = response.notification.request.content.data ?? {};
+  const type = data.type as string | undefined;
+  const relatedId = (data.relatedId ?? data.matchId) as string | undefined;
+
+  if (type === "message" || type === "session_proposed" || type === "session_accepted" || type === "session_declined") {
+    return relatedId ? `/chat/${relatedId}` : null;
+  }
+  if (type === "match_request" || type === "match_accepted") {
+    return "/(tabs)/matches";
+  }
+  return null; // unknown types → stay on home (graceful fallback)
+}
+
 async function resolveAppState(session: Session | null): Promise<AppState> {
   if (!session) return "unauthenticated";
   const { data } = await supabase
@@ -104,6 +119,29 @@ async function resolveAppState(session: Session | null): Promise<AppState> {
 
 export default function RootLayout() {
   const [appState, setAppState] = useState<AppState>("loading");
+  const pendingRoute = useRef<string | null>(null);
+
+  useEffect(() => {
+    // Cold start: check if the app was opened by tapping a notification
+    Notifications.getLastNotificationResponseAsync().then((response) => {
+      if (response) pendingRoute.current = extractRoute(response);
+    });
+
+    // Background: app was running and user tapped a notification
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const route = extractRoute(response);
+      if (!route) return;
+      // If already ready, navigate immediately; otherwise queue for after auth
+      if (appState === "ready") {
+        router.push(route as any);
+      } else {
+        pendingRoute.current = route;
+      }
+    });
+
+    return () => sub.remove();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -127,8 +165,10 @@ export default function RootLayout() {
     if (appState === "loading") return;
     if (appState === "unauthenticated") { router.replace("/(auth)/welcome"); return; }
     if (appState === "needs_onboarding") { router.replace("/(auth)/onboarding"); return; }
-    // ready
-    router.replace("/(tabs)/home");
+    // ready — navigate to pending deep link if present, otherwise home
+    const deepLink = pendingRoute.current;
+    pendingRoute.current = null;
+    router.replace(deepLink ? (deepLink as any) : "/(tabs)/home");
     registerPushToken();
   }, [appState]);
 
