@@ -949,7 +949,7 @@ const s = StyleSheet.create({
   popupField:      { flexDirection: "row", alignItems: "flex-start", gap: SPACE[6],
                      paddingHorizontal: SPACE[12], paddingVertical: SPACE[8],
                      borderRadius: RADIUS.md, borderWidth: 1, marginTop: SPACE[4] },
-  popupFieldText:  { flex: 1, fontSize: FONT.size.sm, color: "#666" },
+  popupFieldText:  { flex: 1, fontSize: FONT.size.sm, color: "#8E8E93" },
   popupDesc:       { fontSize: FONT.size.sm, textAlign: "center", lineHeight: FONT.size.sm * 1.5 },
   popupDivider:    { height: 1, marginVertical: SPACE[14] },
   popupMemberHeader:{ fontSize: FONT.size.xs, fontWeight: FONT.weight.bold, textTransform: "uppercase", letterSpacing: 1, marginBottom: SPACE[8] },

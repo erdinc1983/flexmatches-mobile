@@ -242,7 +242,7 @@ export default function MessagesScreen() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaView style={[s.root, { backgroundColor: "#fff" }]}>
+      <SafeAreaView style={[s.root, { backgroundColor: c.bg }]}>
         <FlatList
           data={conversations}
           keyExtractor={(item) => item.matchId}
@@ -250,14 +250,14 @@ export default function MessagesScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.brand} />}
           ListHeaderComponent={
             <View style={s.header}>
-              <Text style={s.title}>Chat</Text>
+              <Text style={[s.title, { color: c.text }]}>Chat</Text>
               {conversations.length > 0 && (
-                <Text style={s.subtitle}>{conversations.length} conversation{conversations.length !== 1 ? "s" : ""}</Text>
+                <Text style={[s.subtitle, { color: c.textMuted }]}>{conversations.length} conversation{conversations.length !== 1 ? "s" : ""}</Text>
               )}
             </View>
           }
           ItemSeparatorComponent={() => (
-            <View style={s.separator} />
+            <View style={[s.separator, { backgroundColor: c.border }]} />
           )}
           renderItem={({ item }) => (
             <ConversationRow
@@ -294,11 +294,11 @@ export default function MessagesScreen() {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  root:         { flex: 1, backgroundColor: "#fff" },
+  root:         { flex: 1 },
   header:       { paddingHorizontal: SPACE[20], paddingTop: SPACE[20], paddingBottom: SPACE[12] },
-  title:        { fontSize: 34, fontWeight: "700", color: "#000", letterSpacing: 0.37 },
-  subtitle:     { fontSize: 13, color: "#8E8E93", marginTop: 2 },
+  title:        { fontSize: 34, fontWeight: "700", letterSpacing: 0.37 },
+  subtitle:     { fontSize: 13, marginTop: 2 },
   // Separator starts after: dotCol(20) + gap(0) + avatar(50) + gap(12) = 82px
-  separator:    { height: StyleSheet.hairlineWidth, backgroundColor: "#C6C6C8", marginLeft: 82 },
+  separator:    { height: StyleSheet.hairlineWidth, marginLeft: 82 },
   emptyWrapper: { paddingTop: 80 },
 });

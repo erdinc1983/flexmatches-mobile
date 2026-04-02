@@ -114,6 +114,7 @@ blocks, favorites, passes, reports
 - `log_checkin(p_user_id uuid)` → returns `{ streak: number, already_checked_in: boolean }` — atomic streak update with consecutive day check. Already deployed.
 - `confirm_session(p_session_id, p_user_id, p_other_id)` — mutual confirmation with FOR UPDATE row lock. Sets proposer_confirmed/receiver_confirmed flags. Status → "confirmed" when both done.
 - `no_show_session(p_session_id, p_reporter_id, p_partner_id)` — marks session as "no_show".
+- `get_inbox(p_user_id uuid)` — returns full inbox in one round-trip using LATERAL joins: last message, unread count, active buddy session. Replaces N×3 per-conversation queries. Deployed. SQL: `supabase/get_inbox.sql`.
 
 ### Edge Functions (deployed)
 - `delete-account` — JWT verify → push_tokens delete → users delete → auth.admin.deleteUser()
@@ -233,7 +234,7 @@ function sanitizeILike(q: string): string {
 | FM-504 | Realtime Subscription User Filter | ✅ Done |
 | FM-505 | Push Token Cleanup on Logout | ✅ Done |
 
-### Eagle 3 — Security, Compliance & Polish (🔄 In Progress)
+### Eagle 3 — Security, Compliance & Polish (✅ Complete)
 | Key | Title | Status |
 |-----|-------|--------|
 | FM-601 | Leaderboard Unified Tier System | ✅ Done |
@@ -244,11 +245,26 @@ function sanitizeILike(q: string): string {
 | FM-703 | Search Input Sanitization (ILIKE wildcard + PostgREST injection) | ✅ Done |
 | FM-704 | Terms & Privacy Policy Tappable Links | ✅ Done |
 
+### Eagle 4 — Performance, UX Polish & Theme (✅ Complete)
+| Key | Title | Status |
+|-----|-------|--------|
+| FM-804 | SwipeDeck PanResponder Fix (tap eating eliminated) | ✅ Done |
+| FM-901 | Input Validation (age, weight, duration, goal target) | ✅ Done |
+| FM-903 | Per-Item Loading Spinners (matches accept/decline, circles join/leave) | ✅ Done |
+| FM-902 | Keyboard Avoidance in Modals (activity log, feed compose, settings) | ✅ Done |
+| FM-802 | Inbox N+1 Elimination (get_inbox RPC, LATERAL joins) | ✅ Done |
+| FM-803 | Paginated User Loading (cursor-based, 40/page, load-more on deck low) | ✅ Done |
+| FM-801 | Dark/Light Theme Audit (search.tsx, messages.tsx, circles.tsx) | ✅ Done |
+
 ---
 
-## 🦅 CURRENT SPRINT: Eagle 3 — Security, Compliance & Polish (continuing)
+## 🦅 Eagle 5 — (Planned)
 
-### Coding Standards
+> No stories assigned yet. Use JIRA backlog to pick next sprint.
+
+---
+
+## Coding Standards
 
 #### Error Handling Pattern (use everywhere)
 ```typescript

@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { supabase } from "../lib/supabase";
+import { useTheme } from "../lib/theme";
 import { Avatar } from "../components/Avatar";
 
 type MatchStatus = "none" | "pending" | "accepted" | "sending";
@@ -42,6 +43,8 @@ function sanitizeILike(q: string): string {
 }
 
 export default function SearchScreen() {
+  const { theme } = useTheme();
+  const c = theme.colors;
   const [query,    setQuery]    = useState("");
   const [results,  setResults]  = useState<User[]>([]);
   const [loading,  setLoading]  = useState(false);
@@ -124,17 +127,17 @@ export default function SearchScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
+    <SafeAreaView style={[styles.container, { backgroundColor: c.bg }]}>
+      <View style={[styles.header, { borderBottomColor: c.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Text style={styles.backText}>←</Text>
+          <Text style={[styles.backText, { color: c.textMuted }]}>←</Text>
         </TouchableOpacity>
         <TextInput
-          style={styles.input}
+          style={[styles.input, { backgroundColor: c.bgCard, color: c.text, borderColor: c.border }]}
           value={query}
           onChangeText={setQuery}
           placeholder="Search by name or username..."
-          placeholderTextColor="#444"
+          placeholderTextColor={c.textFaint}
           autoFocus
           returnKeyType="search"
         />
@@ -147,13 +150,13 @@ export default function SearchScreen() {
       {!loading && query.length > 0 && results.length === 0 && (
         <View style={styles.empty}>
           <Text style={styles.emptyEmoji}>🔍</Text>
-          <Text style={styles.emptyText}>No users found for "{query}"</Text>
+          <Text style={[styles.emptyText, { color: c.textMuted }]}>No users found for "{query}"</Text>
         </View>
       )}
 
       {!loading && query.length === 0 && (
         <View style={styles.hint}>
-          <Text style={styles.hintText}>Search for gym partners by name or username</Text>
+          <Text style={[styles.hintText, { color: c.textFaint }]}>Search for gym partners by name or username</Text>
         </View>
       )}
 
@@ -163,27 +166,27 @@ export default function SearchScreen() {
         contentContainerStyle={{ paddingBottom: 40 }}
         keyboardShouldPersistTaps="handled"
         renderItem={({ item }) => {
-          const levelColor = item.fitness_level ? LEVEL_COLOR[item.fitness_level] : "#555";
+          const levelColor = item.fitness_level ? LEVEL_COLOR[item.fitness_level] : c.textMuted;
           return (
-            <View style={styles.row}>
+            <View style={[styles.row, { borderBottomColor: c.border }]}>
               <Avatar url={item.avatar_url} name={item.username} size={52} />
               <View style={styles.info}>
-                <Text style={styles.name}>{item.full_name ?? item.username}</Text>
-                <Text style={styles.username}>@{item.username}</Text>
+                <Text style={[styles.name, { color: c.text }]}>{item.full_name ?? item.username}</Text>
+                <Text style={[styles.username, { color: c.textMuted }]}>@{item.username}</Text>
                 <View style={styles.chips}>
                   {item.fitness_level && (
-                    <View style={[styles.chip, { borderColor: levelColor + "55" }]}>
+                    <View style={[styles.chip, { borderColor: levelColor + "55", backgroundColor: c.bgCard }]}>
                       <Text style={[styles.chipText, { color: levelColor }]}>{item.fitness_level}</Text>
                     </View>
                   )}
                   {item.city && (
-                    <View style={styles.chip}>
-                      <Text style={styles.chipText}>📍 {item.city}</Text>
+                    <View style={[styles.chip, { borderColor: c.border, backgroundColor: c.bgCard }]}>
+                      <Text style={[styles.chipText, { color: c.textMuted }]}>📍 {item.city}</Text>
                     </View>
                   )}
                   {item.current_streak > 0 && (
-                    <View style={styles.chip}>
-                      <Text style={styles.chipText}>🔥 {item.current_streak}</Text>
+                    <View style={[styles.chip, { borderColor: c.border, backgroundColor: c.bgCard }]}>
+                      <Text style={[styles.chipText, { color: c.textMuted }]}>🔥 {item.current_streak}</Text>
                     </View>
                   )}
                 </View>
@@ -199,8 +202,8 @@ export default function SearchScreen() {
                 </View>
               )}
               {statuses[item.id] === "pending" && (
-                <View style={[styles.connectBtn, styles.pendingBtn]}>
-                  <Text style={styles.pendingText}>Pending</Text>
+                <View style={[styles.connectBtn, styles.pendingBtn, { borderColor: c.border }]}>
+                  <Text style={[styles.pendingText, { color: c.textMuted }]}>Pending</Text>
                 </View>
               )}
               {statuses[item.id] === "accepted" && (
@@ -221,27 +224,27 @@ export default function SearchScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0A0A0A" },
-  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 10, gap: 12, borderBottomWidth: 1, borderBottomColor: "#1a1a1a" },
+  container: { flex: 1 },
+  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 10, gap: 12, borderBottomWidth: 1 },
   backBtn: { padding: 4 },
-  backText: { fontSize: 24, color: "#888" },
-  input: { flex: 1, backgroundColor: "#141414", borderRadius: 14, paddingHorizontal: 16, paddingVertical: 11, color: "#fff", fontSize: 15, borderWidth: 1, borderColor: "#222" },
-  row: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, gap: 12, borderBottomWidth: 1, borderBottomColor: "#111" },
+  backText: { fontSize: 24 },
+  input: { flex: 1, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 11, fontSize: 15, borderWidth: 1 },
+  row: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, gap: 12, borderBottomWidth: 1 },
   info: { flex: 1, gap: 3 },
-  name: { fontSize: 15, fontWeight: "700", color: "#fff" },
-  username: { fontSize: 12, color: "#555" },
+  name: { fontSize: 15, fontWeight: "700" },
+  username: { fontSize: 12 },
   chips: { flexDirection: "row", gap: 6, marginTop: 4, flexWrap: "wrap" },
-  chip: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: "#222", backgroundColor: "#111" },
-  chipText: { fontSize: 11, color: "#666", fontWeight: "600" },
+  chip: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1 },
+  chipText: { fontSize: 11, fontWeight: "600" },
   connectBtn:    { backgroundColor: "#FF4500", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8, minWidth: 80, alignItems: "center" },
   connectText:   { color: "#fff", fontWeight: "700", fontSize: 13 },
-  pendingBtn:    { backgroundColor: "transparent", borderWidth: 1, borderColor: "#333" },
-  pendingText:   { color: "#666", fontWeight: "600", fontSize: 13 },
+  pendingBtn:    { backgroundColor: "transparent", borderWidth: 1 },
+  pendingText:   { fontWeight: "600", fontSize: 13 },
   connectedBtn:  { backgroundColor: "#16A34A" },
   connectedText: { color: "#fff", fontWeight: "700", fontSize: 13 },
   empty: { alignItems: "center", paddingTop: 60, gap: 10 },
   emptyEmoji: { fontSize: 40 },
-  emptyText: { fontSize: 14, color: "#555" },
+  emptyText: { fontSize: 14 },
   hint: { flex: 1, alignItems: "center", justifyContent: "center" },
-  hintText: { fontSize: 14, color: "#333", textAlign: "center", paddingHorizontal: 40 },
+  hintText: { fontSize: 14, textAlign: "center", paddingHorizontal: 40 },
 });
