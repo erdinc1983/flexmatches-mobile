@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
-  ScrollView, ActivityIndicator, StatusBar, Dimensions,
+  ScrollView, ActivityIndicator, Alert, StatusBar, Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -69,21 +69,28 @@ export default function OnboardingScreen() {
 
   async function finish() {
     setSaving(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setSaving(false); return; }
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-    await supabase.from("users").update({
-      full_name:       fullName.trim() || null,
-      bio:             bio.trim() || null,
-      sports:          sports.length > 0 ? sports : null,
-      fitness_level:   fitnessLevel || null,
-      availability:    preferredTimes.length > 0 ? preferredTimes : null,
-      city:            city.trim() || null,
-      training_intent: trainingIntent || null,
-    }).eq("id", user.id);
+      const { error } = await supabase.from("users").update({
+        full_name:       fullName.trim() || null,
+        bio:             bio.trim() || null,
+        sports:          sports.length > 0 ? sports : null,
+        fitness_level:   fitnessLevel || null,
+        availability:    preferredTimes.length > 0 ? preferredTimes : null,
+        city:            city.trim() || null,
+        training_intent: trainingIntent || null,
+      }).eq("id", user.id);
 
-    setSaving(false);
-    router.replace("/(tabs)/home");
+      if (error) throw error;
+      router.replace("/(tabs)/home");
+    } catch {
+      Alert.alert("Couldn't save your profile. Please check your connection and try again.");
+      // stays on current step — all state is preserved
+    } finally {
+      setSaving(false);
+    }
   }
 
   function next() {

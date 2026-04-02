@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { Stack, router } from "expo-router";
-import { Session } from "@supabase/supabase-js";
+import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
 import { ThemeProvider, useTheme, FONT, SPACE, PALETTE } from "../lib/theme";
 import { NotificationProvider } from "../lib/notificationContext";
@@ -89,33 +89,44 @@ const ebStyles = StyleSheet.create({
   button: { marginTop: SPACE[12], alignSelf: "center" },
 });
 
+// ─── App routing state ────────────────────────────────────────────────────────
+type AppState = "loading" | "unauthenticated" | "needs_onboarding" | "ready";
+
+async function resolveAppState(session: Session | null): Promise<AppState> {
+  if (!session) return "unauthenticated";
+  const { data } = await supabase
+    .from("users")
+    .select("full_name")
+    .eq("id", session.user.id)
+    .single();
+  return data?.full_name ? "ready" : "needs_onboarding";
+}
+
 export default function RootLayout() {
-  const [session, setSession] = useState<Session | null>(null);
-  const [initialized, setInitialized] = useState(false);
+  const [appState, setAppState] = useState<AppState>("loading");
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setInitialized(true);
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      setAppState(await resolveAppState(session));
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (_event, session) => {
+        setAppState(await resolveAppState(session));
+      }
+    );
 
     return () => subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
-    if (!initialized) return;
-    if (session) {
-      router.replace("/(tabs)/home");
-      // Register push token after login
-      registerPushToken();
-    } else {
-      router.replace("/(auth)/welcome");
-    }
-  }, [session, initialized]);
+    if (appState === "loading") return;
+    if (appState === "unauthenticated") { router.replace("/(auth)/welcome"); return; }
+    if (appState === "needs_onboarding") { router.replace("/(auth)/onboarding"); return; }
+    // ready
+    router.replace("/(tabs)/home");
+    registerPushToken();
+  }, [appState]);
 
   return (
     <ThemeProvider>

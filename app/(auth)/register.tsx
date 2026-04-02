@@ -37,12 +37,11 @@ export default function RegisterScreen() {
     if (error) { setLoading(false); Alert.alert("Error", error.message); return; }
     if (data.user) {
       await supabase.from("users").upsert({ id: data.user.id, username });
-      setLoading(false);
-      router.replace("/(auth)/onboarding");
-      return;
+      // Routing handled centrally by _layout.tsx (needsOnboarding check)
+    } else {
+      Alert.alert("Account created!", "Check your email to verify your account.");
     }
     setLoading(false);
-    Alert.alert("Account created!", "Check your email to verify your account.");
   }
 
   async function handleAppleSignIn() {
@@ -51,9 +50,8 @@ export default function RegisterScreen() {
     setAppleLoading(false);
     if (result.status === "error") {
       Alert.alert("Apple Sign In Failed", result.message);
-    } else if (result.status === "success" && result.isNewUser) {
-      router.replace("/(auth)/onboarding");
     }
+    // Routing handled centrally by _layout.tsx (needsOnboarding check)
   }
 
   return (
