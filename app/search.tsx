@@ -26,6 +26,21 @@ const LEVEL_COLOR: Record<string, string> = {
   advanced: "#FF4500",
 };
 
+/**
+ * Escape characters that have special meaning in PostgREST ILIKE patterns or
+ * filter strings, preventing wildcard abuse and OR-clause injection.
+ *
+ * ILIKE wildcards:  % → \%   _ → \_
+ * PostgREST syntax: , ( ) removed (these delimit OR conditions and groups)
+ */
+function sanitizeILike(q: string): string {
+  return q
+    .replace(/\\/g, "\\\\")  // escape backslash first
+    .replace(/%/g, "\\%")    // % is ILIKE wildcard → treat as literal
+    .replace(/_/g, "\\_")    // _ is ILIKE single-char wildcard → treat as literal
+    .replace(/[,()']/g, ""); // strip PostgREST OR/grouping syntax chars
+}
+
 export default function SearchScreen() {
   const [query,    setQuery]    = useState("");
   const [results,  setResults]  = useState<User[]>([]);
@@ -50,10 +65,11 @@ export default function SearchScreen() {
   async function search(q: string) {
     if (!myId) return;
     setLoading(true);
+    const safe = sanitizeILike(q);
     const { data } = await supabase
       .from("users")
       .select("id, username, full_name, avatar_url, fitness_level, city, current_streak")
-      .or(`username.ilike.%${q}%,full_name.ilike.%${q}%`)
+      .or(`username.ilike.%${safe}%,full_name.ilike.%${safe}%`)
       .neq("id", myId)
       .limit(20);
 
