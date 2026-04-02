@@ -17,6 +17,7 @@ export default function LoginScreen() {
   const [appleLoading,   setAppleLoading]   = useState(false);
   const [appleAvailable, setAppleAvailable] = useState(false);
   const [focusedField,   setFocusedField]   = useState<string | null>(null);
+  const [showPassword,   setShowPassword]   = useState(false);
 
   useEffect(() => {
     isAppleAuthAvailable().then(setAppleAvailable);
@@ -88,16 +89,21 @@ export default function LoginScreen() {
 
             <View style={styles.field}>
               <Text style={styles.label}>Password</Text>
-              <TextInput
-                style={[styles.input, focusedField === "password" && styles.inputFocused]}
-                placeholder="••••••••"
-                placeholderTextColor="#333"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                onFocus={() => setFocusedField("password")}
-                onBlur={() => setFocusedField(null)}
-              />
+              <View style={[styles.inputWrap, focusedField === "password" && styles.inputFocused]}>
+                <TextInput
+                  style={styles.inputInner}
+                  placeholder="••••••••"
+                  placeholderTextColor="#333"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                  onFocus={() => setFocusedField("password")}
+                  onBlur={() => setFocusedField(null)}
+                />
+                <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowPassword(v => !v)}>
+                  <Text style={styles.eyeIcon}>{showPassword ? "🙈" : "👁️"}</Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             <TouchableOpacity
@@ -218,4 +224,8 @@ const styles = StyleSheet.create({
   appleBtn:         { width: "100%", height: 56 },
   appleLoading:     { height: 56, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, backgroundColor: "#111", borderRadius: 18, borderWidth: 1, borderColor: "#222" },
   appleLoadingText: { color: "#888", fontSize: 15, fontWeight: "600" },
+  inputWrap:  { flexDirection: "row", alignItems: "center", backgroundColor: "#111", borderRadius: 16, borderWidth: 1.5, borderColor: "#222" },
+  inputInner: { flex: 1, paddingHorizontal: 18, paddingVertical: 16, color: "#FFF", fontSize: 16 },
+  eyeBtn:     { paddingHorizontal: 14, paddingVertical: 14 },
+  eyeIcon:    { fontSize: 18 },
 });

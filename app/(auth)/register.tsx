@@ -10,26 +10,50 @@ import * as AppleAuthentication from "expo-apple-authentication";
 import { supabase } from "../../lib/supabase";
 import { signInWithApple, isAppleAuthAvailable } from "../../lib/appleAuth";
 
+function getStrength(pw: string): { label: string; color: string; bars: number } {
+  if (pw.length < 6) return { label: "Too short", color: "#FF4500", bars: 1 };
+  const has8    = pw.length >= 8;
+  const hasUpper = /[A-Z]/.test(pw);
+  const hasNum   = /[0-9]/.test(pw);
+  const score = [has8, hasUpper, hasNum].filter(Boolean).length;
+  if (score === 0) return { label: "Weak",   color: "#FF4500", bars: 1 };
+  if (score === 1) return { label: "Weak",   color: "#FF4500", bars: 1 };
+  if (score === 2) return { label: "Medium", color: "#F59E0B", bars: 2 };
+  return              { label: "Strong", color: "#22C55E", bars: 3 };
+}
+
 export default function RegisterScreen() {
   const [email,          setEmail]          = useState("");
   const [password,       setPassword]       = useState("");
+  const [confirm,        setConfirm]        = useState("");
   const [username,       setUsername]       = useState("");
   const [loading,        setLoading]        = useState(false);
   const [appleLoading,   setAppleLoading]   = useState(false);
   const [appleAvailable, setAppleAvailable] = useState(false);
   const [focusedField,   setFocusedField]   = useState<string | null>(null);
+  const [showPassword,   setShowPassword]   = useState(false);
+  const [showConfirm,    setShowConfirm]    = useState(false);
+
+  const strength     = password.length > 0 ? getStrength(password) : null;
+  const passwordsMatch = confirm.length > 0 && password === confirm;
+  const canSubmit    = !!email && !!username && strength?.label === "Strong" && passwordsMatch;
 
   useEffect(() => {
     isAppleAuthAvailable().then(setAppleAvailable);
   }, []);
 
   async function handleRegister() {
-    if (!email || !password || !username) {
+    if (!email || !password || !username || !confirm) {
       Alert.alert("Error", "All fields are required");
       return;
     }
-    if (password.length < 6) {
-      Alert.alert("Error", "Password must be at least 6 characters");
+    if (password !== confirm) {
+      Alert.alert("Error", "Passwords don't match");
+      return;
+    }
+    const s = getStrength(password);
+    if (s.label !== "Strong") {
+      Alert.alert("Weak Password", "Use 8+ characters with at least one uppercase letter and one number.");
       return;
     }
     setLoading(true);
@@ -73,32 +97,98 @@ export default function RegisterScreen() {
           </View>
 
           <View style={styles.form}>
-            {[
-              { key: "username", label: "Username", placeholder: "flexkral", value: username, onChange: setUsername, autoCapitalize: "none" as const, keyboard: "default" as const },
-              { key: "email", label: "Email", placeholder: "you@example.com", value: email, onChange: setEmail, autoCapitalize: "none" as const, keyboard: "email-address" as const },
-              { key: "password", label: "Password", placeholder: "Min. 6 characters", value: password, onChange: setPassword, autoCapitalize: "none" as const, keyboard: "default" as const, secure: true },
-            ].map((field) => (
-              <View key={field.key} style={styles.field}>
-                <Text style={styles.label}>{field.label}</Text>
+            {/* Username */}
+            <View style={styles.field}>
+              <Text style={styles.label}>Username</Text>
+              <TextInput
+                style={[styles.input, focusedField === "username" && styles.inputFocused]}
+                placeholder="flexkral"
+                placeholderTextColor="#333"
+                value={username}
+                onChangeText={setUsername}
+                autoCapitalize="none"
+                onFocus={() => setFocusedField("username")}
+                onBlur={() => setFocusedField(null)}
+              />
+            </View>
+
+            {/* Email */}
+            <View style={styles.field}>
+              <Text style={styles.label}>Email</Text>
+              <TextInput
+                style={[styles.input, focusedField === "email" && styles.inputFocused]}
+                placeholder="you@example.com"
+                placeholderTextColor="#333"
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                onFocus={() => setFocusedField("email")}
+                onBlur={() => setFocusedField(null)}
+              />
+            </View>
+
+            {/* Password + strength */}
+            <View style={styles.field}>
+              <Text style={styles.label}>Password</Text>
+              <View style={styles.inputWrap}>
                 <TextInput
-                  style={[styles.input, focusedField === field.key && styles.inputFocused]}
-                  placeholder={field.placeholder}
+                  style={[styles.inputInner, focusedField === "password" && styles.inputFocused]}
+                  placeholder="8+ chars, uppercase, number"
                   placeholderTextColor="#333"
-                  value={field.value}
-                  onChangeText={field.onChange}
-                  autoCapitalize={field.autoCapitalize}
-                  keyboardType={field.keyboard}
-                  secureTextEntry={field.secure}
-                  onFocus={() => setFocusedField(field.key)}
+                  value={password}
+                  onChangeText={setPassword}
+                  autoCapitalize="none"
+                  secureTextEntry={!showPassword}
+                  onFocus={() => setFocusedField("password")}
                   onBlur={() => setFocusedField(null)}
                 />
+                <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowPassword(v => !v)}>
+                  <Text style={styles.eyeIcon}>{showPassword ? "🙈" : "👁️"}</Text>
+                </TouchableOpacity>
               </View>
-            ))}
+              {strength && (
+                <View style={styles.strengthRow}>
+                  {[1, 2, 3].map(i => (
+                    <View
+                      key={i}
+                      style={[styles.strengthBar, { backgroundColor: i <= strength.bars ? strength.color : "#222" }]}
+                    />
+                  ))}
+                  <Text style={[styles.strengthLabel, { color: strength.color }]}>{strength.label}</Text>
+                </View>
+              )}
+            </View>
+
+            {/* Confirm Password */}
+            <View style={styles.field}>
+              <Text style={styles.label}>Confirm Password</Text>
+              <View style={styles.inputWrap}>
+                <TextInput
+                  style={[styles.inputInner, focusedField === "confirm" && styles.inputFocused,
+                    confirm.length > 0 && !passwordsMatch && { borderColor: "#FF4500" }]}
+                  placeholder="Repeat your password"
+                  placeholderTextColor="#333"
+                  value={confirm}
+                  onChangeText={setConfirm}
+                  autoCapitalize="none"
+                  secureTextEntry={!showConfirm}
+                  onFocus={() => setFocusedField("confirm")}
+                  onBlur={() => setFocusedField(null)}
+                />
+                <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowConfirm(v => !v)}>
+                  <Text style={styles.eyeIcon}>{showConfirm ? "🙈" : "👁️"}</Text>
+                </TouchableOpacity>
+              </View>
+              {confirm.length > 0 && !passwordsMatch && (
+                <Text style={styles.errorHint}>Passwords don't match</Text>
+              )}
+            </View>
 
             <TouchableOpacity
-              style={[styles.button, loading && styles.buttonDisabled]}
+              style={[styles.button, (!canSubmit || loading) && styles.buttonDisabled]}
               onPress={handleRegister}
-              disabled={loading}
+              disabled={!canSubmit || loading}
               activeOpacity={0.85}
             >
               {loading
@@ -196,4 +286,12 @@ const styles = StyleSheet.create({
   appleBtn:         { width: "100%", height: 56 },
   appleLoading:     { height: 56, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, backgroundColor: "#111", borderRadius: 18, borderWidth: 1, borderColor: "#222" },
   appleLoadingText: { color: "#888", fontSize: 15, fontWeight: "600" },
+  inputWrap:     { flexDirection: "row", alignItems: "center", backgroundColor: "#111", borderRadius: 16, borderWidth: 1.5, borderColor: "#222" },
+  inputInner:    { flex: 1, paddingHorizontal: 18, paddingVertical: 16, color: "#FFF", fontSize: 16 },
+  eyeBtn:        { paddingHorizontal: 14, paddingVertical: 14 },
+  eyeIcon:       { fontSize: 18 },
+  strengthRow:   { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 },
+  strengthBar:   { flex: 1, height: 3, borderRadius: 2 },
+  strengthLabel: { fontSize: 12, fontWeight: "700", minWidth: 50 },
+  errorHint:     { fontSize: 12, color: "#FF4500", marginTop: 2 },
 });
