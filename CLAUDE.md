@@ -149,10 +149,12 @@ function sanitizeILike(q: string): string {
 ## Working Rules
 - Edit only `FlexMatchesMobile/` — never `flexmatches/apps/mobile/`
 - Read the file before editing
-- Use `useTheme()` for all colors — support dark + light
+- Use `useTheme()` for all colors — support dark + light; every new screen MUST start with `useTheme()` + `const c = theme.colors`
 - Mock data for visual-only passes; connect real Supabase after
 - Run Expo from this directory: `npx expo start`
 - After approved changes: commit + push to `origin master`
+- Supabase CLI on Windows: always use `--file <path>`, never stdin pipe (`--file -`)
+- Google Places API key lives in `lib/config.ts` — restricted to Places API + bundle ID `com.flexmatches.app` in Google Cloud Console
 
 ---
 
@@ -256,9 +258,18 @@ function sanitizeILike(q: string): string {
 | FM-803 | Paginated User Loading (cursor-based, 40/page, load-more on deck low) | ✅ Done |
 | FM-801 | Dark/Light Theme Audit (search.tsx, messages.tsx, circles.tsx) | ✅ Done |
 
+### Eagle 5 — Stability, Growth & Accessibility (✅ Complete)
+| Key | Title | Status |
+|-----|-------|--------|
+| FM-904 | useFocusEffect Stale Reload (matches, discover, activity, profile) | ✅ Done |
+| FM-1002 | Google Places City Autocomplete (onboarding + profile edit) | ✅ Done |
+| FM-1003 | Circle Capacity Enforcement ("Full" block + disabled join) | ✅ Done |
+| FM-1004 | Ended Challenge Progress Lock (form hidden, leaderboard final) | ✅ Done |
+| FM-1001 | Accessibility Labels (SwipeDeck buttons, TextInputs, icon-only buttons) | ✅ Done |
+
 ---
 
-## 🦅 Eagle 5 — (Planned)
+## 🦅 Eagle 6 — (Planned)
 
 > No stories assigned yet. Use JIRA backlog to pick next sprint.
 
