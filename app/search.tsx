@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, TextInput, FlatList,
-  TouchableOpacity, ActivityIndicator,
+  TouchableOpacity, ActivityIndicator, Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { supabase } from "../lib/supabase";
 import { Avatar } from "../components/Avatar";
+
+type MatchStatus = "none" | "pending" | "accepted" | "sending";
 
 type User = {
   id: string;
@@ -25,10 +27,12 @@ const LEVEL_COLOR: Record<string, string> = {
 };
 
 export default function SearchScreen() {
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<User[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [myId, setMyId] = useState<string | null>(null);
+  const [query,    setQuery]    = useState("");
+  const [results,  setResults]  = useState<User[]>([]);
+  const [loading,  setLoading]  = useState(false);
+  const [myId,     setMyId]     = useState<string | null>(null);
+  const [statuses, setStatuses] = useState<Record<string, MatchStatus>>({});
+  const [matchIds, setMatchIds] = useState<Record<string, string>>({});
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -37,34 +41,69 @@ export default function SearchScreen() {
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (!query.trim()) { setResults([]); return; }
+    if (!query.trim()) { setResults([]); setStatuses({}); return; }
 
     debounceRef.current = setTimeout(() => search(query.trim()), 350);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [query]);
 
   async function search(q: string) {
+    if (!myId) return;
     setLoading(true);
     const { data } = await supabase
       .from("users")
       .select("id, username, full_name, avatar_url, fitness_level, city, current_streak")
       .or(`username.ilike.%${q}%,full_name.ilike.%${q}%`)
-      .neq("id", myId ?? "")
+      .neq("id", myId)
       .limit(20);
 
-    setResults(data ?? []);
+    const users = data ?? [];
+    setResults(users);
+
+    // Load existing match statuses for all results
+    if (users.length > 0) {
+      const ids = users.map((u: User) => u.id);
+      const { data: matches } = await supabase
+        .from("matches")
+        .select("id, sender_id, receiver_id, status")
+        .or(`sender_id.eq.${myId},receiver_id.eq.${myId}`)
+        .in("sender_id", [myId, ...ids])
+        .in("receiver_id", [myId, ...ids]);
+
+      const newStatuses: Record<string, MatchStatus> = {};
+      const newMatchIds: Record<string, string> = {};
+      for (const m of matches ?? []) {
+        const otherId = m.sender_id === myId ? m.receiver_id : m.sender_id;
+        if (m.status === "accepted") {
+          newStatuses[otherId] = "accepted";
+          newMatchIds[otherId] = m.id;
+        } else if (m.status === "pending") {
+          newStatuses[otherId] = "pending";
+          newMatchIds[otherId] = m.id;
+        }
+      }
+      setStatuses(newStatuses);
+      setMatchIds(newMatchIds);
+    }
+
     setLoading(false);
   }
 
   async function sendRequest(targetId: string) {
-    if (!myId) return;
-    const { error } = await supabase.from("matches").insert({
-      sender_id: myId,
-      receiver_id: targetId,
-      status: "pending",
-    });
-    if (!error) {
-      setResults(r => r.filter(u => u.id !== targetId));
+    if (!myId || statuses[targetId] === "sending") return;
+    setStatuses(prev => ({ ...prev, [targetId]: "sending" }));
+    try {
+      const { data, error } = await supabase.from("matches").insert({
+        sender_id: myId,
+        receiver_id: targetId,
+        status: "pending",
+      }).select("id").single();
+      if (error) throw error;
+      setStatuses(prev => ({ ...prev, [targetId]: "pending" }));
+      if (data) setMatchIds(prev => ({ ...prev, [targetId]: data.id }));
+    } catch {
+      Alert.alert("Error", "Could not send request. Please try again.");
+      setStatuses(prev => ({ ...prev, [targetId]: "none" }));
     }
   }
 
@@ -133,9 +172,30 @@ export default function SearchScreen() {
                   )}
                 </View>
               </View>
-              <TouchableOpacity style={styles.connectBtn} onPress={() => sendRequest(item.id)} activeOpacity={0.8}>
-                <Text style={styles.connectText}>Connect</Text>
-              </TouchableOpacity>
+              {(statuses[item.id] === "none" || !statuses[item.id]) && (
+                <TouchableOpacity style={styles.connectBtn} onPress={() => sendRequest(item.id)} activeOpacity={0.8}>
+                  <Text style={styles.connectText}>Connect</Text>
+                </TouchableOpacity>
+              )}
+              {statuses[item.id] === "sending" && (
+                <View style={styles.connectBtn}>
+                  <ActivityIndicator color="#fff" size="small" />
+                </View>
+              )}
+              {statuses[item.id] === "pending" && (
+                <View style={[styles.connectBtn, styles.pendingBtn]}>
+                  <Text style={styles.pendingText}>Pending</Text>
+                </View>
+              )}
+              {statuses[item.id] === "accepted" && (
+                <TouchableOpacity
+                  style={[styles.connectBtn, styles.connectedBtn]}
+                  onPress={() => matchIds[item.id] && router.push(`/chat/${matchIds[item.id]}` as any)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.connectedText}>Connected</Text>
+                </TouchableOpacity>
+              )}
             </View>
           );
         }}
@@ -157,8 +217,12 @@ const styles = StyleSheet.create({
   chips: { flexDirection: "row", gap: 6, marginTop: 4, flexWrap: "wrap" },
   chip: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: "#222", backgroundColor: "#111" },
   chipText: { fontSize: 11, color: "#666", fontWeight: "600" },
-  connectBtn: { backgroundColor: "#FF4500", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 },
-  connectText: { color: "#fff", fontWeight: "700", fontSize: 13 },
+  connectBtn:    { backgroundColor: "#FF4500", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8, minWidth: 80, alignItems: "center" },
+  connectText:   { color: "#fff", fontWeight: "700", fontSize: 13 },
+  pendingBtn:    { backgroundColor: "transparent", borderWidth: 1, borderColor: "#333" },
+  pendingText:   { color: "#666", fontWeight: "600", fontSize: 13 },
+  connectedBtn:  { backgroundColor: "#16A34A" },
+  connectedText: { color: "#fff", fontWeight: "700", fontSize: 13 },
   empty: { alignItems: "center", paddingTop: 60, gap: 10 },
   emptyEmoji: { fontSize: 40 },
   emptyText: { fontSize: 14, color: "#555" },
