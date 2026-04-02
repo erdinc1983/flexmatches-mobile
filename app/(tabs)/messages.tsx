@@ -236,19 +236,28 @@ export default function MessagesScreen() {
   }
 
   async function handleDeleteMessages(matchId: string) {
-    // Delete messages only — match row is preserved
-    await supabase.from("messages").delete().eq("match_id", matchId);
-    setConversations((prev) => prev.map((c) =>
-      c.matchId !== matchId ? c : { ...c, lastMessage: null, lastMessageAt: null, unreadCount: 0 }
-    ));
+    try {
+      const { error } = await supabase.from("messages").delete().eq("match_id", matchId);
+      if (error) throw error;
+      setConversations((prev) => prev.map((c) =>
+        c.matchId !== matchId ? c : { ...c, lastMessage: null, lastMessageAt: null, unreadCount: 0 }
+      ));
+    } catch {
+      Alert.alert("Error", "Could not delete messages. Please try again.");
+    }
   }
 
   async function handleUnmatch(matchId: string) {
-    // Delete messages then set match status to 'unmatched' (distinct from 'declined')
-    await supabase.from("messages").delete().eq("match_id", matchId);
-    await supabase.from("matches").update({ status: "unmatched" }).eq("id", matchId);
-    setConversations((prev) => prev.filter((c) => c.matchId !== matchId));
-    setSaved((prev) => { const n = new Set(prev); n.delete(matchId); return n; });
+    try {
+      const { error: msgError } = await supabase.from("messages").delete().eq("match_id", matchId);
+      if (msgError) throw msgError;
+      const { error: matchError } = await supabase.from("matches").update({ status: "unmatched" }).eq("id", matchId);
+      if (matchError) throw matchError;
+      setConversations((prev) => prev.filter((c) => c.matchId !== matchId));
+      setSaved((prev) => { const n = new Set(prev); n.delete(matchId); return n; });
+    } catch {
+      Alert.alert("Error", "Could not unmatch. Please try again.");
+    }
   }
 
   // ── Render ───────────────────────────────────────────────────────────────────
