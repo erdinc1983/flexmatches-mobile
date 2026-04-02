@@ -68,97 +68,60 @@ export default function MessagesScreen() {
 
   const load = useCallback(async (isRefresh = false) => {
     try {
-    setError(false);
-    if (!isRefresh) setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    setMyId(user.id);
-    myIdRef.current = user.id;
+      setError(false);
+      if (!isRefresh) setLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      setMyId(user.id);
+      myIdRef.current = user.id;
 
-    const { data: matches } = await supabase
-      .from("matches")
-      .select("id, sender_id, receiver_id, updated_at")
-      .eq("status", "accepted")
-      .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
-      .order("updated_at", { ascending: false });
+      // Single RPC replaces N×3 queries — LATERAL joins return everything in one round-trip
+      const { data: rows, error: rpcError } = await supabase
+        .rpc("get_inbox", { p_user_id: user.id });
 
-    if (!matches || matches.length === 0) { setLoading(false); return; }
+      if (rpcError) throw rpcError;
+      if (!rows || rows.length === 0) { setConversations([]); conversationsRef.current = []; return; }
 
-    const otherIds = matches.map((m: any) =>
-      m.sender_id === user.id ? m.receiver_id : m.sender_id
-    );
-    const { data: userRows } = await supabase
-      .from("users")
-      .select("id, username, full_name, avatar_url, banned_at")
-      .in("id", otherIds)
-      .is("banned_at", null);
-    const userMap = new Map((userRows ?? []).map((u: any) => [u.id, u]));
+      const convos: Conversation[] = (rows as any[]).map((row) => ({
+        matchId:       row.match_id,
+        userId:        row.other_user_id,
+        name:          row.other_full_name ?? row.other_username,
+        username:      row.other_username,
+        avatarUrl:     row.other_avatar_url ?? null,
+        lastMessage:   row.last_message ?? null,
+        lastMessageAt: row.last_message_at ?? null,
+        unreadCount:   Number(row.unread_count ?? 0),
+        session:       row.session_id ? {
+          id:          row.session_id,
+          match_id:    row.match_id,
+          proposer_id: row.session_proposer_id,
+          receiver_id: row.session_receiver_id,
+          sport:       row.session_sport,
+          session_date: row.session_date,
+          session_time: row.session_time,
+          location:    row.session_location,
+          notes:       row.session_notes,
+          status:      row.session_status,
+        } as BuddySession : null,
+      }));
 
-    // Only show conversations where the other user is not banned
-    const activeMatches = matches.filter((m: any) => {
-      const otherId = m.sender_id === user.id ? m.receiver_id : m.sender_id;
-      return userMap.has(otherId);
-    });
+      // Sort: action-needed → unread → recency (RPC already orders by updated_at,
+      // but we need the action/unread priority on top)
+      convos.sort((a, b) => {
+        const aNeedsAction = a.session?.status === "pending" && a.session.receiver_id === user.id;
+        const bNeedsAction = b.session?.status === "pending" && b.session.receiver_id === user.id;
+        if (aNeedsAction && !bNeedsAction) return -1;
+        if (!aNeedsAction && bNeedsAction) return 1;
+        if (a.unreadCount > 0 && b.unreadCount === 0) return -1;
+        if (a.unreadCount === 0 && b.unreadCount > 0) return 1;
+        if (!a.lastMessageAt) return 1;
+        if (!b.lastMessageAt) return -1;
+        return new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime();
+      });
 
-    const convos: Conversation[] = await Promise.all(
-      activeMatches.map(async (m: any) => {
-        const otherId = m.sender_id === user.id ? m.receiver_id : m.sender_id;
-        const other = userMap.get(otherId)!;
-
-        const [
-          { data: lastMsg },
-          { count: unread },
-          { data: sessionData },
-        ] = await Promise.all([
-          supabase.from("messages")
-            .select("content, created_at")
-            .eq("match_id", m.id)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle(),
-          supabase.from("messages")
-            .select("*", { count: "exact", head: true })
-            .eq("match_id", m.id)
-            .neq("sender_id", user.id)
-            .is("read_at", null),
-          supabase.from("buddy_sessions")
-            .select("id, match_id, proposer_id, receiver_id, sport, session_date, session_time, location, notes, status")
-            .eq("match_id", m.id)
-            .not("status", "in", '("declined","cancelled","completed")')
-            .order("session_date", { ascending: true })
-            .limit(1)
-            .maybeSingle(),
-        ]);
-
-        return {
-          matchId:       m.id,
-          userId:        otherId,
-          name:          other.full_name ?? other.username,
-          username:      other.username,
-          avatarUrl:     other.avatar_url ?? null,
-          lastMessage:   lastMsg?.content ?? null,
-          lastMessageAt: lastMsg?.created_at ?? null,
-          unreadCount:   unread ?? 0,
-          session:       sessionData as BuddySession | null,
-        };
-      })
-    );
-
-    convos.sort((a, b) => {
-      const aNeedsAction = a.session?.status === "pending" && a.session.receiver_id === user.id;
-      const bNeedsAction = b.session?.status === "pending" && b.session.receiver_id === user.id;
-      if (aNeedsAction && !bNeedsAction) return -1;
-      if (!aNeedsAction && bNeedsAction) return 1;
-      if (a.unreadCount > 0 && b.unreadCount === 0) return -1;
-      if (a.unreadCount === 0 && b.unreadCount > 0) return 1;
-      if (!a.lastMessageAt) return 1;
-      if (!b.lastMessageAt) return -1;
-      return new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime();
-    });
-
-    setConversations(convos);
-    conversationsRef.current = convos;
-    lastLoadRef.current = Date.now();
+      setConversations(convos);
+      conversationsRef.current = convos;
+      lastLoadRef.current = Date.now();
     } catch (err) {
       console.error("[Messages] load failed:", err);
       if (isRefresh) {
