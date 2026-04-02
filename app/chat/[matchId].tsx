@@ -361,7 +361,7 @@ export default function ChatScreen() {
           title: "Session Accepted! ✅",
           body: `${me?.full_name ?? me?.username ?? "Your partner"} accepted your ${session.sport} session`,
           relatedId: matchId,
-          data: { type: "session_accepted", matchId },
+          data: { type: "session_accepted", relatedId: matchId },
         });
       }
       loadSession();
@@ -382,9 +382,9 @@ export default function ChatScreen() {
         notifyUser(session.proposer_id, {
           type: "session_declined",
           title: "Session Declined",
-          body: `${me?.full_name ?? me?.username ?? "Your partner"} declined the ${session.sport} session`,
+          body: `${me?.full_name ?? me?.username ?? "Your partner"} can't make the ${session.sport} session`,
           relatedId: matchId,
-          data: { type: "session_declined", matchId },
+          data: { type: "session_declined", relatedId: matchId },
         });
       }
       setSession(null);
@@ -547,9 +547,9 @@ export default function ChatScreen() {
       notifyUser(other.id, {
         type: "session_proposed",
         title: "New Session Proposal 📅",
-        body: `${me?.full_name ?? me?.username ?? "Your partner"} wants to do ${sportValue} on ${sessionDate.trim()}`,
+        body: `${me?.full_name ?? me?.username ?? "Your partner"} proposed a workout: ${sportValue} on ${sessionDate.trim()}`,
         relatedId: matchId,
-        data: { type: "session_proposed", matchId },
+        data: { type: "session_proposed", relatedId: matchId },
       });
       if (editingSessionRef.current) {
         await supabase.from("buddy_sessions").update({ status: "cancelled" }).eq("id", editingSessionRef.current);
