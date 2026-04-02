@@ -327,6 +327,8 @@ export default function DiscoverScreen() {
   const currentUserIdRef = useRef<string>("");
   const excludedRef      = useRef<Set<string>>(new Set());
   const myProfileRef     = useRef<MyProfile | null>(null);
+  const lastLoadRef      = useRef(0);
+  const STALE_MS         = 30_000;
 
   // ── Data loading ────────────────────────────────────────────────────────────
   const load = useCallback(async (isRefresh = false) => {
@@ -433,6 +435,7 @@ export default function DiscoverScreen() {
     setStatuses(initialStatuses);
     setRawOffset(PAGE_SIZE);
     setHasMore((candidates?.length ?? 0) >= PAGE_SIZE);
+    lastLoadRef.current = Date.now();
     } catch (err) {
       console.error("[Discover] load failed:", err);
       if (isRefresh) {
@@ -482,14 +485,13 @@ export default function DiscoverScreen() {
     }
   }, [loadingMore, hasMore, rawOffset]);
 
-  // Load once on mount
-  useEffect(() => { load(); }, [load]);
-
-  // Reset filters every time the tab comes into focus
+  // Reload on focus if stale (>30s) or empty; always reset filters
   useFocusEffect(useCallback(() => {
     setFilters(EMPTY_FILTERS);
     setSearchQuery("");
-  }, []));
+    const elapsed = Date.now() - lastLoadRef.current;
+    if (elapsed > STALE_MS || users.length === 0) load();
+  }, [load, users.length]));
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

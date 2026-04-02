@@ -8,7 +8,7 @@
  *   career section (company, industry, education, career goals).
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ErrorState } from "../../components/ui/ErrorState";
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
@@ -16,7 +16,7 @@ import {
   Switch,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { supabase } from "../../lib/supabase";
 import { useTheme, SPACE, FONT, RADIUS, PALETTE, BRAND } from "../../lib/theme";
@@ -167,6 +167,9 @@ export default function ProfileScreen() {
   const [userTier,          setUserTier]          = useState<Tier>(TIERS[0]);
   const [userPoints,        setUserPoints]        = useState(0);
 
+  const lastLoadRef = useRef(0);
+  const STALE_MS    = 30_000;
+
   // ── Data ────────────────────────────────────────────────────────────────────
   const fetchProfile = useCallback(async (isRefresh = false) => {
     try {
@@ -229,6 +232,7 @@ export default function ProfileScreen() {
     const pts = await calcUserPoints(user.id);
     setUserPoints(pts);
     setUserTier(calcTier(pts));
+    lastLoadRef.current = Date.now();
     } catch (err) {
       console.error("[Profile] fetchProfile failed:", err);
       if (isRefresh) {
@@ -241,7 +245,10 @@ export default function ProfileScreen() {
     }
   }, []);
 
-  useEffect(() => { fetchProfile(); }, [fetchProfile]);
+  useFocusEffect(useCallback(() => {
+    const elapsed = Date.now() - lastLoadRef.current;
+    if (elapsed > STALE_MS || !profile) fetchProfile();
+  }, [fetchProfile, profile]));
 
   useEffect(() => {
     if (!loading) return;

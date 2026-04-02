@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, FlatList,
   ActivityIndicator, TextInput, Modal, Alert, RefreshControl,
   KeyboardAvoidingView, Platform, ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useFocusEffect } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import { ErrorState } from "../../components/ui/ErrorState";
 import { useTheme, SPACE, FONT, RADIUS, PALETTE } from "../../lib/theme";
@@ -45,6 +46,9 @@ export default function ActivityScreen() {
   const [isAtGym, setIsAtGym] = useState(false);
   const [gymToggling, setGymToggling] = useState(false);
 
+  const lastLoadRef = useRef(0);
+  const STALE_MS    = 30_000;
+
   const load = useCallback(async (isRefresh = false) => {
     try {
     setError(false);
@@ -74,6 +78,7 @@ export default function ActivityScreen() {
       }
     }
     setIsAtGym(atGym);
+    lastLoadRef.current = Date.now();
     } catch (err) {
       console.error("[Activity] load failed:", err);
       if (isRefresh) {
@@ -86,7 +91,10 @@ export default function ActivityScreen() {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useFocusEffect(useCallback(() => {
+    const elapsed = Date.now() - lastLoadRef.current;
+    if (elapsed > STALE_MS || workouts.length === 0) load();
+  }, [load, workouts.length]));
 
   useEffect(() => {
     if (!loading) return;

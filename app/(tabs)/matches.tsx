@@ -8,13 +8,13 @@
  * Leaderboard has been removed — it does not belong in the connections context.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ErrorState } from "../../components/ui/ErrorState";
 import {
   View, Text, StyleSheet, TouchableOpacity,
   ActivityIndicator, FlatList, Alert, Modal, TextInput, ScrollView, RefreshControl,
 } from "react-native";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "../../lib/supabase";
 import { notifyMatchAccepted } from "../../lib/notifications";
@@ -75,6 +75,9 @@ export default function MatchesScreen() {
 
   const [refreshing,      setRefreshing]      = useState(false);
   const [myId,            setMyId]            = useState<string | null>(null);
+
+  const lastLoadRef = useRef(0);
+  const STALE_MS    = 30_000;
 
   // Session scheduling
   const [sessionCounts,   setSessionCounts]   = useState<Record<string, number>>({});
@@ -159,6 +162,7 @@ export default function MatchesScreen() {
       });
       setSessionCounts(counts);
     }
+    lastLoadRef.current = Date.now();
     } catch (err) {
       console.error("[Matches] load failed:", err);
       if (isRefresh) {
@@ -181,7 +185,10 @@ export default function MatchesScreen() {
     setBuddySessions((data as BuddySession[]) ?? []);
   }
 
-  useEffect(() => { load(); }, [load]);
+  useFocusEffect(useCallback(() => {
+    const elapsed = Date.now() - lastLoadRef.current;
+    if (elapsed > STALE_MS || pending.length + accepted.length === 0) load();
+  }, [load, pending.length, accepted.length]));
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
