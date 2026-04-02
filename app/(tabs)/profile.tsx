@@ -21,6 +21,7 @@ import { supabase } from "../../lib/supabase";
 import { useTheme, SPACE, FONT, RADIUS, PALETTE, BRAND } from "../../lib/theme";
 import { Icon } from "../../components/Icon";
 import { Avatar } from "../../components/Avatar";
+import { ProfileSkeleton } from "../../components/ui/Skeleton";
 import { TIERS, BADGES, BADGE_MAP, calcTier, calcUserPoints, type BadgeKey, type Tier } from "../../lib/badges";
 import { useNotifications } from "../../lib/notificationContext";
 import { unregisterPushToken } from "../../lib/pushTokens";
@@ -362,7 +363,7 @@ export default function ProfileScreen() {
   if (loading || !profile) {
     return (
       <SafeAreaView style={[s.root, { backgroundColor: c.bg }]}>
-        <ActivityIndicator color={c.brand} size="large" style={{ flex: 1 }} />
+        <ProfileSkeleton />
       </SafeAreaView>
     );
   }
@@ -1164,7 +1165,7 @@ function InfoCard({ label, value, valueColor }: { label: string; value: string; 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   root:   { flex: 1 },
-  scroll: { paddingHorizontal: SPACE[24], paddingBottom: SPACE[60], gap: SPACE[20] },
+  scroll: { paddingHorizontal: SPACE[24], paddingBottom: SPACE[60], gap: SPACE[10] },
 
   // Hero
   hero:          { alignItems: "center", paddingTop: SPACE[16], gap: SPACE[8] },
@@ -1322,7 +1323,7 @@ const s = StyleSheet.create({
 
 // ─── Accordion styles ─────────────────────────────────────────────────────────
 const acc = StyleSheet.create({
-  wrap:      { borderRadius: RADIUS.xl, borderWidth: 1, marginBottom: SPACE[10], overflow: "hidden" },
+  wrap:      { borderRadius: RADIUS.xl, borderWidth: 1, marginBottom: SPACE[2], overflow: "hidden" },
   header:    { flexDirection: "row", alignItems: "center", paddingHorizontal: SPACE[16], paddingVertical: SPACE[14], gap: SPACE[10] },
   emoji:     { fontSize: 18 },
   title:     { flex: 1, fontSize: FONT.size.md, fontWeight: FONT.weight.bold },

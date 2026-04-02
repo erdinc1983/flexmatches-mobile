@@ -151,12 +151,14 @@ export default function NotificationsScreen() {
   const load = useCallback(async (uid?: string) => {
     const id = uid ?? userId;
     if (!id) return;
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("notifications")
       .select("id, type, title, body, message, read, created_at, related_id, url")
       .eq("user_id", id)
       .order("created_at", { ascending: false })
       .limit(100);
+    if (error) console.warn("[Notifications] load error:", error.message);
+    console.log("[Notifications] loaded", (data ?? []).length, "rows");
     setNotifs(data ?? []);
     setLoading(false);
   }, [userId]);

@@ -87,7 +87,7 @@ function MatchPhotoCard({ user, onPress }: { user: SuggestedUser; onPress: () =>
         source={{ uri: photoUrl }}
         style={s.photo}
         contentFit="cover"
-        placeholder={{ uri: fallbackUrl }}
+        placeholder={{ blurhash: "LKHBBd~q9F%M%MIUofRj00M{D%of" }}
         transition={200}
       />
 

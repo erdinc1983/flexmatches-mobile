@@ -18,6 +18,7 @@ import { useTheme, SPACE, FONT, RADIUS, PALETTE } from "../../lib/theme";
 import { Icon } from "../Icon";
 import { resolveUrl } from "../Avatar";
 import { supabase } from "../../lib/supabase";
+import { BlurOverlay } from "../ui/BlurOverlay";
 import { RequestStatus, DiscoverUser } from "./PersonCard";
 
 // Cartoon fallback
@@ -106,10 +107,7 @@ export function ProfileSheet({ user, status, onConnect, onClose, onBlock }: Prop
 
   return (
     <Modal visible animationType="fade" transparent onRequestClose={onClose}>
-      {/* Backdrop — tap to close */}
-      <TouchableWithoutFeedback onPress={() => { setMenuOpen(false); setShowReport(false); onClose(); }}>
-        <View style={s.backdrop} />
-      </TouchableWithoutFeedback>
+      <BlurOverlay onPress={() => { setMenuOpen(false); setShowReport(false); onClose(); }}>
 
       {/* Centered card */}
       <View style={s.centeredWrap} pointerEvents="box-none">
@@ -184,7 +182,7 @@ export function ProfileSheet({ user, status, onConnect, onClose, onBlock }: Prop
                   source={{ uri: photoUrl }}
                   style={StyleSheet.absoluteFill}
                   contentFit="cover"
-                  placeholder={{ uri: cartoonAvatar(displayName) }}
+                  placeholder={{ blurhash: "LKHBBd~q9F%M%MIUofRj00M{D%of" }}
                   transition={200}
                 />
                 <LinearGradient
@@ -221,7 +219,7 @@ export function ProfileSheet({ user, status, onConnect, onClose, onBlock }: Prop
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.content}>
 
             {/* ── Stats row ───────────────────────────────────────── */}
-            {(user.current_streak >= 1 || user.matchScore > 0) && (
+            {(user.current_streak >= 1 || user.matchScore > 0 || user.sessions_completed > 0) && (
               <View style={[s.statsRow, { borderColor: c.border }]}>
                 {user.current_streak >= 1 && (
                   <StatCell label="Streak" value={`${user.current_streak}d`} valueColor={c.brand} />
@@ -234,6 +232,14 @@ export function ProfileSheet({ user, status, onConnect, onClose, onBlock }: Prop
                 {user.fitness_level && (
                   <StatCell label="Level" value={user.fitness_level} valueColor={
                     user.fitness_level === "beginner" ? "#22C55E" : user.fitness_level === "intermediate" ? "#F59E0B" : "#FF4500"
+                  } />
+                )}
+                {user.sessions_completed > 0 && (
+                  <StatCell label="Sessions" value={`${user.sessions_completed}`} valueColor="#22C55E" />
+                )}
+                {user.sessions_completed >= 3 && (
+                  <StatCell label="Reliable" value={`${user.reliability_score}%`} valueColor={
+                    user.reliability_score >= 80 ? "#22C55E" : user.reliability_score >= 50 ? "#F59E0B" : "#FF4500"
                   } />
                 )}
               </View>
@@ -328,6 +334,7 @@ export function ProfileSheet({ user, status, onConnect, onClose, onBlock }: Prop
           </ScrollView>
         </View>
       </View>
+      </BlurOverlay>
     </Modal>
   );
 }

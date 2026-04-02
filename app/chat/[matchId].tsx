@@ -23,6 +23,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, router } from "expo-router";
 import { supabase } from "../../lib/supabase";
+import { notifyUser } from "../../lib/push";
 import { scheduleSessionReminder } from "../../lib/notifications";
 import { MapLocationPicker } from "../../components/MapLocationPicker";
 import { useTheme, SPACE, FONT, RADIUS } from "../../lib/theme";
@@ -32,6 +33,7 @@ import { SessionBanner } from "../../components/chat/SessionBanner";
 import type { BuddySession } from "../../components/chat/SessionBanner";
 import { ProfileSheet } from "../../components/discover/ProfileSheet";
 import type { DiscoverUser } from "../../components/discover/PersonCard";
+import { BlurOverlay } from "../../components/ui/BlurOverlay";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Message = {
@@ -208,6 +210,7 @@ export default function ChatScreen() {
   const [sheetUser,         setSheetUser]         = useState<DiscoverUser | null>(null);
   const [showCompleted,     setShowCompleted]     = useState(false);
   const [completedSessions, setCompletedSessions] = useState<{ id: string; sport: string; session_date: string; completed_at: string | null }[]>([]);
+  const [sessionCount,      setSessionCount]      = useState(0);
 
   const flatListRef       = useRef<FlatList>(null);
   const editingSessionRef = useRef<string | null>(null); // id of session being replaced via Edit
@@ -305,6 +308,14 @@ export default function ChatScreen() {
 
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 100);
     loadSession();
+
+    // Load completed session count for this match pair
+    const { count } = await supabase
+      .from("buddy_sessions")
+      .select("*", { count: "exact", head: true })
+      .eq("match_id", matchId)
+      .eq("status", "completed");
+    setSessionCount(count ?? 0);
   }
 
   const loadCompletedSessions = useCallback(async () => {
@@ -336,16 +347,61 @@ export default function ChatScreen() {
       const partnerName = other?.full_name?.split(" ")[0] ?? other?.username ?? "your partner";
       scheduleSessionReminder(partnerName, session.session_date);
     }
+    // Push to proposer: their session was accepted
+    if (session.proposer_id && session.proposer_id !== userId) {
+      const myName = other?.full_name?.split(" ")[0]; // we are the accepter, other is the proposer... actually no
+      const { data: me } = await supabase.from("users").select("full_name, username").eq("id", userId!).single();
+      notifyUser(session.proposer_id, {
+        type: "session_accepted",
+        title: "Session Accepted! ✅",
+        body: `${me?.full_name ?? me?.username ?? "Your partner"} accepted your ${session.sport} session`,
+        relatedId: matchId,
+        data: { type: "session_accepted", matchId },
+      });
+    }
     loadSession();
   }
   async function declineSession() {
     if (!session) return;
     await supabase.from("buddy_sessions").update({ status: "declined" }).eq("id", session.id);
+    // Notify proposer: their session was declined
+    if (session.proposer_id && session.proposer_id !== userId) {
+      const { data: me } = await supabase.from("users").select("full_name, username").eq("id", userId!).single();
+      notifyUser(session.proposer_id, {
+        type: "session_declined",
+        title: "Session Declined",
+        body: `${me?.full_name ?? me?.username ?? "Your partner"} declined the ${session.sport} session`,
+        relatedId: matchId,
+        data: { type: "session_declined", matchId },
+      });
+    }
     setSession(null);
   }
+  /** Recalculate reliability_score for a user based on their counters */
+  async function recalcReliability(uid: string) {
+    const { data } = await supabase
+      .from("users")
+      .select("sessions_completed, sessions_no_show, sessions_cancelled")
+      .eq("id", uid)
+      .single();
+    if (!data) return;
+    const completed  = data.sessions_completed ?? 0;
+    const noShow     = data.sessions_no_show ?? 0;
+    const cancelled  = data.sessions_cancelled ?? 0;
+    const total = completed + noShow + cancelled;
+    const score = total === 0 ? 100 : Math.round((completed / total) * 100);
+    await supabase.from("users").update({ reliability_score: score }).eq("id", uid);
+  }
+
   async function cancelSession() {
-    if (!session) return;
+    if (!session || !userId) return;
     await supabase.from("buddy_sessions").update({ status: "cancelled" }).eq("id", session.id);
+    // Increment cancelled counter + recalc reliability
+    const { data } = await supabase.from("users").select("sessions_cancelled").eq("id", userId).single();
+    if (data) {
+      await supabase.from("users").update({ sessions_cancelled: (data.sessions_cancelled ?? 0) + 1 }).eq("id", userId);
+      recalcReliability(userId);
+    }
     setSession(null);
   }
 
@@ -372,14 +428,65 @@ export default function ChatScreen() {
 
   async function confirmSession() {
     if (!session || !userId) return;
-    // Mark session completed — both participants get +1 sessions_kept
-    await supabase.from("buddy_sessions").update({ status: "completed", completed_at: new Date().toISOString() }).eq("id", session.id);
-    // Increment sessions_kept for both users (fire-and-forget, best-effort)
-    supabase.rpc("increment_sessions_kept", { uid: userId }).then(() => {});
-    if (other?.id) {
-      supabase.rpc("increment_sessions_kept", { uid: other.id }).then(() => {});
+    await supabase.from("buddy_sessions").update({
+      status: "completed",
+      completed_at: new Date().toISOString(),
+      confirmed_by: userId,
+    }).eq("id", session.id);
+    // Increment completed count + recalc reliability for both users
+    const { data: myData } = await supabase.from("users").select("sessions_completed").eq("id", userId).single();
+    if (myData) {
+      await supabase.from("users").update({ sessions_completed: (myData.sessions_completed ?? 0) + 1 }).eq("id", userId);
+      recalcReliability(userId);
     }
+    if (other?.id) {
+      const { data: theirData } = await supabase.from("users").select("sessions_completed").eq("id", other.id).single();
+      if (theirData) {
+        await supabase.from("users").update({ sessions_completed: (theirData.sessions_completed ?? 0) + 1 }).eq("id", other.id);
+        recalcReliability(other.id);
+      }
+    }
+    // Also call legacy RPC (best-effort)
+    supabase.rpc("increment_sessions_kept", { uid: userId }).then(() => {});
+    if (other?.id) supabase.rpc("increment_sessions_kept", { uid: other.id }).then(() => {});
+    setSessionCount((prev) => prev + 1);
     loadSession();
+  }
+
+  async function noShowSession() {
+    if (!session || !userId) return;
+    Alert.alert(
+      "Session didn't happen?",
+      "This will be recorded. It helps build trust in the community.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Confirm",
+          onPress: async () => {
+            await supabase.from("buddy_sessions").update({
+              status: "completed",
+              no_show: true,
+              completed_at: new Date().toISOString(),
+              confirmed_by: userId,
+            }).eq("id", session.id);
+            // Increment no-show counter + recalc reliability for both
+            const { data: myData } = await supabase.from("users").select("sessions_no_show").eq("id", userId).single();
+            if (myData) {
+              await supabase.from("users").update({ sessions_no_show: (myData.sessions_no_show ?? 0) + 1 }).eq("id", userId);
+              recalcReliability(userId);
+            }
+            if (other?.id) {
+              const { data: theirData } = await supabase.from("users").select("sessions_no_show").eq("id", other.id).single();
+              if (theirData) {
+                await supabase.from("users").update({ sessions_no_show: (theirData.sessions_no_show ?? 0) + 1 }).eq("id", other.id);
+                recalcReliability(other.id);
+              }
+            }
+            loadSession();
+          },
+        },
+      ]
+    );
   }
 
   // ── Propose session ───────────────────────────────────────────────────────
@@ -397,6 +504,15 @@ export default function ChatScreen() {
       const partnerName = other?.full_name?.split(" ")[0] ?? other?.username ?? "your partner";
       scheduleSessionReminder(partnerName, sessionDate.trim());
     }
+    // Notify the receiver
+    const { data: me } = await supabase.from("users").select("full_name, username").eq("id", userId).single();
+    notifyUser(other.id, {
+      type: "session_proposed",
+      title: "New Session Proposal 📅",
+      body: `${me?.full_name ?? me?.username ?? "Your partner"} wants to do ${sportValue} on ${sessionDate.trim()}`,
+      relatedId: matchId,
+      data: { type: "session_proposed", matchId },
+    });
     // If editing an existing session, cancel it now that new one is saved
     if (editingSessionRef.current) {
       await supabase.from("buddy_sessions").update({ status: "cancelled" }).eq("id", editingSessionRef.current);
@@ -433,6 +549,17 @@ export default function ChatScreen() {
     await supabase.from("messages").insert({
       match_id: matchId, sender_id: userId, content: trimmed, read_at: null,
     });
+    // Notify the other user (push + in-app)
+    if (other?.id) {
+      const { data: me } = await supabase.from("users").select("full_name, username").eq("id", userId).single();
+      notifyUser(other.id, {
+        type: "message",
+        title: me?.full_name ?? me?.username ?? "New message",
+        body: trimmed.length > 80 ? trimmed.slice(0, 77) + "…" : trimmed,
+        relatedId: matchId,
+        data: { type: "message", matchId },
+      });
+    }
     setSending(false);
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 80);
   }
@@ -488,11 +615,18 @@ export default function ChatScreen() {
         >
           <Avatar url={other?.avatar_url} name={otherName} size={38} />
           <View style={s.headerInfo}>
-            <Text style={[s.headerName, { color: c.text }]} numberOfLines={1}>{otherName}</Text>
-            {levelColor && (
-              <View style={[s.levelBadge, { backgroundColor: levelColor+"20", borderColor: levelColor+"50" }]}>
-                <Text style={[s.levelText, { color: levelColor }]}>{other!.fitness_level}</Text>
-              </View>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Text style={[s.headerName, { color: c.text }]} numberOfLines={1}>{otherName}</Text>
+              {levelColor && (
+                <View style={[s.levelBadge, { backgroundColor: levelColor+"20", borderColor: levelColor+"50" }]}>
+                  <Text style={[s.levelText, { color: levelColor }]}>{other!.fitness_level}</Text>
+                </View>
+              )}
+            </View>
+            {sessionCount > 0 && (
+              <Text style={{ fontSize: 11, color: c.textMuted, marginTop: 1 }}>
+                🏋️ Trained together {sessionCount} time{sessionCount !== 1 ? "s" : ""}
+              </Text>
             )}
           </View>
         </TouchableOpacity>
@@ -516,6 +650,7 @@ export default function ChatScreen() {
           onAccept={acceptSession}
           onDecline={declineSession}
           onConfirm={confirmSession}
+          onNoShow={noShowSession}
           onCancel={session.proposer_id === userId && session.status === "pending" ? cancelSession : undefined}
           onEdit={session.proposer_id === userId && session.status === "pending" ? editSession : undefined}
         />
@@ -614,11 +749,8 @@ export default function ChatScreen() {
         transparent
         onRequestClose={() => setShowActionMenu(false)}
       >
-        <TouchableOpacity
-          style={am.backdrop}
-          activeOpacity={1}
-          onPress={() => setShowActionMenu(false)}
-        />
+        <BlurOverlay onPress={() => setShowActionMenu(false)}>
+        <View style={am.sheetWrap}>
         <View style={[am.sheet, { backgroundColor: c.bgCard }]}>
           <Text style={[am.sheetTitle, { color: c.text }]}>
             Plan with {other?.full_name?.split(" ")[0] ?? otherName}
@@ -717,6 +849,8 @@ export default function ChatScreen() {
           </TouchableOpacity>
 
         </View>
+        </View>
+        </BlurOverlay>
       </Modal>
 
       {/* ── Session wizard — centered card ───────────────────────────── */}
@@ -1051,7 +1185,8 @@ const tp = StyleSheet.create({
 // ─── Action menu styles ───────────────────────────────────────────────────────
 const am = StyleSheet.create({
   backdrop:   { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", alignItems: "center" },
-  sheet:      { position: "absolute", left: SPACE[24], right: SPACE[24], borderRadius: 20, paddingHorizontal: SPACE[20], paddingTop: SPACE[20], paddingBottom: SPACE[8], top: "30%" },
+  sheetWrap:  { flex: 1, justifyContent: "center", paddingHorizontal: SPACE[24] },
+  sheet:      { borderRadius: 20, paddingHorizontal: SPACE[20], paddingTop: SPACE[20], paddingBottom: SPACE[8] },
   sheetTitle: { fontSize: 15, fontWeight: "700", textAlign: "center", marginBottom: SPACE[16] },
   row:        { flexDirection: "row", alignItems: "center", paddingVertical: SPACE[14], gap: SPACE[14], borderBottomWidth: StyleSheet.hairlineWidth },
   iconBox:    { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },

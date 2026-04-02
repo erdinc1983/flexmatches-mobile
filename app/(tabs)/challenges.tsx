@@ -7,7 +7,7 @@
  * - Create challenge modal
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, Modal, ScrollView, TextInput,
@@ -76,6 +76,8 @@ export default function ChallengesScreen() {
   const [loading,     setLoading]     = useState(true);
   const [refreshing,  setRefreshing]  = useState(false);
   const [userId,      setUserId]      = useState<string | null>(null);
+  const lastLoadRef = useRef(0);
+  const STALE_MS = 30_000;
 
   // Detail modal
   const [selected,      setSelected]      = useState<Challenge | null>(null);
@@ -132,9 +134,13 @@ export default function ChallengesScreen() {
     setChallenges(enriched);
     setLoading(false);
     setRefreshing(false);
+    lastLoadRef.current = Date.now();
   }, []);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  useFocusEffect(useCallback(() => {
+    const elapsed = Date.now() - lastLoadRef.current;
+    if (elapsed > STALE_MS || challenges.length === 0) load();
+  }, [load, challenges.length]));
 
   // ── Detail ────────────────────────────────────────────────────────────────
 

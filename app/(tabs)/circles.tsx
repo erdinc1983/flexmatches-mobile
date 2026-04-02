@@ -27,6 +27,7 @@ import { useTheme, SPACE, FONT, RADIUS } from "../../lib/theme";
 import { Icon } from "../../components/Icon";
 import { Avatar } from "../../components/Avatar";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { CirclesSkeleton } from "../../components/ui/Skeleton";
 import { MapLocationPicker } from "../../components/MapLocationPicker";
 import { scheduleEventReminder } from "../../lib/notifications";
 
@@ -167,6 +168,8 @@ export default function CirclesScreen() {
   const [search,         setSearch]         = useState("");
   const [filterCat,      setFilterCat]      = useState("");
   const [showCreate,     setShowCreate]     = useState(false);
+  const lastLoadRef = useRef(0);
+  const STALE_MS = 30_000;
 
   // Detail popup
   const [selectedCircle, setSelectedCircle] = useState<Community | null>(null);
@@ -229,9 +232,13 @@ export default function CirclesScreen() {
       is_member:    joinedIds.has(cc.id),
     })));
     setLoading(false);
+    lastLoadRef.current = Date.now();
   }, []);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  useFocusEffect(useCallback(() => {
+    const elapsed = Date.now() - lastLoadRef.current;
+    if (elapsed > STALE_MS || communities.length === 0) load();
+  }, [load, communities.length]));
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -340,7 +347,7 @@ export default function CirclesScreen() {
   if (loading) {
     return (
       <SafeAreaView style={[s.root, { backgroundColor: c.bg }]}>
-        <ActivityIndicator color={c.brand} size="large" style={{ flex: 1 }} />
+        <CirclesSkeleton />
       </SafeAreaView>
     );
   }

@@ -26,9 +26,12 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { supabase } from "../../lib/supabase";
+import { notifyUser } from "../../lib/push";
 import { useTheme, SPACE, FONT, RADIUS, PALETTE } from "../../lib/theme";
 import { Icon } from "../../components/Icon";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { DiscoverSkeleton } from "../../components/ui/Skeleton";
+import { BlurOverlay } from "../../components/ui/BlurOverlay";
 import { PersonCard, DiscoverUser, RequestStatus } from "../../components/discover/PersonCard";
 import { ProfileSheet } from "../../components/discover/ProfileSheet";
 import { DiscoverMap } from "../../components/discover/DiscoverMap";
@@ -180,6 +183,10 @@ function buildReasons(me: MyProfile, other: DiscoverUser): string[] {
     const km = Math.round(haversineKm(me.lat, me.lng, other.lat, other.lng));
     if (km <= 30) reasons.push(`${km} km away`);
   }
+
+  // Trust signal
+  if (other.sessions_completed >= 3 && other.reliability_score >= 80)
+    reasons.push("Verified partner");
 
   // Intent compatibility
   if (me.training_intent && other.training_intent) {
@@ -345,12 +352,12 @@ export default function DiscoverScreen() {
       .filter((m: any) => m.status === "pending" && m.sender_id === user.id)
       .map((m: any) => m.receiver_id);
 
-    const SELECT_FIELDS = "id, username, full_name, bio, city, fitness_level, age, gender, sports, current_streak, last_active, avatar_url, is_at_gym, availability, training_intent, lat, lng, created_at";
+    const SELECT_FIELDS = "id, username, full_name, bio, city, fitness_level, age, gender, sports, current_streak, last_active, avatar_url, is_at_gym, availability, training_intent, lat, lng, created_at, sessions_completed, reliability_score";
 
     const [{ data: candidates }, { data: pendingProfiles }] = await Promise.all([
       supabase.from("users").select(SELECT_FIELDS).neq("id", user.id).is("banned_at", null).limit(80),
       pendingSentIds.length > 0
-        ? supabase.from("users").select(SELECT_FIELDS).in("id", pendingSentIds)
+        ? supabase.from("users").select(SELECT_FIELDS).in("id", pendingSentIds).is("banned_at", null)
         : Promise.resolve({ data: [] }),
     ]);
 
@@ -371,9 +378,11 @@ export default function DiscoverScreen() {
         sports:         u.sports ?? null,
         current_streak: u.current_streak ?? 0,
         last_active:    u.last_active ?? null,
-        is_at_gym:      u.is_at_gym ?? false,
-        availability:   u.availability ?? null,
-        matchScore:     0,
+        is_at_gym:           u.is_at_gym ?? false,
+        availability:        u.availability ?? null,
+        sessions_completed:  u.sessions_completed ?? 0,
+        reliability_score:   u.reliability_score ?? 100,
+        matchScore:          0,
         reasons:        [],
         isNew:          !!(u.created_at && Date.now() - new Date(u.created_at).getTime() < NEW_THRESHOLD),
       };
@@ -468,6 +477,15 @@ export default function DiscoverScreen() {
       if (connectTimerRef.current) clearTimeout(connectTimerRef.current);
       setConnectUndo({ userId, dbId: data.id, name: u?.full_name ?? u?.username ?? "" });
       connectTimerRef.current = setTimeout(() => setConnectUndo(null), 4000);
+      // Notify the receiver
+      const { data: me } = await supabase.from("users").select("full_name, username").eq("id", uid).single();
+      notifyUser(userId, {
+        type: "match_request",
+        title: "New Match Request 🤝",
+        body: `${me?.full_name ?? me?.username ?? "Someone"} wants to train with you!`,
+        relatedId: data.id,
+        data: { type: "match_request", matchId: data.id },
+      });
     }
   }
 
@@ -508,7 +526,7 @@ export default function DiscoverScreen() {
   if (loading) {
     return (
       <SafeAreaView style={[s.root, { backgroundColor: c.bg }]}>
-        <ActivityIndicator color={c.brand} size="large" style={{ flex: 1 }} />
+        <DiscoverSkeleton />
       </SafeAreaView>
     );
   }
@@ -768,10 +786,7 @@ function FilterModal({
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <TouchableWithoutFeedback onPress={onClose}>
-        <View style={fm.backdrop} />
-      </TouchableWithoutFeedback>
-
+      <BlurOverlay onPress={onClose}>
       <View style={fm.sheet} pointerEvents="box-none">
         <View style={[fm.card, { backgroundColor: c.bgCard }]}>
 
@@ -918,6 +933,7 @@ function FilterModal({
           </TouchableOpacity>
         </View>
       </View>
+      </BlurOverlay>
     </Modal>
   );
 }

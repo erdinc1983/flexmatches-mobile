@@ -20,6 +20,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { supabase } from "../lib/supabase";
 import { useTheme, SPACE, FONT, RADIUS, PALETTE } from "../lib/theme";
+import { BlurOverlay } from "../components/ui/BlurOverlay";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Privacy = {
@@ -323,7 +324,8 @@ export default function SettingsScreen() {
 
       {/* ── Change Email Modal ── */}
       <Modal visible={emailModal} transparent animationType="slide" onRequestClose={() => { setEmailModal(false); setEmailMsg(""); setNewEmail(""); }}>
-        <View style={s.overlay}>
+        <BlurOverlay onPress={() => { setEmailModal(false); setEmailMsg(""); setNewEmail(""); }}>
+          <View style={s.overlayInner}>
           <View style={[s.modalBox, { backgroundColor: c.bgCard, borderColor: c.border }]}>
             <Text style={[s.modalTitle, { color: c.text }]}>Change Email</Text>
             <Text style={[s.modalSub, { color: c.textMuted }]}>Current: {userEmail}</Text>
@@ -354,12 +356,14 @@ export default function SettingsScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+          </View>
+        </BlurOverlay>
       </Modal>
 
       {/* ── Report Bug Modal ── */}
       <Modal visible={reportModal} transparent animationType="slide" onRequestClose={() => setReportModal(false)}>
-        <View style={s.overlay}>
+        <BlurOverlay onPress={() => setReportModal(false)}>
+          <View style={s.overlayInner}>
           <View style={[s.modalBox, { backgroundColor: c.bgCard, borderColor: c.border }]}>
             <Text style={[s.modalTitle, { color: c.text }]}>Report a Bug or Issue</Text>
             {reportSent ? (
@@ -392,12 +396,14 @@ export default function SettingsScreen() {
               </>
             )}
           </View>
-        </View>
+          </View>
+        </BlurOverlay>
       </Modal>
 
       {/* ── Delete Account Modal ── */}
       <Modal visible={deleteModal} transparent animationType="fade" onRequestClose={() => { setDeleteModal(false); setDeleteInput(""); }}>
-        <View style={s.overlay}>
+        <BlurOverlay onPress={() => { setDeleteModal(false); setDeleteInput(""); }}>
+          <View style={s.overlayInner}>
           <View style={[s.modalBox, { backgroundColor: c.bgCard, borderColor: PALETTE.error + "44" }]}>
             <Text style={[s.modalTitle, { color: c.text, textAlign: "center" }]}>⚠️ Delete Account</Text>
             <Text style={[s.modalSub, { color: c.textMuted, textAlign: "center", lineHeight: 20 }]}>
@@ -427,7 +433,8 @@ export default function SettingsScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+          </View>
+        </BlurOverlay>
       </Modal>
     </SafeAreaView>
   );
@@ -506,6 +513,7 @@ const s = StyleSheet.create({
 
   // Modals
   overlay:       { flex: 1, backgroundColor: "#00000099", justifyContent: "flex-end" },
+  overlayInner:  { flex: 1, justifyContent: "flex-end" },
   modalBox:      { borderRadius: RADIUS.xl, borderWidth: 1, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, padding: SPACE[24], gap: SPACE[12] },
   modalTitle:    { fontSize: FONT.size.lg, fontWeight: FONT.weight.black },
   modalSub:      { fontSize: FONT.size.sm, lineHeight: 18 },

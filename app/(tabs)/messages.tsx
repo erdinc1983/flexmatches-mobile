@@ -24,6 +24,7 @@ import { supabase } from "../../lib/supabase";
 import { notifyNewMessage, requestNotificationPermission } from "../../lib/notifications";
 import { useTheme, SPACE, FONT } from "../../lib/theme";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { MessagesSkeleton } from "../../components/ui/Skeleton";
 import { ConversationRow } from "../../components/chat/ConversationRow";
 import type { BuddySession } from "../../components/chat/SessionBanner";
 
@@ -53,6 +54,8 @@ export default function MessagesScreen() {
 
   const myIdRef           = useRef<string | null>(null);
   const conversationsRef  = useRef<Conversation[]>([]);
+  const lastLoadRef       = useRef(0);
+  const STALE_MS          = 15_000; // refetch after 15s
 
   const load = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -74,14 +77,21 @@ export default function MessagesScreen() {
     );
     const { data: userRows } = await supabase
       .from("users")
-      .select("id, username, full_name, avatar_url")
-      .in("id", otherIds);
+      .select("id, username, full_name, avatar_url, banned_at")
+      .in("id", otherIds)
+      .is("banned_at", null);
     const userMap = new Map((userRows ?? []).map((u: any) => [u.id, u]));
 
+    // Only show conversations where the other user is not banned
+    const activeMatches = matches.filter((m: any) => {
+      const otherId = m.sender_id === user.id ? m.receiver_id : m.sender_id;
+      return userMap.has(otherId);
+    });
+
     const convos: Conversation[] = await Promise.all(
-      matches.map(async (m: any) => {
+      activeMatches.map(async (m: any) => {
         const otherId = m.sender_id === user.id ? m.receiver_id : m.sender_id;
-        const other = userMap.get(otherId) ?? { id: otherId, username: "unknown", full_name: null };
+        const other = userMap.get(otherId)!;
 
         const [
           { data: lastMsg },
@@ -137,12 +147,16 @@ export default function MessagesScreen() {
     setConversations(convos);
     conversationsRef.current = convos;
     setLoading(false);
+    lastLoadRef.current = Date.now();
   }, []);
 
   useFocusEffect(useCallback(() => {
-    load();
+    const elapsed = Date.now() - lastLoadRef.current;
+    if (elapsed > STALE_MS || conversations.length === 0) {
+      load();
+    }
     requestNotificationPermission();
-  }, [load]));
+  }, [load, conversations.length]));
 
   useEffect(() => {
     const channel = supabase
@@ -221,7 +235,7 @@ export default function MessagesScreen() {
   if (loading) {
     return (
       <SafeAreaView style={[s.root, { backgroundColor: c.bg }]}>
-        <ActivityIndicator color={c.brand} size="large" style={{ flex: 1 }} />
+        <MessagesSkeleton />
       </SafeAreaView>
     );
   }

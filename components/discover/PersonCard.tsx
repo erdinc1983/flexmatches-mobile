@@ -39,11 +39,13 @@ export type DiscoverUser = {
   is_at_gym:       boolean;
   availability:    Record<string, boolean> | null;
   training_intent: string | null;
-  lat:             number | null;
-  lng:             number | null;
-  matchScore:      number;
-  reasons:         string[];
-  isNew:           boolean;
+  lat:                number | null;
+  lng:                number | null;
+  sessions_completed: number;
+  reliability_score:  number;
+  matchScore:         number;
+  reasons:            string[];
+  isNew:              boolean;
 };
 
 type Props = {
@@ -195,6 +197,26 @@ export function PersonCard({ user, status, onConnect, onCancelRequest, onPress, 
           </View>
         )}
 
+        {/* ── Trust badges ────────────────────────────────────────── */}
+        {(user.sessions_completed > 0 || user.reliability_score >= 80) && (
+          <View style={s.trustRow}>
+            {user.sessions_completed > 0 && (
+              <View style={[s.trustBadge, { backgroundColor: "#22C55E18" }]}>
+                <Text style={{ fontSize: 10, color: "#22C55E", fontWeight: "600" }}>
+                  ✓ {user.sessions_completed} session{user.sessions_completed !== 1 ? "s" : ""} completed
+                </Text>
+              </View>
+            )}
+            {user.reliability_score >= 80 && user.sessions_completed >= 3 && (
+              <View style={[s.trustBadge, { backgroundColor: "#007AFF18" }]}>
+                <Text style={{ fontSize: 10, color: "#007AFF", fontWeight: "600" }}>
+                  {user.reliability_score}% reliable
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
+
         {/* ── Row 3: Bio ─────────────────────────────────────────── */}
         {user.bio ? (
           <Text style={[s.bio, { color: c.textSecondary }]} numberOfLines={1}>
@@ -293,6 +315,10 @@ const s = StyleSheet.create({
   intentRow:  { flexDirection: "row" },
   intentChip: { paddingHorizontal: SPACE[10], paddingVertical: 4, borderRadius: RADIUS.pill, borderWidth: 1 },
   intentText: { fontSize: FONT.size.xs, fontWeight: FONT.weight.bold },
+
+  // Trust badges
+  trustRow:    { flexDirection: "row", flexWrap: "wrap", gap: SPACE[6] },
+  trustBadge:  { paddingHorizontal: SPACE[8], paddingVertical: 3, borderRadius: RADIUS.pill },
 
   // Bio
   bio:         { fontSize: FONT.size.sm, lineHeight: FONT.size.sm * 1.5 },

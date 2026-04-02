@@ -12,7 +12,7 @@
  *   7. all caught up
  */
 
-import { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useFocusEffect } from "expo-router";
 import { router } from "expo-router";
 import {
@@ -22,10 +22,13 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "../../lib/supabase";
+import { notifyMatchAccepted } from "../../lib/notifications";
+import { notifyUser } from "../../lib/push";
 import { useTheme, SPACE, FONT, RADIUS, PALETTE, SHADOW, TYPE } from "../../lib/theme";
 import { Icon } from "../../components/Icon";
 import { Avatar } from "../../components/Avatar";
 
+import { HomeSkeleton }            from "../../components/ui/Skeleton";
 import { HomeHeader }             from "../../components/home/HomeHeader";
 import { PrimaryActionCard }      from "../../components/home/PrimaryActionCard";
 import { PendingRequestsSection } from "../../components/home/PendingRequestsSection";
@@ -101,6 +104,8 @@ export default function HomeScreen() {
   const [selectedSession,   setSelectedSession]   = useState<SessionInfo | null>(null);
 
   const today    = localToday();
+  const lastLoadRef = useRef(0);
+  const STALE_MS = 30_000; // refetch after 30s
 
   // Check nudge dismiss state once on mount
   useEffect(() => {
@@ -121,12 +126,12 @@ export default function HomeScreen() {
     const monthAgo    = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
     const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
 
-    // Phase 1 — parallel queries
+    // Phase 1 — parallel queries (no FK joins — RLS-safe)
     const [
       { data: profileData },
       { count: matchCount },
       { count: workoutMonth },
-      { data: pendingData },
+      { data: pendingMatchRows },
       { data: likedData },
       { data: sessionData },
       { data: myCircleData },
@@ -141,21 +146,16 @@ export default function HomeScreen() {
       supabase.from("workouts").select("*", { count: "exact", head: true })
         .eq("user_id", uid).gte("logged_at", monthAgo),
       supabase.from("matches")
-        .select("id, sender_id, sender:users!matches_sender_id_fkey(id, username, full_name, avatar_url, city, fitness_level)")
+        .select("id, sender_id")
         .eq("receiver_id", uid).eq("status", "pending").limit(5),
       supabase.from("matches").select("receiver_id").eq("sender_id", uid),
       supabase.from("buddy_sessions")
-        .select(`
-          id, match_id, sport, session_date, session_time, location, status, proposer_id, receiver_id,
-          proposer:users!buddy_sessions_proposer_id_fkey(full_name, username),
-          receiver:users!buddy_sessions_receiver_id_fkey(full_name, username)
-        `)
+        .select("id, match_id, sport, session_date, session_time, location, status, proposer_id, receiver_id")
         .or(`proposer_id.eq.${uid},receiver_id.eq.${uid}`)
         .eq("session_date", today)
         .in("status", ["accepted", "pending"]),
-      // User's own circles — not global popular ones
       supabase.from("community_members")
-        .select("community:communities(id, name, avatar_emoji, member_count)")
+        .select("community:communities(id, name, avatar_emoji)")
         .eq("user_id", uid)
         .limit(3),
       supabase.from("matches")
@@ -166,6 +166,34 @@ export default function HomeScreen() {
         .select("blocked_id")
         .eq("blocker_id", uid),
     ]);
+
+    // Fetch sender profiles for pending matches separately (FK join unreliable with RLS)
+    const pendingSenderIds = (pendingMatchRows ?? []).map((m: any) => m.sender_id);
+    let senderMap = new Map<string, any>();
+    if (pendingSenderIds.length > 0) {
+      const { data: senderRows } = await supabase
+        .from("users")
+        .select("id, username, full_name, avatar_url, city, fitness_level, banned_at")
+        .in("id", pendingSenderIds)
+        .is("banned_at", null);
+      senderMap = new Map((senderRows ?? []).map((u: any) => [u.id, u]));
+    }
+    const pendingData = (pendingMatchRows ?? [])
+      .filter((m: any) => senderMap.has(m.sender_id))
+      .map((m: any) => ({ ...m, sender: senderMap.get(m.sender_id) }));
+
+    // Fetch partner names for today's sessions separately
+    const sessionPartnerIds = (sessionData ?? []).map((s: any) =>
+      s.proposer_id === uid ? s.receiver_id : s.proposer_id
+    ).filter(Boolean);
+    let sessionPartnerMap = new Map<string, any>();
+    if (sessionPartnerIds.length > 0) {
+      const { data: partnerRows } = await supabase
+        .from("users")
+        .select("id, full_name, username")
+        .in("id", sessionPartnerIds);
+      sessionPartnerMap = new Map((partnerRows ?? []).map((u: any) => [u.id, u]));
+    }
 
     // Unread messages — filter by THIS user's accepted match IDs only
     let unread = 0;
@@ -214,9 +242,10 @@ export default function HomeScreen() {
     if (!profileData?.city)           missing.push("city");
     setProfileMissing(missing);
 
-    // Fix: also exclude pending-request senders so they don't appear in BestMatches too
-    const pendingSenderIds = (pendingData ?? []).map((m: any) => m.sender_id);
-    setPendingRequests((pendingData ?? []).map((m: any) => ({
+    // pendingData already filtered by banned_at (senderMap only has non-banned)
+    const activePending = pendingData;
+    const activePendingSenderIds = activePending.map((m: any) => m.sender_id);
+    setPendingRequests(activePending.map((m: any) => ({
       id:            m.id,
       sender_id:     m.sender_id,
       username:      m.sender.username,
@@ -228,8 +257,8 @@ export default function HomeScreen() {
 
     // Parse today's sessions
     const allSessions: SessionInfo[] = (sessionData ?? []).map((s: any) => {
-      const isProposer = s.proposer_id === uid;
-      const partner = isProposer ? s.receiver : s.proposer;
+      const partnerId = s.proposer_id === uid ? s.receiver_id : s.proposer_id;
+      const partner = sessionPartnerMap.get(partnerId);
       return {
         id:           s.id,
         match_id:     s.match_id,
@@ -302,6 +331,7 @@ export default function HomeScreen() {
         .from("users")
         .select("id, username, full_name, avatar_url, is_at_gym, last_active")
         .in("id", partnerIds)
+        .is("banned_at", null)
         .gte("last_active", twoHoursAgo)
         .limit(8);
       setActivePartners((partnerData ?? []).map((u: any) => ({
@@ -392,13 +422,18 @@ export default function HomeScreen() {
     setNewCircles(matchingNew);
 
     setLoading(false);
+    lastLoadRef.current = Date.now();
   }, [today]);
 
   useFocusEffect(useCallback(() => {
-    load();
+    // Skip re-fetch if data was loaded recently (< 30s ago)
+    const elapsed = Date.now() - lastLoadRef.current;
+    if (elapsed > STALE_MS || !profile) {
+      load();
+    }
     // Close any open modal when the tab loses focus
     return () => { setSelectedSession(null); };
-  }, [load]));
+  }, [load, profile]));
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -474,10 +509,22 @@ export default function HomeScreen() {
   }
 
   async function respondToMatch(matchId: string, status: "accepted" | "declined") {
+    const req = pendingRequests.find((p) => p.id === matchId);
     await supabase.from("matches").update({ status }).eq("id", matchId);
     setPendingRequests((prev) => prev.filter((p) => p.id !== matchId));
-    if (status === "accepted") {
+    if (status === "accepted" && req) {
       setProfile((p) => p ? { ...p, match_count: p.match_count + 1 } : p);
+      const myName = profile?.full_name ?? profile?.username ?? "Someone";
+      // Local notification for myself
+      notifyMatchAccepted(req.full_name ?? req.username);
+      // Notify the sender
+      notifyUser(req.sender_id, {
+        type: "match_accepted",
+        title: "Match Accepted! 🎉",
+        body: `${myName} accepted your request. Start chatting!`,
+        relatedId: matchId,
+        data: { type: "match_accepted", matchId },
+      });
     }
   }
 
@@ -596,7 +643,7 @@ export default function HomeScreen() {
   if (loading) {
     return (
       <SafeAreaView style={[s.root, { backgroundColor: c.bg }]}>
-        <ActivityIndicator color={c.brand} size="large" style={{ flex: 1 }} />
+        <HomeSkeleton />
       </SafeAreaView>
     );
   }

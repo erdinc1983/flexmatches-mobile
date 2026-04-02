@@ -7,12 +7,14 @@ import { Icon } from "../../components/Icon";
 export default function TabsLayout() {
   const { theme } = useTheme();
   const c = theme.colors;
-  const { unreadCount } = useNotifications();
+  const { unreadCount, unreadMessages } = useNotifications();
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
+        animation: "none",
+        freezeOnBlur: true,
         tabBarStyle: {
           backgroundColor: c.tabBar,
           borderTopWidth:  0,
@@ -55,9 +57,9 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused, color }) => (
             <View>
               <Icon name={focused ? "chatActive" : "chat"} size={24} color={color} />
-              {unreadCount > 0 && (
+              {unreadMessages > 0 && (
                 <View style={[badge.dot, { backgroundColor: c.brand }]}>
-                  <Text style={badge.dotText}>{unreadCount > 9 ? "9+" : unreadCount}</Text>
+                  <Text style={badge.dotText}>{unreadMessages > 9 ? "9+" : unreadMessages}</Text>
                 </View>
               )}
             </View>

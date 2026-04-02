@@ -12,8 +12,9 @@
  *   style={{ backgroundColor: theme.colors.bg }}
  */
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
 import { Appearance, ColorSchemeName } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // ─── Brand ───────────────────────────────────────────────────────────────────
 export const BRAND = {
@@ -305,18 +306,31 @@ const ThemeContext = createContext<ThemeContextValue>({
 });
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
+const THEME_KEY = "flexmatches_theme_pref"; // "light" | "dark" | "system"
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const systemScheme = Appearance.getColorScheme();
   const [scheme, setSchemeState] = useState<"light" | "dark">(
     systemScheme === "light" ? "light" : "dark"
   );
+  const userPref = useRef<"light" | "dark" | "system">("system");
 
-  // Listen to system changes
+  // Load saved preference on mount
+  useEffect(() => {
+    AsyncStorage.getItem(THEME_KEY).then((saved) => {
+      if (saved === "light" || saved === "dark") {
+        userPref.current = saved;
+        setSchemeState(saved);
+      } else {
+        userPref.current = "system";
+      }
+    });
+  }, []);
+
+  // Listen to system changes — only follow if user chose "system"
   useEffect(() => {
     const sub = Appearance.addChangeListener(({ colorScheme }) => {
-      // Only auto-follow system if user hasn't manually overridden
-      // For now, always follow system on first load
-      if (colorScheme) {
+      if (userPref.current === "system" && colorScheme) {
         setSchemeState(colorScheme === "light" ? "light" : "dark");
       }
     });
@@ -325,10 +339,16 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   const theme = scheme === "light" ? lightTheme : darkTheme;
 
-  const toggleTheme = () =>
-    setSchemeState((prev) => (prev === "dark" ? "light" : "dark"));
+  const toggleTheme = () => {
+    const next = scheme === "dark" ? "light" : "dark";
+    userPref.current = next;
+    setSchemeState(next);
+    AsyncStorage.setItem(THEME_KEY, next);
+  };
 
   const setTheme = (s: "light" | "dark" | "system") => {
+    userPref.current = s;
+    AsyncStorage.setItem(THEME_KEY, s);
     if (s === "system") {
       const sys = Appearance.getColorScheme();
       setSchemeState(sys === "light" ? "light" : "dark");

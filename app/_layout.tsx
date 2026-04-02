@@ -4,6 +4,7 @@ import { Session } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
 import { ThemeProvider } from "../lib/theme";
 import { NotificationProvider } from "../lib/notificationContext";
+import { registerPushToken } from "../lib/push";
 
 export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null);
@@ -26,6 +27,8 @@ export default function RootLayout() {
     if (!initialized) return;
     if (session) {
       router.replace("/(tabs)/home");
+      // Register push token after login
+      registerPushToken();
     } else {
       router.replace("/(auth)/welcome");
     }

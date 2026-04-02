@@ -16,9 +16,13 @@ import {
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "../../lib/supabase";
+import { notifyMatchAccepted } from "../../lib/notifications";
+import { notifyUser } from "../../lib/push";
 import { useTheme, SPACE, FONT, RADIUS, PALETTE } from "../../lib/theme";
 import { Icon } from "../../components/Icon";
 import { Avatar } from "../../components/Avatar";
+import { ProfileSheet } from "../../components/discover/ProfileSheet";
+import type { DiscoverUser } from "../../components/discover/PersonCard";
 
 const SPORTS = ["Gym", "Running", "Cycling", "Swimming", "Soccer", "Basketball", "Tennis", "Boxing", "Yoga", "CrossFit", "Hiking", "Other"];
 
@@ -64,6 +68,7 @@ export default function MatchesScreen() {
   const [myId,            setMyId]            = useState<string | null>(null);
 
   // Session scheduling
+  const [sessionCounts,   setSessionCounts]   = useState<Record<string, number>>({});
   const [schedulingMatch, setSchedulingMatch] = useState<Match | null>(null);
   const [sessionSport,    setSessionSport]    = useState("Gym");
   const [sessionDate,     setSessionDate]     = useState("");
@@ -71,30 +76,53 @@ export default function MatchesScreen() {
   const [sessionLocation, setSessionLocation] = useState("");
   const [sessionNotes,    setSessionNotes]    = useState("");
   const [sendingSession,  setSendingSession]  = useState(false);
+  const [sheetUser,       setSheetUser]       = useState<DiscoverUser | null>(null);
 
   const load = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     setMyId(user.id);
 
-    const [incomingRes, acceptedRes] = await Promise.all([
+    const [{ data: incomingRows }, { data: acceptedRows }] = await Promise.all([
       supabase.from("matches")
-        .select("id, status, sender_id, sender:users!matches_sender_id_fkey(id, username, full_name, fitness_level, city, avatar_url, current_streak)")
+        .select("id, status, sender_id")
         .eq("receiver_id", user.id).eq("status", "pending"),
       supabase.from("matches")
-        .select("id, status, sender_id, receiver_id, sender:users!matches_sender_id_fkey(id, username, full_name, fitness_level, city, avatar_url, current_streak), receiver:users!matches_receiver_id_fkey(id, username, full_name, fitness_level, city, avatar_url, current_streak)")
+        .select("id, status, sender_id, receiver_id")
         .eq("status", "accepted")
         .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`),
     ]);
 
-    setPending((incomingRes.data ?? []).map((m: any) => ({
-      id: m.id, status: m.status, sender_id: m.sender_id, other_user: m.sender,
-    })));
+    // Collect all user IDs we need to fetch
+    const userIdsToFetch = new Set<string>();
+    (incomingRows ?? []).forEach((m: any) => userIdsToFetch.add(m.sender_id));
+    (acceptedRows ?? []).forEach((m: any) => {
+      const otherId = m.sender_id === user.id ? m.receiver_id : m.sender_id;
+      userIdsToFetch.add(otherId);
+    });
 
-    const acceptedMatches: Match[] = (acceptedRes.data ?? []).map((m: any) => ({
-      id: m.id, status: m.status, sender_id: m.sender_id,
-      other_user: m.sender_id === user.id ? m.receiver : m.sender,
-    }));
+    let userMap = new Map<string, MatchUser>();
+    if (userIdsToFetch.size > 0) {
+      const { data: userRows } = await supabase
+        .from("users")
+        .select("id, username, full_name, fitness_level, city, avatar_url, current_streak, banned_at")
+        .in("id", [...userIdsToFetch])
+        .is("banned_at", null);
+      userMap = new Map((userRows ?? []).map((u: any) => [u.id, u]));
+    }
+
+    setPending((incomingRows ?? [])
+      .filter((m: any) => userMap.has(m.sender_id))
+      .map((m: any) => ({
+        id: m.id, status: m.status, sender_id: m.sender_id, other_user: userMap.get(m.sender_id)!,
+      })));
+
+    const acceptedMatches: Match[] = (acceptedRows ?? [])
+      .map((m: any) => {
+        const otherId = m.sender_id === user.id ? m.receiver_id : m.sender_id;
+        return { id: m.id, status: m.status, sender_id: m.sender_id, other_user: userMap.get(otherId)! };
+      })
+      .filter((m: any) => m.other_user);
     const seen = new Set<string>();
     setAccepted(acceptedMatches.filter((m) => {
       if (!m.other_user || seen.has(m.other_user.id)) return false;
@@ -103,6 +131,22 @@ export default function MatchesScreen() {
     }));
 
     await loadBuddySessions(user.id);
+
+    // Load completed session counts per match
+    const matchIds = (acceptedRows ?? []).map((m: any) => m.id);
+    if (matchIds.length > 0) {
+      const { data: completedRows } = await supabase
+        .from("buddy_sessions")
+        .select("match_id")
+        .in("match_id", matchIds)
+        .eq("status", "completed");
+      const counts: Record<string, number> = {};
+      (completedRows ?? []).forEach((r: any) => {
+        counts[r.match_id] = (counts[r.match_id] || 0) + 1;
+      });
+      setSessionCounts(counts);
+    }
+
     setLoading(false);
   }, []);
 
@@ -125,7 +169,22 @@ export default function MatchesScreen() {
   }, [load]);
 
   async function respondToMatch(matchId: string, status: "accepted" | "declined") {
+    const match = pending.find((p) => p.id === matchId);
     await supabase.from("matches").update({ status }).eq("id", matchId);
+    if (status === "accepted" && match) {
+      const partnerName = match.other_user.full_name ?? match.other_user.username;
+      notifyMatchAccepted(partnerName);
+      // Push to the sender who sent the request
+      const { data: { user } } = await supabase.auth.getUser();
+      const myName = user ? (await supabase.from("users").select("full_name, username").eq("id", user.id).single()).data : null;
+      notifyUser(match.sender_id, {
+        type: "match_accepted",
+        title: "Match Accepted! 🎉",
+        body: `${myName?.full_name ?? myName?.username ?? "Someone"} accepted your request. Start chatting!`,
+        relatedId: matchId,
+        data: { type: "match_accepted", matchId },
+      });
+    }
     await load();
   }
 
@@ -155,6 +214,23 @@ export default function MatchesScreen() {
       .update({ status: accept ? "accepted" : "declined" })
       .eq("id", sessionId);
     if (myId) await loadBuddySessions(myId);
+  }
+
+  async function openProfile(userId: string) {
+    const { data } = await supabase
+      .from("users")
+      .select("id, username, full_name, avatar_url, bio, city, fitness_level, age, gender, sports, current_streak, last_active, is_at_gym, availability, training_intent, lat, lng, sessions_completed, reliability_score")
+      .eq("id", userId)
+      .single();
+    if (!data) return;
+    setSheetUser({
+      ...data,
+      matchScore:         0,
+      reasons:            [],
+      isNew:              false,
+      sessions_completed: data.sessions_completed ?? 0,
+      reliability_score:  data.reliability_score ?? 100,
+    } as DiscoverUser);
   }
 
   function getSessionForMatch(matchId: string) {
@@ -200,7 +276,12 @@ export default function MatchesScreen() {
                   REQUESTS  <Text style={{ color: c.brand }}>{pending.length}</Text>
                 </Text>
                 {pending.map((match) => (
-                  <View key={match.id} style={[s.pendingCard, { backgroundColor: c.bgCard, borderColor: c.brandBorder }]}>
+                  <TouchableOpacity
+                    key={match.id}
+                    style={[s.pendingCard, { backgroundColor: c.bgCard, borderColor: c.brandBorder }]}
+                    onPress={() => openProfile(match.other_user.id)}
+                    activeOpacity={0.8}
+                  >
                     <Avatar url={match.other_user.avatar_url} name={match.other_user.username} size={46} />
                     <View style={{ flex: 1 }}>
                       <Text style={[s.cardName, { color: c.text }]}>{match.other_user.full_name ?? match.other_user.username}</Text>
@@ -222,7 +303,7 @@ export default function MatchesScreen() {
                         <Icon name="checkActive" size={16} color="#fff" />
                       </TouchableOpacity>
                     </View>
-                  </View>
+                  </TouchableOpacity>
                 ))}
               </View>
             )}
@@ -241,6 +322,11 @@ export default function MatchesScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={[s.cardName, { color: c.text }]}>{match.other_user.full_name ?? match.other_user.username}</Text>
                   <Text style={[s.cardSub, { color: c.textMuted }]}>@{match.other_user.username}</Text>
+                  {(sessionCounts[match.id] ?? 0) > 0 && (
+                    <Text style={{ fontSize: 11, color: PALETTE.success, marginTop: 2, fontWeight: "500" }}>
+                      🏋️ Trained together {sessionCounts[match.id]} time{sessionCounts[match.id] !== 1 ? "s" : ""}
+                    </Text>
+                  )}
                 </View>
                 <View style={s.matchActions}>
                   <TouchableOpacity
@@ -387,6 +473,14 @@ export default function MatchesScreen() {
           </ScrollView>
         </SafeAreaView>
       </Modal>
+
+      {/* Profile Sheet */}
+      <ProfileSheet
+        user={sheetUser}
+        status="none"
+        onConnect={() => {}}
+        onClose={() => setSheetUser(null)}
+      />
     </SafeAreaView>
   );
 }

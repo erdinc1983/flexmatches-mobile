@@ -90,7 +90,7 @@ export function GridCard({ user, status, onPress, onConnect, matchId }: Props) {
           source={{ uri: photoUrl }}
           style={StyleSheet.absoluteFill}
           contentFit="cover"
-          placeholder={{ uri: fallbackUrl }}
+          placeholder={{ blurhash: "LKHBBd~q9F%M%MIUofRj00M{D%of" }}
           transition={200}
         />
         <LinearGradient
@@ -150,6 +150,13 @@ export function GridCard({ user, status, onPress, onConnect, matchId }: Props) {
               </View>
             )}
           </View>
+        )}
+
+        {/* Trust indicator */}
+        {user.sessions_completed > 0 && (
+          <Text style={{ fontSize: 10, color: "#22C55E", fontWeight: "600", marginTop: 2 }}>
+            ✓ {user.sessions_completed} session{user.sessions_completed !== 1 ? "s" : ""}{user.sessions_completed >= 3 ? ` · ${user.reliability_score}% reliable` : ""}
+          </Text>
         )}
 
         {/* Why this works */}

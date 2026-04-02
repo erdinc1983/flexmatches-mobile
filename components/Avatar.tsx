@@ -1,5 +1,8 @@
 import { Image } from "expo-image";
 
+// Warm neutral blurhash — shows while image loads
+const BLURHASH = "LKHBBd~q9F%M%MIUofRj00M{D%of";
+
 const WEB_BASE      = "https://flexmatches.com";
 const SUPABASE_BASE = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "";
 
@@ -42,6 +45,8 @@ export function Avatar({ url, name, size = 48 }: Props) {
   return (
     <Image
       source={{ uri: src }}
+      placeholder={{ blurhash: BLURHASH }}
+      transition={200}
       style={{ width: size, height: size, borderRadius: radius }}
       contentFit="cover"
     />

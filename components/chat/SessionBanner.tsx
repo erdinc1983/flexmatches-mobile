@@ -106,11 +106,12 @@ type Props = {
   onAccept:    () => void;
   onDecline:   () => void;
   onConfirm:   () => void;
+  onNoShow?:   () => void;
   onCancel?:   () => void;
   onEdit?:     () => void;
 };
 
-export function SessionBanner({ session, myId, partnerName, onAccept, onDecline, onConfirm, onCancel, onEdit }: Props) {
+export function SessionBanner({ session, myId, partnerName, onAccept, onDecline, onConfirm, onNoShow, onCancel, onEdit }: Props) {
   const { theme, isDark } = useTheme();
   const c = theme.colors;
 
@@ -238,13 +239,24 @@ export function SessionBanner({ session, myId, partnerName, onAccept, onDecline,
           </Text>
         </View>
       </View>
-      <TouchableOpacity
-        style={[s.acceptBtn, { backgroundColor: c.brand }]}
-        onPress={onConfirm}
-        activeOpacity={0.85}
-      >
-        <Text style={s.ctaText}>Mark done</Text>
-      </TouchableOpacity>
+      <View style={s.actions}>
+        {onNoShow && (
+          <TouchableOpacity
+            style={[s.declineBtn, { borderColor: c.borderMedium }]}
+            onPress={onNoShow}
+            activeOpacity={0.8}
+          >
+            <Text style={[s.declineText, { color: c.textMuted }]}>Didn't happen</Text>
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity
+          style={[s.acceptBtn, { backgroundColor: c.brand }]}
+          onPress={onConfirm}
+          activeOpacity={0.85}
+        >
+          <Text style={s.ctaText}>Mark done</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
