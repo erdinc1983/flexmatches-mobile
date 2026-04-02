@@ -413,7 +413,6 @@ export default function DiscoverScreen() {
         ? supabase.from("users").select(SELECT_FIELDS).in("id", pendingSentIds).is("banned_at", null)
         : Promise.resolve({ data: [] }),
     ]);
-    }
 
     // Pending users for list view (already liked, awaiting response)
     setPendingUsers((pendingProfiles ?? []).map(mapUser));
