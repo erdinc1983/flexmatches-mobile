@@ -102,42 +102,48 @@ export default function ActivityScreen() {
   async function logWorkout() {
     if (!userId) return;
     setSaving(true);
+    try {
+      const { error: insertError } = await supabase.from("workouts").insert({
+        user_id:       userId,
+        exercise_type: sport || "Gym",
+        notes:         notes.trim() || null,
+        duration_min:  duration ? parseInt(duration) : null,
+        logged_at:     new Date().toISOString(),
+      });
+      if (insertError) throw insertError;
 
-    const { error } = await supabase.from("workouts").insert({
-      user_id:       userId,
-      exercise_type: sport || "Gym",
-      notes:         notes.trim() || null,
-      duration_min:  duration ? parseInt(duration) : null,
-      logged_at:     new Date().toISOString(),
-    });
+      // Local calendar date (not UTC) — satisfies AC4
+      const localDate = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD in local time
 
-    if (error) { Alert.alert("Error", error.message); setSaving(false); return; }
+      // Atomic streak update via RPC — no read-modify-write race condition
+      const { data: streakResult } = await supabase.rpc("update_streak_for_workout", {
+        p_user_id:    userId,
+        p_local_date: localDate,
+      });
+      const newStreak = streakResult?.streak ?? streak;
 
-    const today = new Date().toISOString().split("T")[0];
-    const { data: profile } = await supabase.from("users").select("last_checkin_date, current_streak").eq("id", userId).single();
-    const isNewDay = profile?.last_checkin_date !== today;
-    let newStreak = profile?.current_streak ?? 0;
-    if (isNewDay) {
-      newStreak = newStreak + 1;
-      await supabase.from("users").update({ last_checkin_date: today, current_streak: newStreak }).eq("id", userId);
       setStreak(newStreak);
+
+      const feedContent = notes.trim()
+        ? `${sport} · ${notes.trim()}${duration ? ` · ${duration}min` : ""}`
+        : `${sport} workout${duration ? ` · ${duration}min` : ""}${newStreak > 1 ? ` · 🔥 ${newStreak} day streak` : ""}`;
+      await supabase.from("feed_posts").insert({
+        user_id:   userId,
+        post_type: "workout",
+        content:   feedContent,
+        meta:      { sport, duration: duration || null, streak: newStreak },
+      });
+
+      setModalVisible(false);
+      setNotes("");
+      setDuration("");
+      await load();
+    } catch (err) {
+      console.error("[logWorkout] failed:", err);
+      Alert.alert("Error", "Could not save workout. Please try again.");
+    } finally {
+      setSaving(false);
     }
-
-    const feedContent = notes.trim()
-      ? `${sport} · ${notes.trim()}${duration ? ` · ${duration}min` : ""}`
-      : `${sport} workout${duration ? ` · ${duration}min` : ""}${newStreak > 1 ? ` · 🔥 ${newStreak} day streak` : ""}`;
-    await supabase.from("feed_posts").insert({
-      user_id: userId,
-      post_type: "workout",
-      content: feedContent,
-      meta: { sport, duration: duration || null, streak: newStreak },
-    });
-
-    setSaving(false);
-    setModalVisible(false);
-    setNotes("");
-    setDuration("");
-    await load();
   }
 
   function formatDate(iso: string) {
