@@ -451,30 +451,16 @@ export default function ChatScreen() {
   }
 
   async function confirmSession() {
-    if (!session || !userId || sessionActing) return;
+    if (!session || !userId || !other || sessionActing) return;
     setSessionActing(true);
     try {
-      const { error } = await supabase.from("buddy_sessions").update({
-        status: "completed",
-        completed_at: new Date().toISOString(),
-        confirmed_by: userId,
-      }).eq("id", session.id);
+      const { data, error } = await supabase.rpc("confirm_session", {
+        p_session_id: session.id,
+        p_user_id:    userId,
+        p_other_id:   other.id,
+      });
       if (error) throw error;
-      const { data: myData } = await supabase.from("users").select("sessions_completed").eq("id", userId).single();
-      if (myData) {
-        await supabase.from("users").update({ sessions_completed: (myData.sessions_completed ?? 0) + 1 }).eq("id", userId);
-        recalcReliability(userId);
-      }
-      if (other?.id) {
-        const { data: theirData } = await supabase.from("users").select("sessions_completed").eq("id", other.id).single();
-        if (theirData) {
-          await supabase.from("users").update({ sessions_completed: (theirData.sessions_completed ?? 0) + 1 }).eq("id", other.id);
-          recalcReliability(other.id);
-        }
-      }
-      supabase.rpc("increment_sessions_kept", { uid: userId }).then(() => {});
-      if (other?.id) supabase.rpc("increment_sessions_kept", { uid: other.id }).then(() => {});
-      setSessionCount((prev) => prev + 1);
+      if (data?.both_confirmed) setSessionCount((prev) => prev + 1);
       loadSession();
     } catch {
       Alert.alert("Could not update session. Please try again.");
@@ -484,7 +470,7 @@ export default function ChatScreen() {
   }
 
   async function noShowSession() {
-    if (!session || !userId || sessionActing) return;
+    if (!session || !userId || !other || sessionActing) return;
     Alert.alert(
       "Session didn't happen?",
       "This will be recorded. It helps build trust in the community.",
@@ -495,25 +481,12 @@ export default function ChatScreen() {
           onPress: async () => {
             setSessionActing(true);
             try {
-              const { error } = await supabase.from("buddy_sessions").update({
-                status: "completed",
-                no_show: true,
-                completed_at: new Date().toISOString(),
-                confirmed_by: userId,
-              }).eq("id", session.id);
+              const { error } = await supabase.rpc("no_show_session", {
+                p_session_id:  session.id,
+                p_reporter_id: userId,
+                p_partner_id:  other.id,
+              });
               if (error) throw error;
-              const { data: myData } = await supabase.from("users").select("sessions_no_show").eq("id", userId).single();
-              if (myData) {
-                await supabase.from("users").update({ sessions_no_show: (myData.sessions_no_show ?? 0) + 1 }).eq("id", userId);
-                recalcReliability(userId);
-              }
-              if (other?.id) {
-                const { data: theirData } = await supabase.from("users").select("sessions_no_show").eq("id", other.id).single();
-                if (theirData) {
-                  await supabase.from("users").update({ sessions_no_show: (theirData.sessions_no_show ?? 0) + 1 }).eq("id", other.id);
-                  recalcReliability(other.id);
-                }
-              }
               loadSession();
             } catch {
               Alert.alert("Could not update session. Please try again.");
