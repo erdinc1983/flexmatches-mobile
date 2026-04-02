@@ -7,7 +7,7 @@
  */
 
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet, ImageBackground } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, ImageBackground, ActivityIndicator } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { useTheme, SPACE, FONT, RADIUS, TYPE, BRAND } from "../../lib/theme";
@@ -31,8 +31,9 @@ const G = {
 } as const;
 
 type Props = {
-  action:     PrimaryAction;
+  action:       PrimaryAction;
   onLogWorkout: () => void;
+  checkingIn?:  boolean;
 };
 
 type CardConfig = {
@@ -50,10 +51,11 @@ type CardConfig = {
   isHero?:   boolean;
 };
 
-export function PrimaryActionCard({ action, onLogWorkout }: Props) {
+export function PrimaryActionCard({ action, onLogWorkout, checkingIn }: Props) {
   const { theme, isDark } = useTheme();
   const c = theme.colors;
 
+  const isLogAction = action.kind === "log_streak" || action.kind === "at_gym_log";
   const cfg = getConfig(action, c, isDark, onLogWorkout);
 
   // "done" variant: full gym photo card
@@ -106,11 +108,15 @@ export function PrimaryActionCard({ action, onLogWorkout }: Props) {
         <Text style={s.heroTitle}>{cfg.title}</Text>
         <Text style={s.heroSub}>{cfg.subtitle}</Text>
         <TouchableOpacity
-          style={s.heroBtn}
+          style={[s.heroBtn, isLogAction && checkingIn && { opacity: 0.6 }]}
           onPress={cfg.ctaAction}
+          disabled={isLogAction && checkingIn}
           activeOpacity={0.85}
         >
-          <Text style={s.heroBtnText}>{cfg.ctaLabel}</Text>
+          {isLogAction && checkingIn
+            ? <ActivityIndicator color="#fff" size="small" />
+            : <Text style={s.heroBtnText}>{cfg.ctaLabel}</Text>
+          }
         </TouchableOpacity>
       </LinearGradient>
     );
@@ -129,11 +135,15 @@ export function PrimaryActionCard({ action, onLogWorkout }: Props) {
         </View>
       </View>
       <TouchableOpacity
-        style={[s.cta, { backgroundColor: cfg.ctaBg }]}
+        style={[s.cta, { backgroundColor: cfg.ctaBg }, isLogAction && checkingIn && { opacity: 0.6 }]}
         onPress={cfg.ctaAction}
+        disabled={isLogAction && checkingIn}
         activeOpacity={0.85}
       >
-        <Text style={s.ctaText}>{cfg.ctaLabel}</Text>
+        {isLogAction && checkingIn
+          ? <ActivityIndicator color="#fff" size="small" />
+          : <Text style={s.ctaText}>{cfg.ctaLabel}</Text>
+        }
       </TouchableOpacity>
     </View>
   );

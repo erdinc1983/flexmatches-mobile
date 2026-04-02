@@ -454,58 +454,68 @@ export default function HomeScreen() {
   }, [load]);
 
   // ── Actions ──────────────────────────────────────────────────────────────────
+  const [checkingIn, setCheckingIn] = useState(false);
+
   async function logWorkout() {
-    if (!profile) return;
-    const { error } = await supabase.from("workouts").insert({
-      user_id:       profile.id,
-      exercise_type: "Quick Check-in",
-      logged_at:     new Date().toISOString(),
-      notes:         "Quick check-in",
-    });
-    if (error) { Alert.alert("Error", error.message); return; }
+    if (!profile || checkingIn) return;
+    setCheckingIn(true);
+    try {
+      // Atomic RPC: handles consecutive-day logic + duplicate prevention server-side
+      const { data: result, error: rpcError } = await supabase.rpc("log_checkin", {
+        p_user_id: profile.id,
+      });
+      if (rpcError) throw rpcError;
 
-    const newStreak = profile.current_streak + 1;
-    await supabase.from("users").update({
-      last_checkin_date: today,
-      current_streak:    newStreak,
-    }).eq("id", profile.id);
+      // AC1: server already rejected the duplicate — show button as done, no other side effects
+      if (result?.already_checked_in) {
+        setProfile((p) => p ? { ...p, last_checkin_date: today } : p);
+        return;
+      }
 
-    await supabase.from("feed_posts").insert({
-      user_id:   profile.id,
-      post_type: "workout",
-      content:   newStreak > 1 ? `Day ${newStreak} streak!` : "Just logged my first workout!",
-      meta:      { streak: newStreak },
-    });
+      const newStreak = result?.streak ?? profile.current_streak + 1;
 
-    // Notify all accepted match partners
-    const { data: acceptedMs } = await supabase
-      .from("matches")
-      .select("sender_id, receiver_id")
-      .eq("status", "accepted")
-      .or(`sender_id.eq.${profile.id},receiver_id.eq.${profile.id}`);
-    const partnerIds = (acceptedMs ?? []).map((m: any) =>
-      m.sender_id === profile.id ? m.receiver_id : m.sender_id
-    );
-    if (partnerIds.length > 0) {
-      const displayName = profile.full_name?.split(" ")[0] ?? profile.username ?? "Your buddy";
-      await supabase.from("notifications").insert(
-        partnerIds.map((pid: string) => ({
-          user_id:    pid,
-          type:       "partner_workout",
-          title:      "💪 Training buddy is active!",
-          body:       `${displayName} just logged a workout. Stay motivated!`,
-          related_id: profile.id,
-          read:       false,
-        }))
+      await supabase.from("feed_posts").insert({
+        user_id:   profile.id,
+        post_type: "workout",
+        content:   newStreak > 1 ? `Day ${newStreak} streak! 🔥` : "Just logged my first workout!",
+        meta:      { streak: newStreak },
+      });
+
+      // Notify partners once per day (server enforced via RPC; client skips if already checked in)
+      const { data: acceptedMs } = await supabase
+        .from("matches")
+        .select("sender_id, receiver_id")
+        .eq("status", "accepted")
+        .or(`sender_id.eq.${profile.id},receiver_id.eq.${profile.id}`);
+      const partnerIds = (acceptedMs ?? []).map((m: any) =>
+        m.sender_id === profile.id ? m.receiver_id : m.sender_id
       );
-    }
+      if (partnerIds.length > 0) {
+        const displayName = profile.full_name?.split(" ")[0] ?? profile.username ?? "Your buddy";
+        await supabase.from("notifications").insert(
+          partnerIds.map((pid: string) => ({
+            user_id:    pid,
+            type:       "partner_workout",
+            title:      "💪 Training buddy is active!",
+            body:       `${displayName} just logged a workout. Stay motivated!`,
+            related_id: profile.id,
+            read:       false,
+          }))
+        );
+      }
 
-    setProfile((p) => p ? {
-      ...p,
-      last_checkin_date:   today,
-      current_streak:      newStreak,
-      workout_count_month: p.workout_count_month + 1,
-    } : p);
+      setProfile((p) => p ? {
+        ...p,
+        last_checkin_date:   today,
+        current_streak:      newStreak,
+        workout_count_month: p.workout_count_month + 1,
+      } : p);
+    } catch (err) {
+      console.error("[logWorkout] failed:", err);
+      Alert.alert("Error", "Could not log your workout. Please try again.");
+    } finally {
+      setCheckingIn(false);
+    }
   }
 
   async function toggleGym() {
@@ -689,7 +699,7 @@ export default function HomeScreen() {
         />
 
         {/* ── Primary action ── */}
-        <PrimaryActionCard action={primaryAction} onLogWorkout={logWorkout} />
+        <PrimaryActionCard action={primaryAction} onLogWorkout={logWorkout} checkingIn={checkingIn} />
 
         {/* Gym strip only when primary card isn't already showing the gym prompt */}
         {showGymStrip && (
