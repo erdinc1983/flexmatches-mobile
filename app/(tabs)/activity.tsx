@@ -107,7 +107,7 @@ export default function ActivityScreen() {
         user_id:       userId,
         exercise_type: sport || "Gym",
         notes:         notes.trim() || null,
-        duration_min:  duration ? parseInt(duration) : null,
+        duration_min:  duration ? Math.max(1, parseInt(duration) || 1) : null,
         logged_at:     new Date().toISOString(),
       });
       if (insertError) throw insertError;

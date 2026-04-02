@@ -258,6 +258,18 @@ export default function ProfileScreen() {
   // ── Actions ──────────────────────────────────────────────────────────────────
   async function saveProfile() {
     if (!form || !userId) return;
+
+    // Validate numeric fields before saving
+    if (form.age != null && (form.age < 13 || form.age > 120)) {
+      Alert.alert("Invalid Age", "Please enter a valid age (13–120)."); return;
+    }
+    if (form.weight != null && form.weight <= 0) {
+      Alert.alert("Invalid Weight", "Weight must be greater than 0."); return;
+    }
+    if (form.target_weight != null && form.target_weight <= 0) {
+      Alert.alert("Invalid Target Weight", "Target weight must be greater than 0."); return;
+    }
+
     setSaving(true);
     const { error } = await supabase.from("users").update({
       full_name:       form.full_name,

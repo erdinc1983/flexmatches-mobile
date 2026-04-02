@@ -94,6 +94,12 @@ export default function GoalsScreen() {
 
   async function createGoal() {
     if (!form.title.trim() || !userId) return;
+
+    const parsedTarget = form.target_value ? parseFloat(form.target_value) : null;
+    if (parsedTarget != null && parsedTarget <= 0) {
+      Alert.alert("Invalid Target", "Target value must be greater than 0."); return;
+    }
+
     setSaving(true);
 
     const typeInfo = GOAL_TYPES.find(t => t.key === form.goal_type);
@@ -101,7 +107,7 @@ export default function GoalsScreen() {
       user_id: userId,
       title: form.title.trim(),
       goal_type: form.goal_type,
-      target_value: form.target_value ? parseFloat(form.target_value) : null,
+      target_value: parsedTarget,
       current_value: 0,
       unit: form.unit || typeInfo?.unit || null,
       deadline: form.deadline || null,
