@@ -6,33 +6,11 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { supabase } from "../../lib/supabase";
+import { calcTier, TIERS } from "../../lib/badges";
 import { ErrorState } from "../../components/ui/ErrorState";
 import { Avatar } from "../../components/Avatar";
 import { useTheme, SPACE, FONT, RADIUS } from "../../lib/theme";
 import { Icon } from "../../components/Icon";
-
-const TIERS = [
-  { key: "diamond",  label: "Diamond",  min: 500, color: "#B9F2FF", medal: "💎" },
-  { key: "platinum", label: "Platinum", min: 200, color: "#E5E4E2", medal: "🥇" },
-  { key: "gold",     label: "Gold",     min: 100, color: "#FFD700", medal: "🥇" },
-  { key: "silver",   label: "Silver",   min: 50,  color: "#C0C0C0", medal: "🥈" },
-  { key: "bronze",   label: "Bronze",   min: 0,   color: "#CD7F32", medal: "🥉" },
-];
-
-function getTier(streak: number) {
-  if (streak >= 500) return TIERS[0];
-  if (streak >= 200) return TIERS[1];
-  if (streak >= 100) return TIERS[2];
-  if (streak >= 50)  return TIERS[3];
-  return TIERS[4];
-}
-
-function getNextTier(streak: number) {
-  if (streak >= 200) return TIERS[0];
-  if (streak >= 100) return TIERS[1];
-  if (streak >= 50)  return TIERS[2];
-  return TIERS[3];
-}
 
 type Leader = {
   id: string;
@@ -42,6 +20,7 @@ type Leader = {
   current_streak: number;
   total_kudos: number;
   city: string | null;
+  points: number;
 };
 
 export default function LeaderboardScreen() {
@@ -66,48 +45,60 @@ export default function LeaderboardScreen() {
 
   async function load(isRefresh = false) {
     try {
-    setError(false);
-    if (!isRefresh) setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+      setError(false);
+      if (!isRefresh) setLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-    const { data: myData } = await supabase
-      .from("users")
-      .select("id,full_name,username,avatar_url,current_streak,total_kudos,city")
-      .eq("id", user.id)
-      .single();
-    setMe(myData as Leader);
+      let rawList: Omit<Leader, "points">[] = [];
 
-    if (tab === "global") {
-      const { data } = await supabase
-        .from("users")
-        .select("id,full_name,username,avatar_url,current_streak,total_kudos,city")
-        .order("current_streak", { ascending: false })
-        .limit(50);
-      const list = (data as Leader[]) ?? [];
+      if (tab === "global") {
+        const { data } = await supabase
+          .from("users")
+          .select("id,full_name,username,avatar_url,current_streak,total_kudos,city")
+          .limit(50);
+        rawList = (data ?? []) as Omit<Leader, "points">[];
+      } else {
+        const { data: matchData } = await supabase
+          .from("matches")
+          .select("sender_id,receiver_id")
+          .eq("status", "accepted")
+          .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`);
+        const friendIds = (matchData ?? []).map((m: any) =>
+          m.sender_id === user.id ? m.receiver_id : m.sender_id
+        );
+        friendIds.push(user.id);
+        const { data } = await supabase
+          .from("users")
+          .select("id,full_name,username,avatar_url,current_streak,total_kudos,city")
+          .in("id", friendIds);
+        rawList = (data ?? []) as Omit<Leader, "points">[];
+      }
+
+      // Bulk-fetch badge + workout counts to compute points (2 queries, not N)
+      const ids = rawList.map((u) => u.id);
+      const [{ data: badgeRows }, { data: workoutRows }] = await Promise.all([
+        supabase.from("user_badges").select("user_id").in("user_id", ids),
+        supabase.from("workouts").select("user_id").in("user_id", ids),
+      ]);
+
+      const badgeCounts: Record<string, number> = {};
+      for (const b of badgeRows ?? []) badgeCounts[b.user_id] = (badgeCounts[b.user_id] ?? 0) + 1;
+      const workoutCounts: Record<string, number> = {};
+      for (const w of workoutRows ?? []) workoutCounts[w.user_id] = (workoutCounts[w.user_id] ?? 0) + 1;
+
+      const list: Leader[] = rawList
+        .map((u) => ({
+          ...u,
+          points: (badgeCounts[u.id] ?? 0) * 100 + (workoutCounts[u.id] ?? 0) * 10 + (u.current_streak ?? 0) * 5,
+        }))
+        .sort((a, b) => b.points - a.points);
+
       setLeaders(list);
+      const myData = list.find((u) => u.id === user.id) ?? null;
+      setMe(myData);
       const rank = list.findIndex((u) => u.id === user.id);
       setMyRank(rank >= 0 ? rank + 1 : null);
-    } else {
-      const { data: matchData } = await supabase
-        .from("matches")
-        .select("sender_id,receiver_id")
-        .eq("status", "accepted")
-        .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`);
-      const friendIds = (matchData ?? []).map((m: any) =>
-        m.sender_id === user.id ? m.receiver_id : m.sender_id
-      );
-      friendIds.push(user.id);
-      const { data } = await supabase
-        .from("users")
-        .select("id,full_name,username,avatar_url,current_streak,total_kudos,city")
-        .in("id", friendIds)
-        .order("current_streak", { ascending: false });
-      const list = (data as Leader[]) ?? [];
-      setLeaders(list);
-      const rank = list.findIndex((u) => u.id === user.id);
-      setMyRank(rank >= 0 ? rank + 1 : null);
-    }
     } catch (err) {
       console.error("[Leaderboard] load failed:", err);
       if (isRefresh) {
@@ -126,10 +117,10 @@ export default function LeaderboardScreen() {
     setRefreshing(false);
   }
 
-  const myTier = me ? getTier(me.current_streak ?? 0) : TIERS[4];
-  const nextTier = me ? getNextTier(me.current_streak ?? 0) : TIERS[3];
-  const progress = me && myTier.key !== "diamond"
-    ? Math.min(((me.current_streak ?? 0) / nextTier.min) * 100, 100)
+  const myTier = me ? calcTier(me.points) : TIERS[0];
+  const nextTierPoints = myTier.nextPoints;
+  const progress = me && nextTierPoints !== null
+    ? Math.min((me.points / nextTierPoints) * 100, 100)
     : 100;
 
   const rankDisplay = (i: number) => {
@@ -177,11 +168,11 @@ export default function LeaderboardScreen() {
               <View style={[s.myTierCard, { backgroundColor: c.bgCard, borderColor: myTier.color + "44" }]}>
                 <View style={s.myTierRow}>
                   <View style={[s.tierBadge, { borderColor: myTier.color, backgroundColor: myTier.color + "22" }]}>
-                    <Text style={{ fontSize: 22 }}>{myTier.medal}</Text>
+                    <Text style={{ fontSize: 22 }}>{myTier.emoji}</Text>
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={[s.tierLabel, { color: myTier.color }]}>{myTier.label} Tier</Text>
-                    <Text style={[s.tierStreak, { color: c.text }]}>{me.current_streak ?? 0} day streak</Text>
+                    <Text style={[s.tierStreak, { color: c.text }]}>{me.points} pts</Text>
                     {myRank && (
                       <Text style={[s.tierRank, { color: c.textMuted }]}>
                         #{myRank} {tab === "global" ? "globally" : "among friends"}
@@ -194,12 +185,12 @@ export default function LeaderboardScreen() {
                   </View>
                 </View>
 
-                {myTier.key !== "diamond" && (
+                {nextTierPoints !== null && (
                   <View style={{ marginTop: SPACE[14] }}>
                     <View style={s.progressLabelRow}>
                       <Text style={[s.progressLabel, { color: c.textMuted }]}>{myTier.label}</Text>
                       <Text style={[s.progressLabel, { color: c.textMuted }]}>
-                        {me.current_streak ?? 0} / {nextTier.min} days → {nextTier.label}
+                        {me.points} / {nextTierPoints} pts → next tier
                       </Text>
                     </View>
                     <View style={[s.progressBar, { backgroundColor: c.border }]}>
@@ -217,7 +208,7 @@ export default function LeaderboardScreen() {
             <View style={s.tierLegend}>
               {[...TIERS].reverse().map((t) => (
                 <View key={t.key} style={[s.tierChip, { borderColor: t.color + "44", backgroundColor: c.bgCard }]}>
-                  <Text style={[s.tierChipText, { color: t.color }]}>{t.medal} {t.label}</Text>
+                  <Text style={[s.tierChipText, { color: t.color }]}>{t.emoji} {t.label}</Text>
                 </View>
               ))}
             </View>
@@ -246,7 +237,7 @@ export default function LeaderboardScreen() {
           </Text>
         ) : null}
         renderItem={({ item: user, index: i }) => {
-          const tier = getTier(user.current_streak ?? 0);
+          const tier = calcTier(user.points);
           const isMe = me?.id === user.id;
           const rankColor = i === 0 ? "#FFD700" : i === 1 ? "#C0C0C0" : i === 2 ? "#CD7F32" : c.textMuted;
 
@@ -268,12 +259,12 @@ export default function LeaderboardScreen() {
                   {isMe ? <Text style={[s.youTag, { color: tier.color }]}> (you)</Text> : null}
                 </Text>
                 <Text style={[s.rowSub, { color: c.textMuted }]}>
-                  {tier.medal} {tier.label}{user.city ? ` · ${user.city}` : ""}
+                  {tier.emoji} {tier.label}{user.city ? ` · ${user.city}` : ""}
                 </Text>
               </View>
               <View style={{ alignItems: "flex-end" }}>
-                <Text style={[s.streakVal, { color: tier.color }]}>🔥 {user.current_streak ?? 0}</Text>
-                <Text style={[s.streakSub, { color: c.textMuted }]}>days</Text>
+                <Text style={[s.streakVal, { color: tier.color }]}>{user.points}</Text>
+                <Text style={[s.streakSub, { color: c.textMuted }]}>pts</Text>
               </View>
             </View>
           );
