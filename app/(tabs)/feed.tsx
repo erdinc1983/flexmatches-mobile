@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, RefreshControl, Modal, TextInput, ScrollView, Alert,
+  KeyboardAvoidingView, Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -287,7 +288,8 @@ export default function FeedScreen() {
             </TouchableOpacity>
           </View>
 
-          <ScrollView contentContainerStyle={{ padding: SPACE[20], gap: SPACE[16] }}>
+          <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+          <ScrollView contentContainerStyle={{ padding: SPACE[20], gap: SPACE[16] }} keyboardShouldPersistTaps="handled">
             <Text style={[s.fieldLabel, { color: c.textMuted }]}>Type</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: SPACE[4] }}>
               <View style={{ flexDirection: "row", gap: SPACE[8] }}>
@@ -335,6 +337,7 @@ export default function FeedScreen() {
               )}
             </TouchableOpacity>
           </ScrollView>
+          </KeyboardAvoidingView>
         </SafeAreaView>
       </Modal>
     </SafeAreaView>

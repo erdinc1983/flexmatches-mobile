@@ -15,6 +15,7 @@ import { useEffect, useState } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   ActivityIndicator, TextInput, Alert, Modal, Switch, Linking,
+  KeyboardAvoidingView, Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -386,6 +387,7 @@ export default function SettingsScreen() {
 
       {/* ── Report Bug Modal ── */}
       <Modal visible={reportModal} transparent animationType="slide" onRequestClose={() => setReportModal(false)}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
         <BlurOverlay onPress={() => setReportModal(false)}>
           <View style={s.overlayInner}>
           <View style={[s.modalBox, { backgroundColor: c.bgCard, borderColor: c.border }]}>
@@ -422,6 +424,7 @@ export default function SettingsScreen() {
           </View>
           </View>
         </BlurOverlay>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ── Delete Account Modal ── */}

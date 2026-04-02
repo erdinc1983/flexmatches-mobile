@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, FlatList,
   ActivityIndicator, TextInput, Modal, Alert, RefreshControl,
+  KeyboardAvoidingView, Platform, ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "../../lib/supabase";
@@ -300,67 +301,76 @@ export default function ActivityScreen() {
 
       {/* Log Workout Modal */}
       <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
-        <View style={[s.modal, { backgroundColor: c.bg }]}>
-          <View style={s.modalHeader}>
-            <Text style={[s.modalTitle, { color: c.text }]}>Log Workout</Text>
-            <TouchableOpacity onPress={() => setModalVisible(false)} style={s.closeBtn}>
-              <Icon name="close" size={22} color={c.textMuted} />
-            </TouchableOpacity>
-          </View>
-
-          <Text style={[s.fieldLabel, { color: c.textMuted }]}>Sport</Text>
-          <View style={s.sportsGrid}>
-            {SPORTS.map((sp) => (
-              <TouchableOpacity
-                key={sp}
-                style={[
-                  s.sportChip,
-                  { backgroundColor: c.bgCard, borderColor: c.border },
-                  sport === sp && { backgroundColor: c.brandSubtle, borderColor: c.brand },
-                ]}
-                onPress={() => setSport(sp)}
-              >
-                <Text style={[s.sportChipText, { color: sport === sp ? c.brand : c.textMuted }]}>{sp}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <Text style={[s.fieldLabel, { color: c.textMuted }]}>Duration (minutes)</Text>
-          <TextInput
-            style={[s.input, { backgroundColor: c.bgInput, borderColor: c.border, color: c.text }]}
-            value={duration}
-            onChangeText={setDuration}
-            keyboardType="numeric"
-            placeholder="e.g. 45"
-            placeholderTextColor={c.textFaint}
-          />
-
-          <Text style={[s.fieldLabel, { color: c.textMuted }]}>Notes (optional)</Text>
-          <TextInput
-            style={[s.input, { backgroundColor: c.bgInput, borderColor: c.border, color: c.text, height: 90, textAlignVertical: "top", paddingTop: 12 }]}
-            value={notes}
-            onChangeText={setNotes}
-            multiline
-            placeholder="How did it go?"
-            placeholderTextColor={c.textFaint}
-          />
-
-          <TouchableOpacity
-            style={[s.saveBtn, { backgroundColor: c.brand }]}
-            onPress={logWorkout}
-            disabled={saving}
-            activeOpacity={0.85}
+        <KeyboardAvoidingView
+          style={{ flex: 1, backgroundColor: c.bg }}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
+          <ScrollView
+            contentContainerStyle={s.modal}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
           >
-            {saving ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <View style={s.saveBtnInner}>
-                <Icon name="workout" size={18} color="#fff" />
-                <Text style={s.saveBtnText}>Log Workout</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        </View>
+            <View style={s.modalHeader}>
+              <Text style={[s.modalTitle, { color: c.text }]}>Log Workout</Text>
+              <TouchableOpacity onPress={() => setModalVisible(false)} style={s.closeBtn}>
+                <Icon name="close" size={22} color={c.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[s.fieldLabel, { color: c.textMuted }]}>Sport</Text>
+            <View style={s.sportsGrid}>
+              {SPORTS.map((sp) => (
+                <TouchableOpacity
+                  key={sp}
+                  style={[
+                    s.sportChip,
+                    { backgroundColor: c.bgCard, borderColor: c.border },
+                    sport === sp && { backgroundColor: c.brandSubtle, borderColor: c.brand },
+                  ]}
+                  onPress={() => setSport(sp)}
+                >
+                  <Text style={[s.sportChipText, { color: sport === sp ? c.brand : c.textMuted }]}>{sp}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={[s.fieldLabel, { color: c.textMuted }]}>Duration (minutes)</Text>
+            <TextInput
+              style={[s.input, { backgroundColor: c.bgInput, borderColor: c.border, color: c.text }]}
+              value={duration}
+              onChangeText={setDuration}
+              keyboardType="numeric"
+              placeholder="e.g. 45"
+              placeholderTextColor={c.textFaint}
+            />
+
+            <Text style={[s.fieldLabel, { color: c.textMuted }]}>Notes (optional)</Text>
+            <TextInput
+              style={[s.input, { backgroundColor: c.bgInput, borderColor: c.border, color: c.text, height: 90, textAlignVertical: "top", paddingTop: 12 }]}
+              value={notes}
+              onChangeText={setNotes}
+              multiline
+              placeholder="How did it go?"
+              placeholderTextColor={c.textFaint}
+            />
+
+            <TouchableOpacity
+              style={[s.saveBtn, { backgroundColor: c.brand }]}
+              onPress={logWorkout}
+              disabled={saving}
+              activeOpacity={0.85}
+            >
+              {saving ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <View style={s.saveBtnInner}>
+                  <Icon name="workout" size={18} color="#fff" />
+                  <Text style={s.saveBtnText}>Log Workout</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
