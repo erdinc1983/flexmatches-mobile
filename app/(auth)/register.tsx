@@ -34,6 +34,13 @@ export default function RegisterScreen() {
   const [showPassword,   setShowPassword]   = useState(false);
   const [showConfirm,    setShowConfirm]    = useState(false);
 
+  const [emailError, setEmailError] = useState<string | null>(null);
+
+  function validateEmail(v: string) {
+    const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+    setEmailError(valid || v.length === 0 ? null : "Please enter a valid email address");
+  }
+
   const strength     = password.length > 0 ? getStrength(password) : null;
   const passwordsMatch = confirm.length > 0 && password === confirm;
   const canSubmit    = !!email && !!username && strength?.label === "Strong" && passwordsMatch;
@@ -45,6 +52,11 @@ export default function RegisterScreen() {
   async function handleRegister() {
     if (!email || !password || !username || !confirm) {
       Alert.alert("Error", "All fields are required");
+      return;
+    }
+    const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    if (!validEmail) {
+      setEmailError("Please enter a valid email address");
       return;
     }
     if (password !== confirm) {
@@ -120,12 +132,13 @@ export default function RegisterScreen() {
                 placeholder="you@example.com"
                 placeholderTextColor="#333"
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={v => { setEmail(v); if (emailError) validateEmail(v); }}
                 autoCapitalize="none"
                 keyboardType="email-address"
                 onFocus={() => setFocusedField("email")}
-                onBlur={() => setFocusedField(null)}
+                onBlur={() => { setFocusedField(null); validateEmail(email); }}
               />
+              {emailError && <Text style={styles.errorHint}>{emailError}</Text>}
             </View>
 
             {/* Password + strength */}
@@ -223,7 +236,7 @@ export default function RegisterScreen() {
               </>
             )}
 
-            <TouchableOpacity style={styles.loginBtn} onPress={() => router.push("/(auth)/login")} activeOpacity={0.7}>
+            <TouchableOpacity style={styles.loginBtn} onPress={() => router.replace("/(auth)/login")} activeOpacity={0.7}>
               <Text style={styles.loginText}>
                 Already have an account?{" "}
                 <Text style={styles.loginLink}>Sign in</Text>

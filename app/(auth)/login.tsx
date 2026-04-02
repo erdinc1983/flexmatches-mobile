@@ -18,6 +18,12 @@ export default function LoginScreen() {
   const [appleAvailable, setAppleAvailable] = useState(false);
   const [focusedField,   setFocusedField]   = useState<string | null>(null);
   const [showPassword,   setShowPassword]   = useState(false);
+  const [emailError,     setEmailError]     = useState<string | null>(null);
+
+  function validateEmail(v: string) {
+    const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+    setEmailError(valid || v.length === 0 ? null : "Please enter a valid email address");
+  }
 
   useEffect(() => {
     isAppleAuthAvailable().then(setAppleAvailable);
@@ -26,6 +32,11 @@ export default function LoginScreen() {
   async function handleLogin() {
     if (!email || !password) {
       Alert.alert("Error", "Email and password are required");
+      return;
+    }
+    const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    if (!validEmail) {
+      setEmailError("Please enter a valid email address");
       return;
     }
     setLoading(true);
@@ -79,13 +90,14 @@ export default function LoginScreen() {
                 placeholder="you@example.com"
                 placeholderTextColor="#333"
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={v => { setEmail(v); if (emailError) validateEmail(v); }}
                 autoCapitalize="none"
                 keyboardType="email-address"
                 onFocus={() => setFocusedField("email")}
-                onBlur={() => setFocusedField(null)}
+                onBlur={() => { setFocusedField(null); validateEmail(email); }}
               />
             </View>
+            {emailError && <Text style={styles.errorHint}>{emailError}</Text>}
 
             <View style={styles.field}>
               <Text style={styles.label}>Password</Text>
@@ -160,7 +172,7 @@ export default function LoginScreen() {
 
             <TouchableOpacity
               style={styles.registerBtn}
-              onPress={() => router.push("/(auth)/register")}
+              onPress={() => router.replace("/(auth)/register")}
               activeOpacity={0.7}
             >
               <Text style={styles.registerText}>
@@ -228,4 +240,5 @@ const styles = StyleSheet.create({
   inputInner: { flex: 1, paddingHorizontal: 18, paddingVertical: 16, color: "#FFF", fontSize: 16 },
   eyeBtn:     { paddingHorizontal: 14, paddingVertical: 14 },
   eyeIcon:    { fontSize: 18 },
+  errorHint:  { fontSize: 12, color: "#FF4500", marginTop: 2 },
 });
