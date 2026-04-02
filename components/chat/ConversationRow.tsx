@@ -74,8 +74,8 @@ function getSessionPill(session: BuddySession | null, myId: string): Pill | null
 
 // ─── Swipe actions ───────────────────────────────────────────────────────────
 function RightActions({
-  saved, onSave, onDeleteMessages, onUnmatch,
-}: { saved: boolean; onSave: () => void; onDeleteMessages: () => void; onUnmatch: () => void; }) {
+  name, saved, onSave, onDeleteMessages, onUnmatch,
+}: { name: string; saved: boolean; onSave: () => void; onDeleteMessages: () => void; onUnmatch: () => void; }) {
   return (
     <View style={ra.wrap}>
       {/* Save / bookmark */}
@@ -88,10 +88,14 @@ function RightActions({
       <TouchableOpacity
         style={[ra.btn, { backgroundColor: "#8E8E93" }]}
         onPress={() =>
-          Alert.alert("Delete messages", "Clear the message history for this chat?", [
-            { text: "Cancel", style: "cancel" },
-            { text: "Delete", style: "destructive", onPress: onDeleteMessages },
-          ])
+          Alert.alert(
+            "Delete Messages",
+            `Delete all messages with ${name}? The match will be preserved.`,
+            [
+              { text: "Cancel", style: "cancel" },
+              { text: "Delete", style: "destructive", onPress: onDeleteMessages },
+            ]
+          )
         }
         activeOpacity={0.85}
       >
@@ -103,10 +107,14 @@ function RightActions({
       <TouchableOpacity
         style={[ra.btn, { backgroundColor: "#FF3B30" }]}
         onPress={() =>
-          Alert.alert("Unmatch", "Remove this match and all messages?", [
-            { text: "Cancel", style: "cancel" },
-            { text: "Unmatch", style: "destructive", onPress: onUnmatch },
-          ])
+          Alert.alert(
+            "Unmatch",
+            `Unmatch ${name}? This will permanently remove this connection and all messages. This cannot be undone.`,
+            [
+              { text: "Cancel", style: "cancel" },
+              { text: "Unmatch", style: "destructive", onPress: onUnmatch },
+            ]
+          )
         }
         activeOpacity={0.85}
       >
@@ -142,6 +150,7 @@ export function ConversationRow({
       rightThreshold={40}
       renderRightActions={() => (
         <RightActions
+          name={name}
           saved={saved}
           onSave={() => { closeSwipe(); onSave(); }}
           onDeleteMessages={() => { closeSwipe(); onDeleteMessages(); }}
