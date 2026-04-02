@@ -35,26 +35,24 @@ export async function notifyUser(
     data?: Record<string, any>;
   }
 ): Promise<void> {
-  // 1. Insert into notifications table (skip for messages — they'd spam the list)
-  if (opts.type !== "message") {
-    supabase.from("notifications").insert({
-      user_id:    userId,
-      type:       opts.type,
-      title:      opts.title,
-      body:       opts.body,
-      message:    opts.body,
-      related_id: opts.relatedId ?? null,
-      read:       false,
-    }).then(({ error }) => {
-      if (error) console.warn("[notifyUser] Insert failed:", error.message);
-      else console.log("[notifyUser] Notification inserted for", userId);
-    });
-  }
+  // 1. Insert into notifications table (all types including messages)
+  const { error } = await supabase.from("notifications").insert({
+    user_id:    userId,
+    type:       opts.type,
+    title:      opts.title,
+    body:       opts.body,
+    message:    opts.body,
+    related_id: opts.relatedId ?? null,
+    read:       false,
+  });
+  if (error) console.warn("[notifyUser] Insert failed:", error.message);
+  else console.log("[notifyUser] Notification inserted for", userId);
 
   // 2. Send push notification (shows on device — all types including messages)
-  sendPushToUser(userId, {
+  await sendPushToUser(userId, {
     title: opts.title,
     body: opts.body,
+    channelId: opts.type === "message" ? "messages" : "default",
     data: { type: opts.type, ...opts.data },
   });
 }
@@ -77,12 +75,18 @@ export async function registerPushToken(): Promise<string | null> {
   }
   if (finalStatus !== "granted") return null;
 
-  // Android channel
+  // Android channels
   if (Platform.OS === "android") {
     await Notifications.setNotificationChannelAsync("default", {
       name: "Default",
       importance: Notifications.AndroidImportance.HIGH,
       sound: "default",
+    });
+    await Notifications.setNotificationChannelAsync("messages", {
+      name: "Messages",
+      importance: Notifications.AndroidImportance.HIGH,
+      sound: "default",
+      vibrationPattern: [0, 250, 250, 250],
     });
   }
 
@@ -91,14 +95,17 @@ export async function registerPushToken(): Promise<string | null> {
       projectId: "4e957dd8-fd32-4678-9b74-4232d65e658d",
     });
     const token = tokenData.data;
+    console.log("[Push] Got token:", token.slice(0, 25) + "...");
 
     // Store in Supabase
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
-      await supabase
+      const { error: upErr } = await supabase
         .from("users")
         .update({ expo_push_token: token })
         .eq("id", user.id);
+      if (upErr) console.warn("[Push] Token store failed:", upErr.message);
+      else console.log("[Push] Token stored for user:", user.id);
     }
 
     return token;
@@ -108,12 +115,31 @@ export async function registerPushToken(): Promise<string | null> {
   }
 }
 
+/**
+ * Remove the current device's push token from the DB.
+ * Call BEFORE supabase.auth.signOut() so the token is cleared
+ * while the session is still valid.
+ */
+export async function unregisterPushToken(): Promise<void> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase
+      .from("users")
+      .update({ expo_push_token: null })
+      .eq("id", user.id);
+  } catch {
+    // Best-effort — don't block sign-out
+  }
+}
+
 // ─── Send push to a specific user ──────────────────────────────────────────
 
 export type PushPayload = {
   title: string;
   body: string;
   data?: Record<string, any>;
+  channelId?: string;
 };
 
 /**
@@ -130,6 +156,7 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
       .single();
 
     const token = data?.expo_push_token;
+    console.log("[Push] token lookup for", userId, "→", token ? `${token.slice(0, 20)}...` : "NULL (no token stored)");
     if (!token) return;
 
     await fetch(EXPO_PUSH_URL, {
@@ -143,6 +170,7 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
         title: payload.title,
         body: payload.body,
         sound: "default",
+        channelId: payload.channelId ?? "default",
         data: payload.data ?? {},
       }),
     });
@@ -181,6 +209,7 @@ export async function sendPushToUsers(userIds: string[], payload: PushPayload): 
           title: payload.title,
           body: payload.body,
           sound: "default",
+          channelId: payload.channelId ?? "default",
           data: payload.data ?? {},
         }))
       ),

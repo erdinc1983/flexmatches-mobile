@@ -19,6 +19,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { supabase } from "../lib/supabase";
+import { unregisterPushToken } from "../lib/push";
 import { useTheme, SPACE, FONT, RADIUS, PALETTE } from "../lib/theme";
 import { BlurOverlay } from "../components/ui/BlurOverlay";
 
@@ -216,6 +217,7 @@ export default function SettingsScreen() {
             Alert.alert("Sign Out", "Are you sure?", [
               { text: "Cancel", style: "cancel" },
               { text: "Sign Out", style: "destructive", onPress: async () => {
+                await unregisterPushToken();
                 await supabase.auth.signOut();
                 router.replace("/(auth)/welcome");
               }},
