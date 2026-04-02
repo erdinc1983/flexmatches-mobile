@@ -8,11 +8,11 @@
  *   const { unreadCount, refresh } = useNotifications();
  */
 
-import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { supabase } from "./supabase";
 import {
   notifyMatchRequest, notifyMatchAccepted, notifyBadgeUnlocked, notifyPartnerWorkout,
-  notifyNewMessage, requestNotificationPermission,
+  notifyNewMessage, notifyGeneric, requestNotificationPermission,
 } from "./notifications";
 import { registerAndSavePushToken, setupAndroidChannel } from "./pushTokens";
 
@@ -68,32 +68,44 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     if (userId) await fetchCount(userId);
   }, [userId, fetchCount]);
 
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+
   useEffect(() => {
-    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let cancelled = false;
 
     setupAndroidChannel();
 
     supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return;
+      if (!user || cancelled) return;
       setUserId(user.id);
       fetchCount(user.id);
       requestNotificationPermission();
-      registerAndSavePushToken(user.id); // no-op until eas init is done
+      registerAndSavePushToken(user.id);
 
-      // Real-time: new notification inserted → update badge + fire local push
-      channel = supabase
-        .channel(`notif-badge-${user.id}`)
+      // Clean up any previous channel before creating a new one
+      if (channelRef.current) {
+        channelRef.current.unsubscribe();
+        channelRef.current = null;
+      }
+
+      console.log("[Realtime] Setting up channel for user:", user.id);
+      channelRef.current = supabase
+        .channel(`notif-badge-${user.id}-${Date.now()}`)
         .on(
           "postgres_changes",
           { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` },
           (payload) => {
+            console.log("[Realtime] 🔔 Notification INSERT received:", JSON.stringify(payload.new));
             fetchCount(user.id);
-            // Fire a local push for key types
             const n = payload.new as { type?: string; title?: string; body?: string; message?: string };
             const body = n.body ?? n.message ?? "";
-            if (n.type === "match_request")    notifyMatchRequest(body || "Someone wants to train with you!");
-            if (n.type === "match_accepted")   notifyMatchAccepted(body || "Your match was accepted");
-            if (n.type === "partner_workout")  notifyPartnerWorkout(body || "Your training buddy just logged a workout!");
+            // message sound is handled by the messages INSERT handler below (more reliable)
+            if (n.type === "match_request")      notifyMatchRequest(body || "Someone wants to train with you!");
+            if (n.type === "match_accepted")     notifyMatchAccepted(body || "Your match was accepted");
+            if (n.type === "session_proposed")   notifyGeneric(n.title ?? "Session Proposed 📅", body || "Someone proposed a training session");
+            if (n.type === "session_accepted")   notifyGeneric(n.title ?? "Session Accepted 🤜", body || "Your session was accepted");
+            if (n.type === "session_declined")   notifyGeneric(n.title ?? "Session Declined", body || "A session was declined");
+            if (n.type === "partner_workout")    notifyPartnerWorkout(body || "Your training buddy just logged a workout!");
             if (n.type === "badge_unlocked") {
               const title = n.title ?? "Badge Unlocked";
               const emoji = title.match(/[\u{1F000}-\u{1FFFF}]/u)?.[0] ?? "🏆";
@@ -106,7 +118,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           { event: "UPDATE", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` },
           () => fetchCount(user.id),
         )
-        // Real-time: new message → update unread count + fire local notification
         .on(
           "postgres_changes",
           { event: "INSERT", schema: "public", table: "messages" },
@@ -114,7 +125,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             const msg = payload.new as { sender_id: string; content?: string };
             if (msg.sender_id !== user.id) {
               fetchCount(user.id);
-              // Look up sender name for the local notification
               const { data: sender } = await supabase
                 .from("users")
                 .select("full_name, username")
@@ -135,7 +145,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         });
     });
 
-    return () => { channel?.unsubscribe(); };
+    return () => {
+      cancelled = true;
+      if (channelRef.current) {
+        channelRef.current.unsubscribe();
+        channelRef.current = null;
+      }
+    };
   }, [fetchCount]);
 
   return (

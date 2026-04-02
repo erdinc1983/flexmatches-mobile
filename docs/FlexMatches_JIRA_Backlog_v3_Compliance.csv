@@ -1,0 +1,810 @@
+FLEXMATCHES — PRODUCT BACKLOG (JIRA-Style),,,,,,,,,,,,,,,,
+Key,Type,Epic,Summary,User Story,MoSCoW,Priority,Points,Sprint,Assignee,Status,Acceptance Criteria (Given/When/Then),QA Verification Tasks,QA DoD Checklist,UI/Design Requirements,Story-Specific DoD (beyond standard),
+E01,Epic,—,Critical Error Handling,Epic: Critical Error Handling,,,,,,,,,,,,
+FM-101,Story,E01,Global Error Handling on All Screen Load Functions,"As a user, I want every screen to recover gracefully from network failures, so that I never see an infinite loading spinner with no escape.",Must Have,P0,8,Eagle 0,Senior Dev,To Do,"AC1: Given any of these 10 screens is loading data: Home, Discover, Messages, Matches, Profile, Feed, Activity, Goals, Leaderboard, Challenges — When a Supabase query fails or network is unavailable, Then the ErrorState component (from FM-103) is shown with 'Try Again' button
+
+AC2: Given the ErrorState is displayed on a screen, When the user taps 'Try Again', Then the load() function re-invokes, the ErrorState disappears, and the skeleton loader appears
+
+AC3: Given a retry also fails, When the error occurs again, Then the ErrorState shows again (no infinite retry loop, no infinite skeleton)
+
+AC4: Given a screen uses pull-to-refresh (RefreshControl), When the refresh fails, Then the existing data stays on screen (NOT replaced by ErrorState), and a toast shows 'Could not refresh. Please try again.'
+
+AC5: Given any screen's load() function, When inspecting the code, Then every Promise.all is wrapped in try/catch, errors are logged with screen name prefix (e.g. '[Home] load failed'), and setLoading(false) is in a finally block
+
+AC6: Given a skeleton loader is displayed, When 15 seconds pass without data or error, Then the ErrorState is shown automatically (timeout fallback)","QA must verify error state on ALL 10 screens:
+? 1. Home (app/(tabs)/home.tsx)
+? 2. Discover (app/(tabs)/discover.tsx)
+? 3. Messages (app/(tabs)/messages.tsx)
+? 4. Matches (app/(tabs)/matches.tsx)
+? 5. Profile (app/(tabs)/profile.tsx)
+? 6. Feed (app/(tabs)/feed.tsx)
+? 7. Activity (app/(tabs)/activity.tsx)
+? 8. Goals (app/(tabs)/goals.tsx)
+? 9. Leaderboard (app/(tabs)/leaderboard.tsx)
+? 10. Challenges (app/(tabs)/challenges.tsx)
+
+Per screen test steps:
+• Turn on airplane mode ? open screen ? verify ErrorState shows
+• Tap 'Try Again' with network restored ? verify data loads
+• Pull-to-refresh with network off ? verify existing data stays + toast appears
+• Verify no console errors or unhandled promise rejections
+• Verify skeleton loader never shows longer than 15 seconds","? All ACs verified (happy + failure path)
+? Loading/error/success states exist
+? No console errors or warnings
+? Tested on iOS + Android
+? Code reviewed with 1+ approval
+? Theme verified in dark + light mode
+? No hardcoded colors
+? Accessibility labels on new elements","?? DESIGN NEEDED:
+• Uses ErrorState component from FM-103 (must be designed first)
+• Error state must be visually consistent across all 10 screens
+• Skeleton ? ErrorState transition: no flash, smooth replace
+• Pull-to-refresh failure toast: standard toast style
+
+Designer delivers:
+• Approve ErrorState placement in each screen type (scrollable vs fixed)
+• Toast design for refresh failures
+
+?? DEPENDENCY: FM-103 must be completed first (creates ErrorState.tsx)","? All 10 screens have try/catch in load()
+? Each screen uses ErrorState from components/ui/ErrorState.tsx
+? Each screen has 3 states: loading (skeleton), success (data), error (ErrorState)
+? Pull-to-refresh failure shows toast, does NOT replace existing data
+? Skeleton timeout of 15 seconds triggers ErrorState
+? Error logs include screen name prefix: '[Home] load failed:'
+? setLoading(false) is in finally block (not in try or catch)
+? ErrorState tested on all 10 screens in BOTH themes
+? No unhandled promise rejections in console
+? Retry from ErrorState successfully loads data when network returns
+
+?? BLOCKER: Cannot start until FM-103 (ErrorState component) is Done",done
+FM-102,Story,E01,Chat Message Send with Error Recovery,"As a user, I want my typed message preserved if sending fails, so that I don't lose what I wrote.",Must Have,P0,5,Eagle 0,Senior Dev,To Do,"AC1: Given I have typed a message in chat, When I tap send and the Supabase insert fails, Then my typed text remains in the input field and a toast says 'Message failed to send'
+
+AC2: Given a message failed to send, When I see the failed message indicator, Then I can tap retry to re-attempt the insert with the same content
+
+AC3: Given I tap send, When the async operation is in progress, Then the send button shows a spinner and is disabled to prevent double-send","• Verify text is NOT cleared from input until insert returns success
+• Verify failed message shows red error indicator in chat list
+• Verify double-tap on send does not create duplicate messages
+• Verify retry on failed message successfully sends when network is restored","? All ACs verified (happy + failure path)
+? Loading/error/success states exist
+? No console errors or warnings
+? Tested on iOS + Android
+? Code reviewed with 1+ approval
+? Theme verified in dark + light mode
+? No hardcoded colors
+? Accessibility labels on new elements","?? DESIGN NEEDED:
+• Failed message indicator (red icon/border in chat bubble)
+• Retry affordance on failed message
+• Send button loading spinner style
+
+Designer delivers: Failed message state mockup","? Failed message shows distinct visual indicator
+? Retry action is discoverable
+? Send button loading state prevents double-send
+? Original text preserved in input on failure
+? Toast/alert message copy reviewed by PO",done
+FM-103,Story,E01,React Error Boundary in Root Layout,"As a user, I want the app to show a recovery screen instead of crashing, so that I can continue using the app after an unexpected error.",Must Have,P0,3,Eagle 0,Mid Dev,To Do,"AC1: Given any unhandled JavaScript error occurs in the component tree, When the error propagates to the root layout, Then a full-screen error view shows with 'Something went wrong' and a 'Restart' button
+
+AC2: Given the error screen is displayed, When I tap 'Restart', Then the error boundary resets and the app re-renders to the last working screen
+
+AC3: Given any crash scenario, When the error screen appears, Then no raw error text, stack traces, or technical jargon are visible to the user
+
+AC4: Given a network error (not a JS crash), When a screen's load() fails, Then the Error Boundary does NOT trigger — individual screen ErrorState handles it instead
+
+AC5: Given the ErrorState component is created, When it renders, Then it uses theme colors (useTheme), accepts onRetry callback, and shows icon + message + 'Try Again' button","• Trigger a deliberate JS error by adding `throw new Error('test')` in a component render — verify boundary catches it
+• Verify restart button recovers the app to Home screen in usable state
+• Verify error is logged to console (console.error) for debugging
+• Verify no user-facing technical jargon in the error screen
+• Verify network errors do NOT trigger the error boundary (they use ErrorState instead)
+• Verify ErrorState component renders correctly in BOTH dark and light themes
+• Verify ErrorState 'Try Again' button has loading state while retrying","? All ACs verified (happy + failure path)
+? Loading/error/success states exist
+? No console errors or warnings
+? Tested on iOS + Android
+? Code reviewed with 1+ approval
+? Theme verified in dark + light mode
+? No hardcoded colors
+? Accessibility labels on new elements","?? DESIGN NEEDED (2 components):
+
+1. ErrorBoundary crash screen:
+   • Full-screen centered layout
+   • Illustration or icon (?? or custom)
+   • Title: 'Something went wrong'
+   • Subtitle: 'The app ran into an unexpected problem'
+   • 'Restart' button (primary style)
+   • Must NOT show any error details
+
+2. ErrorState reusable component:
+   • Centered in parent container (not full-screen)
+   • Error icon
+   • Message: 'Something went wrong' (customizable via prop)
+   • 'Try Again' button with loading state
+   • Both themes supported
+
+Designer delivers: Mockup of BOTH components before dev starts","? ErrorBoundary wraps root navigation in _layout.tsx
+? ErrorBoundary catches JS crashes ? shows crash screen
+? ErrorState.tsx created at components/ui/ErrorState.tsx
+? ErrorState accepts: onRetry, message (optional) props
+? ErrorState uses useTheme() — zero hardcoded colors
+? Restart button recovers app to usable state
+? No raw error text or stack traces visible to user
+? Error logged to console for debugging
+? Both components look correct in dark AND light theme
+? Network errors do NOT trigger ErrorBoundary",done
+FM-104,Story,E01,Session Action Error Handling,"As a user, I want session actions to confirm success before updating the UI, so that I always know the real status of my sessions.",Must Have,P0,5,Eagle 0,Senior Dev,To Do,"AC1: Given I tap Accept/Decline/Cancel/Confirm on a session, When the Supabase update returns an error, Then a toast shows 'Could not update session. Please try again.' and the UI state remains unchanged
+
+AC2: Given I tap any session action button, When the async call is in progress, Then the button shows a loading spinner and is disabled
+
+AC3: Given I rapidly tap an action button twice, When the first request is in-flight, Then only one server request is made","• Verify all 5 session actions (propose/accept/decline/cancel/confirm) handle errors
+• Verify UI does not change until server confirms success
+• Verify double-tap prevention on all session action buttons","? All ACs verified (happy + failure path)
+? Loading/error/success states exist
+? No console errors or warnings
+? Tested on iOS + Android
+? Code reviewed with 1+ approval
+? Theme verified in dark + light mode
+? No hardcoded colors
+? Accessibility labels on new elements","?? MINIMAL DESIGN:
+• Loading spinner on session action buttons (Accept/Decline/Cancel/Confirm)
+• Disabled button state during async
+• Use existing button patterns
+
+Designer review: Not needed (uses existing patterns)","? All 5 session actions handle errors with toast
+? UI does NOT change until server confirms
+? Double-tap prevention verified
+? Button re-enables after failure",done
+E02,Epic,—,Data Safety & Destructive Actions,Epic: Data Safety & Destructive Actions,,,,,,,,,,,,
+FM-201,Story,E02,Separate Delete Messages from Unmatch,"As a user, I want 'Delete messages' and 'Unmatch' to be completely separate actions with confirmation, so that I never accidentally lose a connection.",Must Have,P0,5,Eagle 0,Senior Dev,To Do,"AC1: Given I swipe left on a conversation and tap 'Delete messages', When the confirmation dialog appears, Then it says 'Delete all messages with [Name]? The match will be preserved.' and only deletes messages, not the match
+
+AC2: Given I swipe left on a conversation and tap 'Unmatch', When the confirmation dialog appears, Then it says 'Unmatch [Name]? This will permanently remove this connection and all messages. This cannot be undone.'
+
+AC3: Given I tap 'Cancel' on either confirmation dialog, When the dialog closes, Then no data is changed and the conversation remains as-is
+
+AC4: Given I confirm 'Unmatch', When the action completes, Then the match status is set to 'unmatched' (distinct from 'declined')","• Verify 'Delete messages' only removes messages, match row preserved
+• Verify 'Unmatch' sets status='unmatched' not 'declined'
+• Verify both actions show confirmation dialog before executing
+• Verify Cancel on dialog makes no data changes
+• Verify swipe actions are clearly labeled and visually distinct","? All ACs verified (happy + failure path)
+? Loading/error/success states exist
+? No console errors or warnings
+? Tested on iOS + Android
+? Code reviewed with 1+ approval
+? Theme verified in dark + light mode
+? No hardcoded colors
+? Accessibility labels on new elements","?? DESIGN NEEDED:
+• Confirmation dialog copy for 'Delete Messages'
+• Confirmation dialog copy for 'Unmatch'
+• Distinct visual treatment for the two swipe actions
+• Destructive action uses red styling
+
+Designer delivers: Dialog copy + swipe action layout","? 'Delete messages' only removes messages (match preserved)
+? 'Unmatch' uses status='unmatched' not 'declined'
+? Both dialogs have Cancel option
+? Dialog copy reviewed and approved by PO
+? Destructive button uses red/warning color",done
+FM-202,Story,E02,Account Deletion with Full Auth Cleanup,"As a user, I want account deletion to fully remove my data including auth credentials, so that I cannot log back in to a broken state.",Must Have,P0,5,Eagle 1,Senior Dev,To Do,"AC1: Given I tap 'Delete Account' in Settings, When the first dialog appears, Then it asks 'Are you sure? This permanently deletes all your data.'
+
+AC2: Given I confirm the first dialog, When the second confirmation appears, Then I must type 'DELETE' to proceed
+
+AC3: Given I confirm both dialogs, When the Edge Function executes, Then it deletes: profile row, push tokens, AND auth.users entry via auth.admin.deleteUser()
+
+AC4: Given deletion succeeds, When I try to log in with the same email, Then authentication fails with 'No account found'
+
+AC5: Given deletion fails (network error), When the error is shown, Then the Delete button re-enables and I can try again","• Verify two-step confirmation (dialog + type DELETE)
+• Verify Edge Function deletes profile, tokens, and auth user
+• Verify re-login with deleted email fails
+• Verify delete button re-enables on failure (not stuck disabled)","? All ACs verified (happy + failure path)
+? Loading/error/success states exist
+? No console errors or warnings
+? Tested on iOS + Android
+? Code reviewed with 1+ approval
+? Theme verified in dark + light mode
+? No hardcoded colors
+? Accessibility labels on new elements","?? DESIGN NEEDED:
+• Two-step deletion confirmation flow
+• Type 'DELETE' input design
+• Account deletion success state
+
+Designer delivers: Deletion flow mockup","? Two-step confirmation works
+? Edge Function deletes profile + tokens + auth
+? Re-login with deleted email fails
+? Delete button re-enables on failure",
+FM-203,Story,E02,Duplicate Match Request Prevention,"As a user, I want the app to prevent me from sending duplicate match requests, so that I don't accidentally spam someone.",Should Have,P1,3,Eagle 1,Mid Dev,To Do,"AC1: Given I have already sent a match request to User B, When I view User B's card in Discover or Search, Then the connect button shows 'Pending' instead of 'Connect'
+
+AC2: Given User B has already accepted my match, When I view User B's card, Then the button shows 'Connected' and tapping opens chat
+
+AC3: Given I tap Connect, When the request is being processed, Then the button immediately disables and shows a loading spinner","• Verify no duplicate rows in matches table for same user pair
+• Verify button state reflects actual match status
+• Verify this works across all connect entry points (Discover, Search, ProfileSheet)","? All ACs verified (happy + failure path)
+? Loading/error/success states exist
+? No console errors or warnings
+? Tested on iOS + Android
+? Code reviewed with 1+ approval
+? Theme verified in dark + light mode
+? No hardcoded colors
+? Accessibility labels on new elements","?? MINIMAL DESIGN:
+• 'Pending' and 'Connected' button states
+
+Designer review: Button state variants","? No duplicate rows in matches table
+? Button reflects actual match status
+? Works across all connect entry points",
+E03,Epic,—,Auth & Onboarding Fixes,Epic: Auth & Onboarding Fixes,,,,,,,,,,,,
+FM-301,Story,E03,Forgot Password Flow,"As a returning user who forgot my password, I want to reset it via email, so that I can regain access to my account.",Must Have,P0,5,Eagle 0,Mid Dev,To Do,"AC1: Given I am on the login screen, When I look below the password field, Then I see a 'Forgot password?' link
+
+AC2: Given I tap 'Forgot password?' and enter my email, When I tap 'Send Reset Link', Then supabase.auth.resetPasswordForEmail() is called and I see 'Check your email for a reset link'
+
+AC3: Given I enter an invalid or unknown email, When I tap send, Then I see a safe error message (no account enumeration)
+
+AC4: Given I tap the reset link in my email, When the app opens, Then I land on a password reset screen where I can set a new password","• Verify forgot password link is visible and tappable on login screen
+• Verify reset email is sent for valid accounts
+• Verify error handling for invalid/unknown emails
+• Verify deep link from email opens password reset screen
+• Verify new password works for subsequent login","? All ACs verified (happy + failure path)
+? Loading/error/success states exist
+? No console errors or warnings
+? Tested on iOS + Android
+? Code reviewed with 1+ approval
+? Theme verified in dark + light mode
+? No hardcoded colors
+? Accessibility labels on new elements","?? DESIGN NEEDED:
+• Forgot Password screen layout (email input + send button)
+• Success state ('Check your email')
+• Error state (invalid/unknown email)
+• 'Forgot password?' link placement on login screen
+
+Designer delivers: Forgot password screen mockup + link placement","? Forgot password link visible on login screen
+? Reset email sends for valid accounts
+? Error message is safe (no account enumeration)
+? Success state is clear and actionable
+? Deep link from email opens reset screen",done
+FM-302,Story,E03,Fix Onboarding Race Condition,"As a new user, I want to always land on onboarding after registration, so that my profile gets set up before I enter the app.",Must Have,P0,5,Eagle 0,Senior Dev,To Do,"AC1: Given I just completed registration, When the auth state changes, Then routing is handled centrally in _layout.tsx using a needsOnboarding flag
+
+AC2: Given needsOnboarding is true, When the auth listener fires, Then I am routed to onboarding (not home), regardless of timing
+
+AC3: Given I complete onboarding and tap 'Let's go', When the profile save succeeds, Then needsOnboarding is set to false and I navigate to home
+
+AC4: Given the profile save fails during onboarding, When the error occurs, Then an Alert shows, I stay on the current step, and my entered data is preserved in state","• Verify new signup always lands on onboarding (test 10 times for race condition)
+• Verify existing user login bypasses onboarding
+• Verify network failure during onboarding save shows error and preserves data
+• Verify profile data actually persists in Supabase after successful onboarding","? All ACs verified (happy + failure path)
+? Loading/error/success states exist
+? No console errors or warnings
+? Tested on iOS + Android
+? Code reviewed with 1+ approval
+? Theme verified in dark + light mode
+? No hardcoded colors
+? Accessibility labels on new elements","?? NO DESIGN NEEDED:
+• This is a routing/logic fix — no visual changes
+• Onboarding save failure shows standard Alert
+
+Designer review: Not needed","? New signup ALWAYS lands on onboarding (test 10x)
+? Existing user bypasses onboarding
+? Network failure during save shows Alert + preserves data
+? Profile data persists in Supabase after success
+? No race condition between auth listener and register",done
+FM-303,Story,E03,Onboarding Skip Guardrails,"As a new user, I want the app to require at least my name, so that I have a functional profile that others can see.",Should Have,P1,3,Eagle 1,Mid Dev,To Do,"AC1: Given I am on onboarding step 1 (Name), When I look for the Skip button, Then it is not visible or is disabled
+
+AC2: Given I am on step 1, When I try to proceed without entering a name, Then the Continue button is disabled and I see a hint 'Name is required'
+
+AC3: Given I am on steps 2-5, When I tap Skip, Then partial progress (data entered so far) is saved before advancing","• Verify Skip is hidden/disabled on step 1
+• Verify name field requires 2-50 characters (trimmed)
+• Verify skipping later steps saves partial progress","? All ACs verified (happy + failure path)
+? Loading/error/success states exist
+? No console errors or warnings
+? Tested on iOS + Android
+? Code reviewed with 1+ approval
+? Theme verified in dark + light mode
+? No hardcoded colors
+? Accessibility labels on new elements","?? MINIMAL DESIGN:
+• 'Name is required' hint text placement
+
+Designer review: Not needed","? Skip hidden on step 1
+? Name requires 2-50 chars
+? Skipping later steps saves partial progress",
+FM-304,Story,E03,Password Confirmation & Strength Validation,"As a new user, I want a confirm password field and strength indicator, so that I create a secure, correct password.",Should Have,P1,3,Eagle 1,Mid Dev,To Do,"AC1: Given I am on the register screen, When I look at the form, Then there is a 'Confirm Password' field below the password field
+
+AC2: Given I type a password, When it does not meet requirements (8+ chars, 1 uppercase, 1 number), Then a strength indicator shows 'Weak' in red
+
+AC3: Given my passwords match and meet strength requirements, When I look at the Create Account button, Then it is enabled
+
+AC4: Given both login and register screens, When I look at the password field, Then there is an eye icon toggle to show/hide the password","• Verify confirm password must match before submission
+• Verify weak passwords are rejected (test: 'aaaaaa', '123456', 'password')
+• Verify strength indicator updates in real-time
+• Verify eye toggle works on both login and register","? All ACs verified (happy + failure path)
+? Loading/error/success states exist
+? No console errors or warnings
+? Tested on iOS + Android
+? Code reviewed with 1+ approval
+? Theme verified in dark + light mode
+? No hardcoded colors
+? Accessibility labels on new elements","?? DESIGN NEEDED:
+• Password strength indicator (weak/medium/strong)
+• Confirm password field placement
+• Eye toggle icon
+
+Designer delivers: Strength indicator mockup","? Confirm password must match
+? Weak passwords rejected
+? Strength indicator updates in real-time
+? Eye toggle works on login + register",
+FM-305,Story,E03,Email Validation & Navigation Stack Fix,"As a user, I want email format validated before submission and smooth navigation between login and register, so that I don't waste time on invalid inputs or get confused by stacked screens.",Should Have,P1,2,Eagle 1,Mid Dev,To Do,"AC1: Given I enter an invalid email format (e.g., 'asdfgh'), When I tap submit or blur the field, Then I see an inline error 'Please enter a valid email address'
+
+AC2: Given I toggle between Login and Register, When I navigate, Then router.replace() is used (no screen stacking — back button goes to Welcome, not previous auth screen)","• Verify invalid emails are rejected client-side before API call
+• Verify navigating login?register 5 times doesn't stack 5 screens
+• Verify back button from login/register goes to Welcome","? All ACs verified (happy + failure path)
+? Loading/error/success states exist
+? No console errors or warnings
+? Tested on iOS + Android
+? Code reviewed with 1+ approval
+? Theme verified in dark + light mode
+? No hardcoded colors
+? Accessibility labels on new elements","?? NO DESIGN NEEDED:
+Logic/validation only","? Invalid emails rejected client-side
+? No screen stacking on login?register
+? Back goes to Welcome",
+E04,Epic,—,Streak & Trust Mechanics,Epic: Streak & Trust Mechanics,,,,,,,,,,,,
+FM-401,Story,E04,Streak Consecutive Day Enforcement,"As a user, I want my streak to accurately reflect consecutive workout days, so that I can trust the number I see on my profile.",Must Have,P0,5,Eagle 0,Senior Dev,To Do,"AC1: Given I logged a workout yesterday (local time), When I log a workout today, Then my streak increments by 1
+
+AC2: Given I logged a workout 2+ days ago, When I log a workout today, Then my streak resets to 1
+
+AC3: Given I already logged a workout today, When I try to log again, Then my streak does NOT increment (stays the same)
+
+AC4: Given any streak update, When the operation executes, Then it uses a Supabase RPC function (atomic, not read-modify-write) and all date comparisons use local calendar dates (not UTC)","• Verify consecutive day logging increments streak correctly (test 3 consecutive days)
+• Verify 2-day gap resets streak to 1
+• Verify same-day duplicate does not inflate streak
+• Verify late-night workout (11pm) counts for correct local day, not UTC next day","? All ACs verified (happy + failure path)
+? Loading/error/success states exist
+? No console errors or warnings
+? Tested on iOS + Android
+? Code reviewed with 1+ approval
+? Theme verified in dark + light mode
+? No hardcoded colors
+? Accessibility labels on new elements","?? NO DESIGN NEEDED:
+• Streak logic is backend-only (RPC function)
+• No visual changes to existing streak display
+
+Designer review: Not needed","? Consecutive day increments correctly
+? 2+ day gap resets to 1
+? Same-day duplicate does NOT inflate
+? Uses Supabase RPC (atomic, not read-modify-write)
+? Late-night workout counts for correct local day",done
+FM-402,Story,E04,Quick Check-in Spam Prevention,"As a user, I want check-in to only count once per day, so that streaks cannot be gamed and partner notifications stay credible.",Must Have,P0,3,Eagle 0,Mid Dev,To Do,"AC1: Given I have already checked in today, When I look at the Quick Check-in button, Then it shows 'Checked in ?' and is disabled
+
+AC2: Given the check-in is enforced server-side, When any client tries to increment twice, Then the RPC function rejects the duplicate
+
+AC3: Given I check in, When partner notifications fire, Then each partner receives max 1 notification per day from me","• Verify tapping check-in 10 times only increments streak by 1
+• Verify button state changes to disabled after first check-in
+• Verify server-side enforcement (test via direct API call)","? All ACs verified (happy + failure path)
+? Loading/error/success states exist
+? No console errors or warnings
+? Tested on iOS + Android
+? Code reviewed with 1+ approval
+? Theme verified in dark + light mode
+? No hardcoded colors
+? Accessibility labels on new elements","?? MINIMAL DESIGN:
+• Check-in button disabled state ('Checked in ?')
+• Use existing disabled button pattern
+
+Designer review: Quick review of disabled state","? 10 taps only increments streak by 1
+? Button shows 'Checked in ?' and is disabled
+? Server-side enforcement works (direct API test)
+? Partner notifications limited to 1/day",done
+E05,Epic,—,Notification Completeness,Epic: Notification Completeness,,,,,,,,,,,,
+FM-501,Story,E05,Push Notification Tap Deep Linking,"As a user, I want tapping a push notification to navigate me to the relevant screen, so that I can immediately see what happened.",Must Have,P0,5,Eagle 2,Senior Dev,To Do,"AC1: Given I receive a push notification while the app is backgrounded, When I tap the notification, Then the app opens and navigates to the correct screen (match_request?Matches, new_message?Chat, session?Chat)
+
+AC2: Given I tap a notification after the app was killed (cold start), When the app initializes, Then the deep link still routes correctly after auth check
+
+AC3: Given each notification, When it is created, Then the payload includes a 'type' field and relevant 'relatedId' for routing","• Verify deep link works from background state for each notification type
+• Verify deep link works from killed/cold start state
+• Verify unknown notification types open app to Home (graceful fallback)","? All ACs verified (happy + failure path)
+? Loading/error/success states exist
+? No console errors or warnings
+? Tested on iOS + Android
+? Code reviewed with 1+ approval
+? Theme verified in dark + light mode
+? No hardcoded colors
+? Accessibility labels on new elements","?? NO DESIGN NEEDED:
+Navigation logic only","? Deep link works from background
+? Deep link works from cold start
+? Unknown types fallback to Home",
+FM-502,Story,E05,Swipe-Mode Like Sends Push Notification,"As a user, I want to be notified when someone likes me in swipe mode, so that I know someone is interested in training with me.",Must Have,P0,2,Eagle 2,Mid Dev,To Do,"AC1: Given User A swipes right on User B in swipe mode, When the match insert succeeds, Then notifyUser() is called for User B with type='match_request'
+
+AC2: Given the notification is sent, When User B receives it, Then it says '[Name] wants to connect with you!'","• Verify swipe-right triggers push notification to receiver
+• Verify notification content includes sender's name
+• Verify duplicate swipes don't send multiple notifications","? All ACs verified (happy + failure path)
+? Loading/error/success states exist
+? No console errors or warnings
+? Tested on iOS + Android
+? Code reviewed with 1+ approval
+? Theme verified in dark + light mode
+? No hardcoded colors
+? Accessibility labels on new elements","?? NO DESIGN NEEDED:
+Backend notification wiring","? Swipe-right triggers push
+? Notification includes sender name
+? No duplicate notifications",
+FM-503,Story,E05,Session Proposal & Response Notifications,"As a user, I want session proposals and responses to notify both sides, so that the session coordination loop is complete.",Must Have,P0,4,Eagle 2,Mid Dev,To Do,"AC1: Given I propose a session, When the insert succeeds, Then my partner receives a push with type='session_proposed' saying '[Name] proposed a workout: [Sport] on [Date]'
+
+AC2: Given my partner accepts my session, When the update succeeds, Then I receive a push with type='session_accepted' saying '[Name] accepted your session!'
+
+AC3: Given my partner declines, When the update succeeds, Then I receive a push with type='session_declined' saying '[Name] can't make the session'","• Verify session proposal triggers push to partner
+• Verify session accept triggers push to proposer
+• Verify session decline triggers push to proposer
+• Verify all notifications include correct names and session details","? All ACs verified (happy + failure path)
+? Loading/error/success states exist
+? No console errors or warnings
+? Tested on iOS + Android
+? Code reviewed with 1+ approval
+? Theme verified in dark + light mode
+? No hardcoded colors
+? Accessibility labels on new elements","?? NO DESIGN NEEDED:
+Backend notification wiring","? Proposal notifies partner
+? Accept notifies proposer
+? Decline notifies proposer",
+FM-504,Story,E05,Realtime Subscription User Filter (Security),"As a user, I want to only receive realtime events for my own messages, so that other users' message content is never visible to me.",Must Have,P0,4,Eagle 2,Senior Dev,To Do,"AC1: Given I am in a chat screen, When the realtime subscription is created, Then it includes a filter: match_id=eq.${currentMatchId}
+
+AC2: Given User A sends a message to User B, When User C is also connected to realtime, Then User C's client never receives User A's message payload","• Verify subscription filter is set correctly in code review
+• Verify with 2 test accounts that messages don't leak between conversations
+• Verify realtime still works correctly for the intended conversation","? All ACs verified (happy + failure path)
+? Loading/error/success states exist
+? No console errors or warnings
+? Tested on iOS + Android
+? Code reviewed with 1+ approval
+? Theme verified in dark + light mode
+? No hardcoded colors
+? Accessibility labels on new elements","?? NO DESIGN NEEDED:
+Security fix only","? Subscription filter set correctly
+? Messages don't leak between users
+? Realtime still works for intended conversation",
+FM-505,Story,E05,Push Token Cleanup on Logout,"As a user, I want my push tokens removed when I sign out, so that the next person on this device doesn't receive my notifications.",Must Have,P0,2,Eagle 2,Senior Dev,To Do,"AC1: Given I am signed in and have a push token stored, When I tap Sign Out in Settings, Then unregisterPushToken() is called BEFORE signOut()
+
+AC2: Given I sign out and another user signs in, When notifications are sent to my account, Then this device does NOT receive them","• Verify push token is removed from DB on logout
+• Verify token removal happens before auth signout
+• Verify new user on same device only gets their own notifications","? All ACs verified (happy + failure path)
+? Loading/error/success states exist
+? No console errors or warnings
+? Tested on iOS + Android
+? Code reviewed with 1+ approval
+? Theme verified in dark + light mode
+? No hardcoded colors
+? Accessibility labels on new elements","?? NO DESIGN NEEDED:
+Backend cleanup logic","? Token removed from DB on logout
+? Removal happens before signout
+? New user doesn't get old user's notifications",
+E06,Epic,—,Trust System Unification,Epic: Trust System Unification,,,,,,,,,,,,
+FM-601,Story,E06,Unified Tier System (Single Source of Truth),"As a user, I want my tier label to be consistent on every screen, so that I can trust the gamification system.",Must Have,P0,5,Eagle 3,Senior Dev,To Do,"AC1: Given my profile shows 'Gold' tier, When I open the Leaderboard, Then it also shows 'Gold' tier (same calculation)
+
+AC2: Given the tier system, When any screen calculates tier, Then it uses the single calcTier() function from lib/badges.ts
+
+AC3: Given the leaderboard, When it was using streak-based tiers (0/50/100/200/500), Then that is removed and replaced with the points-based system","• Verify same user shows identical tier on Profile, Leaderboard, and any other surface
+• Verify all tier calculation references point to lib/badges.ts
+• Verify old streak-based tier code is fully removed from leaderboard","? All ACs verified (happy + failure path)
+? Loading/error/success states exist
+? No console errors or warnings
+? Tested on iOS + Android
+? Code reviewed with 1+ approval
+? Theme verified in dark + light mode
+? No hardcoded colors
+? Accessibility labels on new elements","?? MINIMAL DESIGN:
+Verify tier badges look consistent
+
+Designer review: Visual consistency check","? Same tier on Profile and Leaderboard
+? All calculations use lib/badges.ts
+? Old streak-based tier code removed",
+FM-602,Story,E06,Mutual Session Confirmation,"As a user, I want completed-session stats to update fairly, so that one person confirming doesn't credit both without consent.",Should Have,P1,5,Eagle 3,Senior Dev,To Do,"AC1: Given User A confirms a session, When the confirmation saves, Then only User A's confirmed_by flag is set (not both users' stats)
+
+AC2: Given both User A and User B have confirmed, When the system checks, Then sessions_completed increments for both users
+
+AC3: Given User A reports no-show, When the report saves, Then only User B's sessions_no_show increments (not User A's)
+
+AC4: Given any stat update, When it executes, Then it uses an atomic Supabase RPC (not read-modify-write)","• Verify one-sided confirmation only updates confirming user's flag
+• Verify stats only increment when both users have confirmed
+• Verify no-show does not penalize the reporter
+• Verify concurrent confirmations don't lose data (race condition test)","? All ACs verified (happy + failure path)
+? Loading/error/success states exist
+? No console errors or warnings
+? Tested on iOS + Android
+? Code reviewed with 1+ approval
+? Theme verified in dark + light mode
+? No hardcoded colors
+? Accessibility labels on new elements","?? NO DESIGN NEEDED:
+Backend logic only","? One-sided confirm only sets confirming user's flag
+? Stats increment when BOTH confirm
+? No-show doesn't penalize reporter",
+FM-603,Story,E06,"Date Pickers Replace Raw Text (Sessions, Goals, Challenges)","As a user, I want proper date pickers when entering dates, so that I never see 'NaN days left' from invalid input.",Should Have,P1,3,Eagle 3,Mid Dev,To Do,"AC1: Given I am proposing a session, When I need to enter a date, Then a native DatePicker component appears (not a TextInput)
+
+AC2: Given I am creating a goal with a deadline, When I enter the date, Then a DatePicker is shown and past dates are rejected
+
+AC3: Given I am creating a challenge with an end date, When I enter the date, Then a DatePicker is shown and past dates are rejected","• Verify DatePicker appears on session propose, goal create, challenge create
+• Verify past dates are visually disabled and cannot be selected
+• Verify selected date is stored in correct YYYY-MM-DD format
+• Verify 'NaN days left' no longer appears anywhere in the app","? All ACs verified (happy + failure path)
+? Loading/error/success states exist
+? No console errors or warnings
+? Tested on iOS + Android
+? Code reviewed with 1+ approval
+? Theme verified in dark + light mode
+? No hardcoded colors
+? Accessibility labels on new elements","?? DESIGN NEEDED:
+• DatePicker integration style for sessions, goals, challenges
+
+Designer delivers: DatePicker style guidance","? DatePicker on all 3 locations
+? Past dates disabled
+? Correct format stored
+? No 'NaN' anywhere",
+E07,Epic,—,Security & App Store Compliance,Epic: Security & App Store Compliance,,,,,,,,,,,,
+FM-701,Story,E07,iOS In-App Purchase for Pro Subscription,"As a user on iOS, I want to subscribe to Pro via Apple's payment system, so that the app complies with App Store rules and my purchase is managed through my Apple account.",Must Have,P0,8,Eagle 3,Senior Dev,To Do,"AC1: Given I am on iOS and tap 'Go Pro', When the purchase flow starts, Then it uses react-native-iap to present Apple's native purchase sheet
+
+AC2: Given I complete the purchase, When the transaction is verified, Then my is_pro flag is set to true and Pro features are unlocked
+
+AC3: Given I am on Android, When I tap 'Go Pro', Then Stripe web checkout is still used (Android allows this)","• Verify iOS purchase uses IAP, not web Stripe
+• Verify purchase receipt is validated server-side
+• Verify Pro features unlock after successful purchase
+• Verify subscription shows in user's Apple subscriptions settings","? All ACs verified (happy + failure path)
+? Loading/error/success states exist
+? No console errors or warnings
+? Tested on iOS + Android
+? Code reviewed with 1+ approval
+? Theme verified in dark + light mode
+? No hardcoded colors
+? Accessibility labels on new elements","?? DESIGN NEEDED:
+• Pro purchase flow for iOS (IAP native sheet)
+
+Designer delivers: Purchase flow UX","? iOS uses IAP
+? Receipt validated server-side
+? Pro features unlock after purchase",
+FM-702,Story,E07,Admin Actions to Supabase Edge Functions,"As the product owner, I want admin operations secured server-side, so that no regular user can execute admin actions by manipulating client-side code.",Must Have,P0,5,Eagle 3,Senior Dev,To Do,"AC1: Given an admin user taps 'Ban User', When the action executes, Then it calls a Supabase Edge Function (not a direct client update)
+
+AC2: Given a non-admin user, When they attempt to call the admin Edge Function, Then the function rejects with 403 Forbidden
+
+AC3: Given the Edge Function, When it runs, Then it uses the service-role key and verifies the caller's is_admin status from the database","• Verify admin actions call Edge Function, not direct Supabase update
+• Verify Edge Function rejects non-admin callers
+• Verify is_admin check happens on server, not client","? All ACs verified (happy + failure path)
+? Loading/error/success states exist
+? No console errors or warnings
+? Tested on iOS + Android
+? Code reviewed with 1+ approval
+? Theme verified in dark + light mode
+? No hardcoded colors
+? Accessibility labels on new elements","?? NO DESIGN NEEDED:
+Backend security","? Admin calls Edge Function
+? Non-admin rejected with 403
+? Server-side is_admin check",
+FM-703,Story,E07,Search Input Sanitization (Injection Fix),"As a user, I want search to be safe and secure, so that crafted inputs cannot manipulate database queries.",Must Have,P0,3,Eagle 3,Senior Dev,To Do,"AC1: Given I type a search query, When the query is sent to Supabase, Then the input is sanitized (special characters escaped) or routed through an RPC function
+
+AC2: Given I enter a malicious string like '%,id.neq.', When the search executes, Then only legitimate matching usernames are returned","• Verify special characters in search don't alter query logic
+• Verify injection attempt returns no results (not all results)
+• Verify search still works correctly for normal queries","? All ACs verified (happy + failure path)
+? Loading/error/success states exist
+? No console errors or warnings
+? Tested on iOS + Android
+? Code reviewed with 1+ approval
+? Theme verified in dark + light mode
+? No hardcoded colors
+? Accessibility labels on new elements","?? NO DESIGN NEEDED:
+Security fix","? Special chars don't alter query
+? Injection returns no results
+? Normal search still works",
+FM-704,Story,E07,Terms & Privacy Policy (Tappable Links + Real Documents),"As a user, I want to read the actual Terms of Service and Privacy Policy, so that I know how my data is used before agreeing.",Must Have,P0,3,Eagle 3,Mid Dev,To Do,"AC1: Given I am on the Welcome or Register screen, When I see the legal text, Then 'Terms' and 'Privacy Policy' are tappable links (not plain text)
+
+AC2: Given I tap either link, When the browser opens, Then it navigates to real, hosted legal documents
+
+AC3: Given the Settings screen, When I look for legal links, Then Terms and Privacy Policy are accessible there too","• Verify links are tappable on Welcome, Register, and Settings
+• Verify links open actual hosted documents (not 404)
+• Verify documents cover data usage, deletion, and contact information","? All ACs verified (happy + failure path)
+? Loading/error/success states exist
+? No console errors or warnings
+? Tested on iOS + Android
+? Code reviewed with 1+ approval
+? Theme verified in dark + light mode
+? No hardcoded colors
+? Accessibility labels on new elements","?? DESIGN NEEDED:
+• Legal link placement on Welcome, Register, Settings
+
+Designer delivers: Link placement mockup","? Links tappable on 3 screens
+? Documents load (not 404)
+? Content covers data usage + deletion",
+E08,Epic,—,Theme & Visual Consistency,Epic: Theme & Visual Consistency,,,,,,,,,,,,
+FM-801,Story,E08,Dark/Light Theme Audit — All Hardcoded Colors,"As a user, I want both dark and light themes to look correct on every screen, so that the app feels polished and intentional.",Should Have,P1,5,Eagle 4,Mid Dev,To Do,"AC1: Given I switch to dark mode, When I navigate through every screen, Then no white backgrounds, black text on dark backgrounds, or jarring color mismatches appear
+
+AC2: Given I switch to light mode, When I navigate through every screen, Then no dark tiles, invisible text, or broken contrast appears
+
+AC3: Given any color in any StyleSheet, When inspecting the code, Then all colors come from useTheme() — zero hardcoded hex values","• Walk through all 22 screens in dark mode — screenshot each
+• Walk through all 22 screens in light mode — screenshot each
+• Code review: grep for hardcoded hex colors in all .tsx files
+• Verify ConversationRow, Search, GymTile, Messages SafeAreaView all use theme","? All ACs verified (happy + failure path)
+? Loading/error/success states exist
+? No console errors or warnings
+? Tested on iOS + Android
+? Code reviewed with 1+ approval
+? Theme verified in dark + light mode
+? No hardcoded colors
+? Accessibility labels on new elements","?? DESIGN NEEDED:
+• Full theme audit — screenshot every screen in both modes
+
+Designer delivers: Theme audit report with issues","? All 22 screens correct in dark mode
+? All 22 screens correct in light mode
+? Zero hardcoded hex colors in codebase",
+FM-802,Story,E08,Messages N+1 Query Optimization,"As a user, I want the Messages screen to load quickly even with 50+ conversations, so that I don't wait for slow loading.",Should Have,P1,5,Eagle 4,Senior Dev,To Do,"AC1: Given I have 50 accepted matches, When I open the Messages tab, Then the conversations load in under 2 seconds
+
+AC2: Given the Messages screen, When it loads data, Then it uses a single Supabase RPC or join query (not 3 queries per conversation)","• Verify Messages loads in <2s with 50 conversations
+• Verify total Supabase requests reduced from 90+ to 1-3
+• Verify conversation data (last message, avatar, name) still displays correctly","? All ACs verified (happy + failure path)
+? Loading/error/success states exist
+? No console errors or warnings
+? Tested on iOS + Android
+? Code reviewed with 1+ approval
+? Theme verified in dark + light mode
+? No hardcoded colors
+? Accessibility labels on new elements","?? NO DESIGN NEEDED:
+Performance optimization","? Messages loads <2s with 50 conversations
+? Requests reduced from 90+ to 1-3
+? Data still displays correctly",
+FM-803,Story,E08,Discover Pagination (Replace 80-User Hard Cap),"As a user, I want to discover all relevant users, not just the first 80, so that I don't miss potential workout partners.",Should Have,P1,5,Eagle 4,Senior Dev,To Do,"AC1: Given there are 200+ users in my area, When I browse Discover, Then I can see all of them through cursor-based pagination or infinite scroll
+
+AC2: Given I scroll to the end of the current batch, When more users exist, Then a new batch loads automatically
+
+AC3: Given Discover in swipe mode, When I run out of cards, Then a refresh button or automatic reload shows the next batch","• Verify more than 80 users are accessible in list mode
+• Verify pagination loads smoothly without duplicates
+• Verify all 3 view modes (list, swipe, map) support refreshing","? All ACs verified (happy + failure path)
+? Loading/error/success states exist
+? No console errors or warnings
+? Tested on iOS + Android
+? Code reviewed with 1+ approval
+? Theme verified in dark + light mode
+? No hardcoded colors
+? Accessibility labels on new elements","?? MINIMAL DESIGN:
+• 'Load more' or infinite scroll indicator
+
+Designer review: Loading indicator style","? >80 users accessible
+? Pagination loads without duplicates
+? All 3 view modes support refresh",
+FM-804,Story,E08,SwipeDeck PanResponder Fix (Allow Card Taps),"As a user, I want to tap on swipe cards to view profile details, so that I can learn about someone before deciding to connect.",Should Have,P1,3,Eagle 4,Senior Dev,To Do,"AC1: Given I am in swipe mode on Discover, When I tap the info button or card body, Then the profile sheet opens
+
+AC2: Given I want to swipe, When I drag the card left or right, Then the swipe gesture still works correctly
+
+AC3: Given the PanResponder, When the code is reviewed, Then onStartShouldSetPanResponder no longer returns true unconditionally","• Verify tap on card opens profile sheet
+• Verify swipe left/right still works correctly
+• Verify info button tap fires correctly
+• Verify no gesture conflicts between tap and swipe","? All ACs verified (happy + failure path)
+? Loading/error/success states exist
+? No console errors or warnings
+? Tested on iOS + Android
+? Code reviewed with 1+ approval
+? Theme verified in dark + light mode
+? No hardcoded colors
+? Accessibility labels on new elements","?? NO DESIGN NEEDED:
+Gesture fix only","? Tap opens profile sheet
+? Swipe still works
+? No gesture conflicts",
+E09,Epic,—,Input Validation & UX Polish,Epic: Input Validation & UX Polish,,,,,,,,,,,,
+FM-901,Story,E09,Negative Value Validation (Age/Weight/Duration/Progress),"As a user, I want the app to reject obviously invalid inputs, so that my profile and stats show real data.",Should Have,P1,2,Eagle 4,Mid Dev,To Do,"AC1: Given I edit my profile age, When I enter -5 or 0 or 999, Then inline validation rejects it with 'Please enter a valid age (13-120)'
+
+AC2: Given I log a workout duration, When I enter a negative number, Then it is clamped to minimum 1
+
+AC3: Given I update challenge progress, When I enter -100, Then it is clamped to 0","• Verify negative ages, weights, and durations are rejected
+• Verify boundary values (0, 1, max) are handled correctly","? All ACs verified (happy + failure path)
+? Loading/error/success states exist
+? No console errors or warnings
+? Tested on iOS + Android
+? Code reviewed with 1+ approval
+? Theme verified in dark + light mode
+? No hardcoded colors
+? Accessibility labels on new elements","?? NO DESIGN NEEDED:
+Validation logic","? Negative values rejected
+? Boundary values handled",
+FM-902,Story,E09,Keyboard Handling on All Modals,"As a user, I want all form modals to be usable with the keyboard open, so that I can always reach the submit button.",Should Have,P1,3,Eagle 4,Mid Dev,To Do,"AC1: Given I open any modal with a text input (log workout, compose post, report bug), When the keyboard opens, Then the content scrolls and the submit button is visible above the keyboard","• Verify log workout modal is scrollable with keyboard open on small screen (iPhone SE)
+• Verify compose post modal submit button is reachable
+• Verify report bug modal in settings is usable with keyboard","? All ACs verified (happy + failure path)
+? Loading/error/success states exist
+? No console errors or warnings
+? Tested on iOS + Android
+? Code reviewed with 1+ approval
+? Theme verified in dark + light mode
+? No hardcoded colors
+? Accessibility labels on new elements","?? NO DESIGN NEEDED:
+Layout fix",? Submit button reachable with keyboard on iPhone SE,
+FM-903,Story,E09,Loading States on All Async Buttons,"As a user, I want buttons to show they're working when I tap them, so that I know the app is responding and I don't tap again.",Should Have,P1,3,Eagle 4,Mid Dev,To Do,"AC1: Given I tap any async action button (Connect, Accept, Send, Propose, Join, Leave), When the request is in-flight, Then the button shows a spinner and is disabled
+
+AC2: Given the request completes (success or failure), When the response is received, Then the button returns to its normal state","• Verify all async buttons show loading state (audit each screen)
+• Verify double-tap prevention works on all buttons
+• Verify buttons re-enable after failure (not stuck disabled)","? All ACs verified (happy + failure path)
+? Loading/error/success states exist
+? No console errors or warnings
+? Tested on iOS + Android
+? Code reviewed with 1+ approval
+? Theme verified in dark + light mode
+? No hardcoded colors
+? Accessibility labels on new elements","?? MINIMAL DESIGN:
+• Loading spinner style on buttons
+
+Designer review: Quick review","? All async buttons show loading state
+? Double-tap prevented
+? Buttons re-enable after failure",
+FM-904,Story,E09,useFocusEffect on Stale Screens,"As a user, I want fresh data when I return to a tab, so that I see the latest matches, messages, and activity.",Should Have,P1,3,Eagle 5,Mid Dev,To Do,"AC1: Given I accept a match on the Home screen, When I navigate to the Connections tab, Then the new connection is visible immediately
+
+AC2: Given I return to Discover after switching tabs, When the data is older than 30 seconds, Then it automatically refreshes
+
+AC3: Given any tab with stale data, When I return to it, Then the load function is called with a staleness check","• Verify Matches/Connections tab refreshes on focus
+• Verify Discover refreshes on focus if stale
+• Verify no unnecessary re-fetches when data is fresh (<30s)","? All ACs verified (happy + failure path)
+? Loading/error/success states exist
+? No console errors or warnings
+? Tested on iOS + Android
+? Code reviewed with 1+ approval
+? Theme verified in dark + light mode
+? No hardcoded colors
+? Accessibility labels on new elements","?? NO DESIGN NEEDED:
+Data refresh logic","? Connections tab refreshes on focus
+? Discover refreshes if stale
+? No unnecessary re-fetches",
+E10,Epic,—,Accessibility & Growth,Epic: Accessibility & Growth,,,,,,,,,,,,
+FM-1001,Story,E10,Accessibility Labels on All Interactive Elements,"As a user with a screen reader, I want all buttons, inputs, and cards to have accessibility labels, so that I can navigate and use the app.",Could Have,P2,5,Eagle 5,Mid Dev,To Do,"AC1: Given any interactive element (button, card, input, toggle), When a screen reader is active, Then the element has a descriptive accessibilityLabel
+
+AC2: Given any button, When a screen reader reads it, Then accessibilityRole='button' is set
+
+AC3: Given the tab bar, When a screen reader navigates, Then each tab has a label describing its purpose","• Test full app flow with VoiceOver (iOS) and TalkBack (Android)
+• Verify all buttons announce their purpose
+• Verify form inputs announce their labels
+• Verify navigation is logical (no focus traps)","? All ACs verified (happy + failure path)
+? Loading/error/success states exist
+? No console errors or warnings
+? Tested on iOS + Android
+? Code reviewed with 1+ approval
+? Theme verified in dark + light mode
+? No hardcoded colors
+? Accessibility labels on new elements","?? DESIGN NEEDED:
+• Accessibility label guidelines
+• Focus order documentation
+
+Designer delivers: A11y annotation guide","? VoiceOver full flow test
+? TalkBack full flow test
+? All buttons announce purpose
+? No focus traps",
+FM-1002,Story,E10,Google Places Autocomplete for City,"As a new user, I want city autocomplete during onboarding and profile edit, so that my location is accurate for matching.",Should Have,P1,3,Eagle 5,Mid Dev,To Do,"AC1: Given I am on onboarding step 4 (City) or editing my profile city, When I start typing, Then Google Places autocomplete suggestions appear
+
+AC2: Given I select a suggestion, When it is saved, Then the standardized city name is stored (not a typo like 'new yrok')","• Verify autocomplete works on onboarding and profile edit
+• Verify selected city is stored in standardized format
+• Verify manual entry is still possible if autocomplete fails","? All ACs verified (happy + failure path)
+? Loading/error/success states exist
+? No console errors or warnings
+? Tested on iOS + Android
+? Code reviewed with 1+ approval
+? Theme verified in dark + light mode
+? No hardcoded colors
+? Accessibility labels on new elements","?? DESIGN NEEDED:
+• Autocomplete dropdown style for city input
+
+Designer delivers: Autocomplete component mockup","? Autocomplete works on onboarding + profile
+? Standardized city name stored
+? Manual entry fallback works",
+FM-1003,Story,E10,Circle Capacity Enforcement,"As a circle creator, I want the max member limit to be enforced, so that circles don't grow beyond their intended size.",Could Have,P2,2,Eagle 5,Mid Dev,To Do,"AC1: Given a circle has reached max_members, When another user tries to join, Then they see 'This circle is full' and the Join button is disabled
+
+AC2: Given a circle has no max_members set, When anyone tries to join, Then they can join without restriction","• Verify join is blocked when circle is at capacity
+• Verify correct member count displayed
+• Verify circles without max_members allow unlimited joins","? All ACs verified (happy + failure path)
+? Loading/error/success states exist
+? No console errors or warnings
+? Tested on iOS + Android
+? Code reviewed with 1+ approval
+? Theme verified in dark + light mode
+? No hardcoded colors
+? Accessibility labels on new elements","?? MINIMAL DESIGN:
+• 'Circle is full' state on join button
+
+Designer review: Disabled state","? Join blocked at capacity
+? Correct count displayed
+? No-limit circles still work",
+FM-1004,Story,E10,Ended Challenges Block Progress Updates,"As a user, I want ended challenges to prevent further progress updates, so that results are final and fair.",Could Have,P2,2,Eagle 5,Mid Dev,To Do,"AC1: Given a challenge has passed its end_date, When I open the challenge detail, Then the progress form is disabled/hidden
+
+AC2: Given an ended challenge, When I view the leaderboard, Then final results are shown as-is with no update option","• Verify progress form is disabled after end_date
+• Verify ended challenges show final results
+• Verify active challenges still allow progress updates","? All ACs verified (happy + failure path)
+? Loading/error/success states exist
+? No console errors or warnings
+? Tested on iOS + Android
+? Code reviewed with 1+ approval
+? Theme verified in dark + light mode
+? No hardcoded colors
+? Accessibility labels on new elements","?? MINIMAL DESIGN:
+• Ended challenge visual treatment
+
+Designer review: Disabled form state","? Progress form disabled after end_date
+? Final results shown
+? Active challenges still work",

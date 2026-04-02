@@ -1,0 +1,47 @@
+FLEXMATCHES — UAT TEST CASES,,,,,,,,,,,,
+UAT ID,Sprint,Linked Story,Journey Stage,Test Scenario,Test Type,Preconditions,Test Steps,Expected Result,Priority,Status,Tester,Notes
+UAT-001,Eagle 0,FM-301,Authentication,Forgot password with valid email,Positive,Existing user account,"1. Open Login
+2. Tap ""Forgot password?""
+3. Enter valid email
+4. Tap Send",Reset email sent; success message appears,Critical,Not Run,,Access recovery
+UAT-002,Eagle 0,FM-301,Authentication,Forgot password with unknown email,Negative,Unknown email,"1. Open Login
+2. Tap ""Forgot password?""
+3. Enter unknown email
+4. Tap Send",Neutral safe message shown (no account enumeration),High,Not Run,,Security: no enumeration
+UAT-003,Eagle 0,FM-302,Onboarding,New signup always lands on onboarding,Positive,Fresh new account,"1. Register new account
+2. Observe landing screen","User lands on onboarding, never on home directly",Critical,Not Run,,Test 10 times for race condition
+UAT-004,Eagle 0,FM-302,Onboarding,Onboarding save failure preserves data,Negative,Simulated network failure,"1. Fill onboarding fields
+2. Disable network
+3. Tap ""Let's go""",Alert shown; stays on step; entered data preserved,Critical,Not Run,,No silent failure
+UAT-005,Eagle 0,FM-302,Onboarding,Incomplete profile user returns to onboarding,Edge,Partial profile user,1. Log in with incomplete profile user,User resumes onboarding until required fields saved,High,Not Run,,Resume logic
+UAT-006,Eagle 0,FM-201,Messaging,Delete messages clears chat only,Positive,Match with messages,"1. Swipe conversation
+2. Tap ""Delete messages""
+3. Confirm",Messages removed; match row preserved with status=accepted,Critical,Not Run,,Trust-critical
+UAT-007,Eagle 0,FM-201,Messaging,Unmatch is separate and clearly explained,Positive,Existing match,"1. Swipe conversation
+2. Tap ""Unmatch""
+3. Read dialog
+4. Confirm","Match status set to ""unmatched""; conversation removed from list",Critical,Not Run,,Distinct from declined
+UAT-008,Eagle 0,FM-201,Messaging,Cancel on destructive dialog makes no changes,Negative,Existing match,"1. Swipe conversation
+2. Tap ""Unmatch""
+3. Tap Cancel",Dialog closes; no data changes; conversation unchanged,High,Not Run,,Safety check
+UAT-009,Eagle 0,FM-104,Sessions,"Session accept error shows toast, UI unchanged",Negative,Pending session + no network,"1. Open chat with pending session
+2. Disable network
+3. Tap Accept","Toast: ""Could not update session""; session still shows as pending",Critical,Not Run,,No false state
+UAT-010,Eagle 0,FM-104,Sessions,Double-tap on session button sends single request,Edge,Pending session,1. Tap Accept rapidly twice,Only 1 server request made; button disabled after first tap,High,Not Run,,Double-tap guard
+UAT-011,Eagle 0,FM-401,Activity,Consecutive day streak increments,Positive,User with yesterday check-in,"1. Check in Day 1
+2. Check in Day 2",Streak increases by 1 for valid consecutive day,High,Not Run,,Trust metric
+UAT-012,Eagle 0,FM-401,Activity,Missed day resets streak,Negative,User with 2+ day gap,"1. Log Day 1
+2. Skip Day 2
+3. Log Day 3",Streak resets to 1 (not continues from old value),Critical,Not Run,,Core trust mechanic
+UAT-013,Eagle 0,FM-402,Activity,Same-day duplicate does not inflate streak,Negative,Already checked in today,"1. Check in
+2. Try check-in again same day","Streak does NOT increment; button shows ""Checked in ?""",Critical,Not Run,,Anti-spam
+UAT-014,Eagle 0,FM-402,Activity,Quick Check-in spam (10 taps),Edge,Home screen,1. Tap Quick Check-in 10 times rapidly,Streak increments by 1 only; button disables after first,Critical,Not Run,,Exploit prevention
+UAT-015,Eagle 0,All,End-to-End,Full Eagle 0 regression: auth ? discover ? chat ? session ? streak,E2E,2 test accounts + 2 devices,"1. Register
+2. Onboarding
+3. Discover
+4. Match
+5. Chat
+6. Propose session
+7. Accept
+8. Check in
+9. Verify streak","Entire flow works without silent failure, data loss, or broken navigation",Critical,Not Run,,Primary release gate
