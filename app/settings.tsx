@@ -152,11 +152,31 @@ export default function SettingsScreen() {
   }
 
   async function deleteAccount() {
-    if (deleteInput !== "DELETE" || !userId) return;
+    if (deleteInput !== "DELETE" || !userId || deleting) return;
     setDeleting(true);
-    await supabase.from("users").delete().eq("id", userId);
-    await supabase.auth.signOut();
-    router.replace("/(auth)/welcome");
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(
+        `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/delete-account`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${session?.access_token}`,
+          },
+        }
+      );
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? "Deletion failed");
+
+      // Auth user is gone — sign out locally and redirect
+      await supabase.auth.signOut();
+      router.replace("/(auth)/welcome");
+    } catch (err: any) {
+      console.error("[deleteAccount]", err);
+      Alert.alert("Error", err.message ?? "Could not delete account. Please try again.");
+      setDeleting(false); // re-enable button so user can retry (AC5)
+    }
   }
 
   async function resetPassword() {
