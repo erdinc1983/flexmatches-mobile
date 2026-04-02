@@ -177,6 +177,7 @@ export default function CirclesScreen() {
   const [selectedCircle, setSelectedCircle] = useState<Community | null>(null);
   const [circleMembers,  setCircleMembers]  = useState<CircleMember[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
+  const [joiningId,      setJoiningId]      = useState<string | null>(null);
 
   // Create form state
   const [formName,       setFormName]       = useState("");
@@ -282,7 +283,8 @@ export default function CirclesScreen() {
 
   // ── Actions ────────────────────────────────────────────────────────────────
   async function joinOrLeave(communityId: string, isMember: boolean) {
-    if (!userId) return;
+    if (!userId || joiningId) return;
+    setJoiningId(communityId);
     if (isMember) {
       await supabase.from("community_members").delete()
         .eq("community_id", communityId).eq("user_id", userId);
@@ -309,6 +311,7 @@ export default function CirclesScreen() {
         : null
       );
     }
+    setJoiningId(null);
   }
 
   async function createCircle() {
@@ -472,6 +475,7 @@ export default function CirclesScreen() {
                 item={item}
                 onPress={() => openCircle(item)}
                 onJoin={() => joinOrLeave(item.id, item.is_member)}
+                joining={joiningId === item.id}
               />
             </>
           );
@@ -571,13 +575,18 @@ export default function CirclesScreen() {
                 selectedCircle.is_member
                   ? { borderWidth: 1, borderColor: c.brandBorder, backgroundColor: "transparent" }
                   : { backgroundColor: c.brand },
+                joiningId === selectedCircle.id && { opacity: 0.6 },
               ]}
               onPress={() => joinOrLeave(selectedCircle.id, selectedCircle.is_member)}
+              disabled={!!joiningId}
               activeOpacity={0.85}
             >
-              <Text style={[s.popupJoinText, { color: selectedCircle.is_member ? c.brand : "#fff" }]}>
-                {selectedCircle.is_member ? "Leave Circle" : "Join Circle"}
-              </Text>
+              {joiningId === selectedCircle.id
+                ? <ActivityIndicator color={selectedCircle.is_member ? c.brand : "#fff"} size="small" />
+                : <Text style={[s.popupJoinText, { color: selectedCircle.is_member ? c.brand : "#fff" }]}>
+                    {selectedCircle.is_member ? "Leave Circle" : "Join Circle"}
+                  </Text>
+              }
             </TouchableOpacity>
           </TouchableOpacity>
         </TouchableOpacity>
@@ -825,7 +834,7 @@ export default function CirclesScreen() {
 }
 
 // ─── Circle Card ──────────────────────────────────────────────────────────────
-function CircleCard({ item, onPress, onJoin }: { item: Community; onPress: () => void; onJoin: () => void }) {
+function CircleCard({ item, onPress, onJoin, joining = false }: { item: Community; onPress: () => void; onJoin: () => void; joining?: boolean }) {
   const { theme } = useTheme();
   const c = theme.colors;
 
@@ -871,13 +880,18 @@ function CircleCard({ item, onPress, onJoin }: { item: Community; onPress: () =>
           item.is_member
             ? { backgroundColor: "transparent", borderWidth: 1, borderColor: c.brandBorder }
             : { backgroundColor: c.brand },
+          joining && { opacity: 0.6 },
         ]}
         onPress={onJoin}
+        disabled={joining}
         activeOpacity={0.8}
       >
-        <Text style={[s.joinText, { color: item.is_member ? c.brand : "#fff" }]}>
-          {item.is_member ? "Joined" : "Join"}
-        </Text>
+        {joining
+          ? <ActivityIndicator color={item.is_member ? c.brand : "#fff"} size="small" />
+          : <Text style={[s.joinText, { color: item.is_member ? c.brand : "#fff" }]}>
+              {item.is_member ? "Joined" : "Join"}
+            </Text>
+        }
       </TouchableOpacity>
     </TouchableOpacity>
   );

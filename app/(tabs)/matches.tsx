@@ -85,6 +85,7 @@ export default function MatchesScreen() {
   const [sessionLocation, setSessionLocation] = useState("");
   const [sessionNotes,    setSessionNotes]    = useState("");
   const [sendingSession,  setSendingSession]  = useState(false);
+  const [respondingId,    setRespondingId]    = useState<string | null>(null);
   const [sheetUser,       setSheetUser]       = useState<DiscoverUser | null>(null);
 
   const load = useCallback(async (isRefresh = false) => {
@@ -189,6 +190,8 @@ export default function MatchesScreen() {
   }, [load]);
 
   async function respondToMatch(matchId: string, status: "accepted" | "declined") {
+    if (respondingId) return;
+    setRespondingId(matchId);
     const match = pending.find((p) => p.id === matchId);
     await supabase.from("matches").update({ status }).eq("id", matchId);
     if (status === "accepted" && match) {
@@ -206,6 +209,7 @@ export default function MatchesScreen() {
       });
     }
     await load();
+    setRespondingId(null);
   }
 
   async function proposeSession() {
@@ -318,18 +322,26 @@ export default function MatchesScreen() {
                       </Text>
                     </View>
                     <View style={s.actionRow}>
-                      <TouchableOpacity
-                        style={[s.declineBtn, { borderColor: c.borderMedium }]}
-                        onPress={() => respondToMatch(match.id, "declined")}
-                      >
-                        <Icon name="close" size={16} color={c.textMuted} />
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[s.acceptBtn, { backgroundColor: c.brand }]}
-                        onPress={() => respondToMatch(match.id, "accepted")}
-                      >
-                        <Icon name="checkActive" size={16} color="#fff" />
-                      </TouchableOpacity>
+                      {respondingId === match.id ? (
+                        <ActivityIndicator color={c.brand} size="small" style={{ paddingHorizontal: SPACE[20] }} />
+                      ) : (
+                        <>
+                          <TouchableOpacity
+                            style={[s.declineBtn, { borderColor: c.borderMedium }]}
+                            onPress={() => respondToMatch(match.id, "declined")}
+                            disabled={!!respondingId}
+                          >
+                            <Icon name="close" size={16} color={c.textMuted} />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[s.acceptBtn, { backgroundColor: c.brand }]}
+                            onPress={() => respondToMatch(match.id, "accepted")}
+                            disabled={!!respondingId}
+                          >
+                            <Icon name="checkActive" size={16} color="#fff" />
+                          </TouchableOpacity>
+                        </>
+                      )}
                     </View>
                   </TouchableOpacity>
                 ))}
