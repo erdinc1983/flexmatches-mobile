@@ -97,7 +97,12 @@ export const SwipeDeck = forwardRef<SwipeDeckRef, Props>(function SwipeDeck(
   // PanResponder calls commitSwipeRef.current — always the latest commitSwipe.
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
+      // Only claim the responder once the finger moves enough to be a swipe.
+      // Returning true unconditionally here swallows all taps, preventing
+      // child TouchableOpacity (info button, card body) from receiving them.
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, { dx, dy }) =>
+        Math.abs(dx) > 6 && Math.abs(dx) > Math.abs(dy),
       onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], { useNativeDriver: false }),
       onPanResponderRelease: (_, { dx, vx }) => {
         const hardSwipe = Math.abs(dx) > SWIPE_THRESHOLD;
