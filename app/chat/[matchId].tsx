@@ -743,6 +743,7 @@ export default function ChatScreen() {
             onChangeText={setText}
             placeholder="Message..."
             placeholderTextColor={c.textFaint}
+            accessibilityLabel="Message input"
             multiline
             maxLength={500}
           />

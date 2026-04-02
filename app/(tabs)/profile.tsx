@@ -897,6 +897,7 @@ function EditForm({ form, setForm, saving, onSave, onCancel, toggleSport, toggle
             value={numeric ? (form[key]?.toString() ?? "") : ((form[key] as string) ?? "")}
             onChangeText={v => setForm({ ...form, [key]: numeric ? (parseInt(v) || null) : v })}
             placeholder={label}
+            accessibilityLabel={label}
             placeholderTextColor={c.textMuted}
             multiline={multiline}
             keyboardType={numeric ? "numeric" : "default"}
@@ -1011,6 +1012,7 @@ function EditForm({ form, setForm, saving, onSave, onCancel, toggleSport, toggle
             onChangeText={setCertInput}
             placeholder="Add certification..."
             placeholderTextColor={c.textMuted}
+            accessibilityLabel="Add certification"
             onSubmitEditing={() => { addCert(certInput); setCertInput(""); }}
             returnKeyType="done"
           />
@@ -1061,6 +1063,7 @@ function EditForm({ form, setForm, saving, onSave, onCancel, toggleSport, toggle
             value={(form[key] as string) ?? ""}
             onChangeText={v => setForm({ ...form, [key]: v })}
             placeholder={label}
+            accessibilityLabel={label}
             placeholderTextColor={c.textMuted}
             multiline={multiline}
           />

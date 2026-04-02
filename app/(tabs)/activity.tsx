@@ -350,6 +350,7 @@ export default function ActivityScreen() {
               keyboardType="numeric"
               placeholder="e.g. 45"
               placeholderTextColor={c.textFaint}
+              accessibilityLabel="Workout duration in minutes"
             />
 
             <Text style={[s.fieldLabel, { color: c.textMuted }]}>Notes (optional)</Text>
@@ -360,6 +361,7 @@ export default function ActivityScreen() {
               multiline
               placeholder="How did it go?"
               placeholderTextColor={c.textFaint}
+              accessibilityLabel="Workout notes"
             />
 
             <TouchableOpacity

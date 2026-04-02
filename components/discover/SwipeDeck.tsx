@@ -209,9 +209,9 @@ export const SwipeDeck = forwardRef<SwipeDeckRef, Props>(function SwipeDeck(
 
       {/* Action buttons */}
       <View style={deck.actions}>
-        <ActionBtn icon="arrow-undo"       color={canUndo ? "#3B82F6" : "#C0C0C8"} bg={canUndo ? "#3B82F614" : "#F0F0F4"} size={46} onPress={() => canUndo && onUndo?.()} />
-        <ActionBtn icon="close"            color="#FF4500"        bg="#FFF0EC"       size={58} onPress={() => commitSwipe("left")} />
-        <ActionBtn icon="information"      color="#8E8E9A"        bg="#F2F2F6"       size={46} onPress={() => onCardPress(users[currentIndex])} />
+        <ActionBtn icon="arrow-undo"  color={canUndo ? "#3B82F6" : "#C0C0C8"} bg={canUndo ? "#3B82F614" : "#F0F0F4"} size={46} onPress={() => canUndo && onUndo?.()} label="Undo" />
+        <ActionBtn icon="close"       color="#FF4500" bg="#FFF0EC" size={58} onPress={() => commitSwipe("left")}               label="Pass" />
+        <ActionBtn icon="information" color="#8E8E9A" bg="#F2F2F6" size={46} onPress={() => onCardPress(users[currentIndex])}  label="View profile" />
         <SparkleBtn size={58} onPress={() => commitSwipe("right")} />
       </View>
     </View>
@@ -356,15 +356,17 @@ function SwipeCardContent({ user, status, onInfoPress }: {
   );
 }
 
-function ActionBtn({ icon, color, bg, size, onPress }: {
+function ActionBtn({ icon, color, bg, size, onPress, label }: {
   icon: React.ComponentProps<typeof Ionicons>["name"];
-  color: string; bg: string; size: number; onPress: () => void;
+  color: string; bg: string; size: number; onPress: () => void; label: string;
 }) {
   return (
     <TouchableOpacity
       style={[deck.actionBtn, { width: size, height: size, borderRadius: size / 2, backgroundColor: bg }]}
       onPress={onPress}
       activeOpacity={0.72}
+      accessibilityRole="button"
+      accessibilityLabel={label}
     >
       <Ionicons name={icon} size={size * 0.44} color={color} />
     </TouchableOpacity>
@@ -377,6 +379,8 @@ function SparkleBtn({ size, onPress }: { size: number; onPress: () => void }) {
       style={[deck.actionBtn, { width: size, height: size, borderRadius: size / 2, backgroundColor: "#E8FBF0" }]}
       onPress={onPress}
       activeOpacity={0.72}
+      accessibilityRole="button"
+      accessibilityLabel="Like"
     >
       {/* Main star — shifted slightly right+down to make room for cluster */}
       <Text style={{ position: "absolute", bottom: size * 0.24, right: size * 0.24, fontSize: size * 0.42, color: "#22C55E" }}>✦</Text>

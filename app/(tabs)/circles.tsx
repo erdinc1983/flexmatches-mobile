@@ -425,6 +425,7 @@ export default function CirclesScreen() {
             onChangeText={setSearch}
             placeholder="Search circles..."
             placeholderTextColor={c.textMuted}
+            accessibilityLabel="Search circles"
           />
           {search.length > 0 && (
             <TouchableOpacity onPress={() => setSearch("")} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -660,6 +661,7 @@ export default function CirclesScreen() {
                     onChangeText={setFormName}
                     placeholder="e.g. Sunday Soccer, Morning Runners"
                     placeholderTextColor={c.textMuted}
+                    accessibilityLabel="Circle name"
                   />
                 </>
               )}
@@ -709,6 +711,7 @@ export default function CirclesScreen() {
                     placeholder="What's this circle about?"
                     placeholderTextColor={c.textMuted}
                     multiline
+                    accessibilityLabel="Circle description"
                   />
                 </>
               )}
@@ -723,6 +726,7 @@ export default function CirclesScreen() {
                     onChangeText={setFormCity}
                     placeholder="e.g. Istanbul, New York"
                     placeholderTextColor={c.textMuted}
+                    accessibilityLabel="Circle city"
                   />
                   <Text style={[wiz.label, { color: c.textMuted }]}>Field / Venue (optional)</Text>
                   <View style={[s.locationRow, { marginBottom: SPACE[16] }]}>
@@ -732,11 +736,14 @@ export default function CirclesScreen() {
                       onChangeText={setFormField}
                       placeholder="e.g. Central Park, Fenerbahçe Stadium"
                       placeholderTextColor={c.textMuted}
+                      accessibilityLabel="Field or venue name"
                     />
                     <TouchableOpacity
                       style={[s.mapBtn, { backgroundColor: c.bgInput, borderColor: c.border }]}
                       onPress={() => setShowMapPicker(true)}
                       hitSlop={8}
+                      accessibilityRole="button"
+                      accessibilityLabel="Pick location on map"
                     >
                       <Icon name="map" size={18} color={c.textMuted} />
                     </TouchableOpacity>
@@ -749,6 +756,7 @@ export default function CirclesScreen() {
                     placeholder="e.g. 10, 20 — unlimited if empty"
                     placeholderTextColor={c.textMuted}
                     keyboardType="number-pad"
+                    accessibilityLabel="Maximum number of members"
                   />
                 </>
               )}

@@ -691,6 +691,7 @@ export default function DiscoverScreen() {
             placeholderTextColor={c.textMuted}
             value={searchQuery}
             onChangeText={setSearchQuery}
+            accessibilityLabel="Search users by name"
             autoFocus
             returnKeyType="search"
             clearButtonMode="while-editing"
