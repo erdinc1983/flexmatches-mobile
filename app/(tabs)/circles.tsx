@@ -284,6 +284,13 @@ export default function CirclesScreen() {
   // ── Actions ────────────────────────────────────────────────────────────────
   async function joinOrLeave(communityId: string, isMember: boolean) {
     if (!userId || joiningId) return;
+    if (!isMember) {
+      const circle = communities.find((c) => c.id === communityId) ?? selectedCircle;
+      if (circle?.max_members != null && circle.member_count >= circle.max_members) {
+        Alert.alert("Circle Full", "This circle is at capacity and isn't accepting new members.");
+        return;
+      }
+    }
     setJoiningId(communityId);
     if (isMember) {
       await supabase.from("community_members").delete()
@@ -569,25 +576,34 @@ export default function CirclesScreen() {
             )}
 
             {/* Join / Leave */}
-            <TouchableOpacity
-              style={[
-                s.popupJoinBtn,
-                selectedCircle.is_member
-                  ? { borderWidth: 1, borderColor: c.brandBorder, backgroundColor: "transparent" }
-                  : { backgroundColor: c.brand },
-                joiningId === selectedCircle.id && { opacity: 0.6 },
-              ]}
-              onPress={() => joinOrLeave(selectedCircle.id, selectedCircle.is_member)}
-              disabled={!!joiningId}
-              activeOpacity={0.85}
-            >
-              {joiningId === selectedCircle.id
-                ? <ActivityIndicator color={selectedCircle.is_member ? c.brand : "#fff"} size="small" />
-                : <Text style={[s.popupJoinText, { color: selectedCircle.is_member ? c.brand : "#fff" }]}>
-                    {selectedCircle.is_member ? "Leave Circle" : "Join Circle"}
-                  </Text>
-              }
-            </TouchableOpacity>
+            {(() => {
+              const isFull = !selectedCircle.is_member &&
+                selectedCircle.max_members != null &&
+                selectedCircle.member_count >= selectedCircle.max_members;
+              return (
+                <TouchableOpacity
+                  style={[
+                    s.popupJoinBtn,
+                    selectedCircle.is_member
+                      ? { borderWidth: 1, borderColor: c.brandBorder, backgroundColor: "transparent" }
+                      : isFull
+                        ? { backgroundColor: c.border, opacity: 0.7 }
+                        : { backgroundColor: c.brand },
+                    joiningId === selectedCircle.id && { opacity: 0.6 },
+                  ]}
+                  onPress={() => joinOrLeave(selectedCircle.id, selectedCircle.is_member)}
+                  disabled={!!joiningId || isFull}
+                  activeOpacity={0.85}
+                >
+                  {joiningId === selectedCircle.id
+                    ? <ActivityIndicator color={selectedCircle.is_member ? c.brand : "#fff"} size="small" />
+                    : <Text style={[s.popupJoinText, { color: selectedCircle.is_member ? c.brand : "#fff" }]}>
+                        {selectedCircle.is_member ? "Leave Circle" : isFull ? "Circle Full" : "Join Circle"}
+                      </Text>
+                  }
+                </TouchableOpacity>
+              );
+            })()}
           </TouchableOpacity>
         </TouchableOpacity>
       )}
@@ -873,26 +889,33 @@ function CircleCard({ item, onPress, onJoin, joining = false }: { item: Communit
         </View>
       </View>
 
-      {/* Join / Joined */}
-      <TouchableOpacity
-        style={[
-          s.joinBtn,
-          item.is_member
-            ? { backgroundColor: "transparent", borderWidth: 1, borderColor: c.brandBorder }
-            : { backgroundColor: c.brand },
-          joining && { opacity: 0.6 },
-        ]}
-        onPress={onJoin}
-        disabled={joining}
-        activeOpacity={0.8}
-      >
-        {joining
-          ? <ActivityIndicator color={item.is_member ? c.brand : "#fff"} size="small" />
-          : <Text style={[s.joinText, { color: item.is_member ? c.brand : "#fff" }]}>
-              {item.is_member ? "Joined" : "Join"}
-            </Text>
-        }
-      </TouchableOpacity>
+      {/* Join / Joined / Full */}
+      {(() => {
+        const isFull = !item.is_member && item.max_members != null && item.member_count >= item.max_members;
+        return (
+          <TouchableOpacity
+            style={[
+              s.joinBtn,
+              item.is_member
+                ? { backgroundColor: "transparent", borderWidth: 1, borderColor: c.brandBorder }
+                : isFull
+                  ? { backgroundColor: c.border, opacity: 0.7 }
+                  : { backgroundColor: c.brand },
+              joining && { opacity: 0.6 },
+            ]}
+            onPress={onJoin}
+            disabled={joining || isFull}
+            activeOpacity={0.8}
+          >
+            {joining
+              ? <ActivityIndicator color={item.is_member ? c.brand : "#fff"} size="small" />
+              : <Text style={[s.joinText, { color: item.is_member ? c.brand : "#fff" }]}>
+                  {item.is_member ? "Joined" : isFull ? "Full" : "Join"}
+                </Text>
+            }
+          </TouchableOpacity>
+        );
+      })()}
     </TouchableOpacity>
   );
 }
