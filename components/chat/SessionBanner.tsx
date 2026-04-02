@@ -14,7 +14,7 @@
  */
 
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Linking, Platform } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, Linking, Platform, ActivityIndicator } from "react-native";
 import { useTheme, SPACE, FONT, RADIUS } from "../../lib/theme";
 import { Icon } from "../Icon";
 
@@ -110,18 +110,19 @@ const GREEN = {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 type Props = {
-  session:     BuddySession;
-  myId:        string;
-  partnerName: string;
-  onAccept:    () => void;
-  onDecline:   () => void;
-  onConfirm:   () => void;
-  onNoShow?:   () => void;
-  onCancel?:   () => void;
-  onEdit?:     () => void;
+  session:          BuddySession;
+  myId:             string;
+  partnerName:      string;
+  onAccept:         () => void;
+  onDecline:        () => void;
+  onConfirm:        () => void;
+  onNoShow?:        () => void;
+  onCancel?:        () => void;
+  onEdit?:          () => void;
+  actingOnSession?: boolean;
 };
 
-export function SessionBanner({ session, myId, partnerName, onAccept, onDecline, onConfirm, onNoShow, onCancel, onEdit }: Props) {
+export function SessionBanner({ session, myId, partnerName, onAccept, onDecline, onConfirm, onNoShow, onCancel, onEdit, actingOnSession }: Props) {
   const { theme, isDark } = useTheme();
   const c = theme.colors;
 
@@ -158,8 +159,9 @@ export function SessionBanner({ session, myId, partnerName, onAccept, onDecline,
         <View style={s.actions}>
           {onEdit && (
             <TouchableOpacity
-              style={[s.editBtn, { borderColor: isDark ? AMBER.darkBorder : AMBER.lightBorder }]}
+              style={[s.editBtn, { borderColor: isDark ? AMBER.darkBorder : AMBER.lightBorder }, actingOnSession && { opacity: 0.5 }]}
               onPress={onEdit}
+              disabled={actingOnSession}
               activeOpacity={0.8}
             >
               <Icon name="edit" size={13} color={AMBER.icon} />
@@ -168,11 +170,15 @@ export function SessionBanner({ session, myId, partnerName, onAccept, onDecline,
           )}
           {onCancel && (
             <TouchableOpacity
-              style={[s.cancelBtn, { borderColor: isDark ? AMBER.darkBorder : AMBER.lightBorder }]}
+              style={[s.cancelBtn, { borderColor: isDark ? AMBER.darkBorder : AMBER.lightBorder }, actingOnSession && { opacity: 0.5 }]}
               onPress={onCancel}
+              disabled={actingOnSession}
               activeOpacity={0.8}
             >
-              <Text style={[s.cancelText, { color: isDark ? AMBER.darkText : AMBER.lightText }]}>Cancel session</Text>
+              {actingOnSession
+                ? <ActivityIndicator size="small" color={isDark ? AMBER.darkText : AMBER.lightText} />
+                : <Text style={[s.cancelText, { color: isDark ? AMBER.darkText : AMBER.lightText }]}>Cancel session</Text>
+              }
             </TouchableOpacity>
           )}
         </View>
@@ -199,18 +205,23 @@ export function SessionBanner({ session, myId, partnerName, onAccept, onDecline,
         </View>
         <View style={s.actions}>
           <TouchableOpacity
-            style={[s.declineBtn, { borderColor: c.borderMedium }]}
+            style={[s.declineBtn, { borderColor: c.borderMedium }, actingOnSession && { opacity: 0.5 }]}
             onPress={onDecline}
+            disabled={actingOnSession}
             activeOpacity={0.8}
           >
             <Text style={[s.declineText, { color: c.textMuted }]}>Decline</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[s.acceptBtn, { backgroundColor: c.brand }]}
+            style={[s.acceptBtn, { backgroundColor: c.brand }, actingOnSession && { opacity: 0.7 }]}
             onPress={onAccept}
+            disabled={actingOnSession}
             activeOpacity={0.85}
           >
-            <Text style={s.ctaText}>Accept</Text>
+            {actingOnSession
+              ? <ActivityIndicator size="small" color="#fff" />
+              : <Text style={s.ctaText}>Accept</Text>
+            }
           </TouchableOpacity>
         </View>
       </View>
@@ -258,19 +269,24 @@ export function SessionBanner({ session, myId, partnerName, onAccept, onDecline,
       <View style={s.actions}>
         {onNoShow && (
           <TouchableOpacity
-            style={[s.declineBtn, { borderColor: c.borderMedium }]}
+            style={[s.declineBtn, { borderColor: c.borderMedium }, actingOnSession && { opacity: 0.5 }]}
             onPress={onNoShow}
+            disabled={actingOnSession}
             activeOpacity={0.8}
           >
             <Text style={[s.declineText, { color: c.textMuted }]}>Didn't happen</Text>
           </TouchableOpacity>
         )}
         <TouchableOpacity
-          style={[s.acceptBtn, { backgroundColor: c.brand }]}
+          style={[s.acceptBtn, { backgroundColor: c.brand }, actingOnSession && { opacity: 0.7 }]}
           onPress={onConfirm}
+          disabled={actingOnSession}
           activeOpacity={0.85}
         >
-          <Text style={s.ctaText}>Mark done</Text>
+          {actingOnSession
+            ? <ActivityIndicator size="small" color="#fff" />
+            : <Text style={s.ctaText}>Mark done</Text>
+          }
         </TouchableOpacity>
       </View>
     </View>

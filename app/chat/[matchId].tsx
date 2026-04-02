@@ -208,6 +208,7 @@ export default function ChatScreen() {
   const [useTime,         setUseTime]         = useState(false);
   const [sessionLocation, setSessionLocation] = useState("");
   const [proposing,       setProposing]       = useState(false);
+  const [sessionActing,   setSessionActing]   = useState(false);
   const [showMapPicker,     setShowMapPicker]     = useState(false);
   const [sheetUser,         setSheetUser]         = useState<DiscoverUser | null>(null);
   const [showCompleted,     setShowCompleted]     = useState(false);
@@ -344,41 +345,54 @@ export default function ChatScreen() {
 
   // ── Session actions ───────────────────────────────────────────────────────
   async function acceptSession() {
-    if (!session) return;
-    await supabase.from("buddy_sessions").update({ status: "accepted" }).eq("id", session.id);
-    if (session.session_date) {
-      const partnerName = other?.full_name?.split(" ")[0] ?? other?.username ?? "your partner";
-      scheduleSessionReminder(partnerName, session.session_date);
+    if (!session || sessionActing) return;
+    setSessionActing(true);
+    try {
+      const { error } = await supabase.from("buddy_sessions").update({ status: "accepted" }).eq("id", session.id);
+      if (error) throw error;
+      if (session.session_date) {
+        const partnerName = other?.full_name?.split(" ")[0] ?? other?.username ?? "your partner";
+        scheduleSessionReminder(partnerName, session.session_date);
+      }
+      if (session.proposer_id && session.proposer_id !== userId) {
+        const { data: me } = await supabase.from("users").select("full_name, username").eq("id", userId!).single();
+        notifyUser(session.proposer_id, {
+          type: "session_accepted",
+          title: "Session Accepted! ✅",
+          body: `${me?.full_name ?? me?.username ?? "Your partner"} accepted your ${session.sport} session`,
+          relatedId: matchId,
+          data: { type: "session_accepted", matchId },
+        });
+      }
+      loadSession();
+    } catch {
+      Alert.alert("Could not update session. Please try again.");
+    } finally {
+      setSessionActing(false);
     }
-    // Push to proposer: their session was accepted
-    if (session.proposer_id && session.proposer_id !== userId) {
-      const myName = other?.full_name?.split(" ")[0]; // we are the accepter, other is the proposer... actually no
-      const { data: me } = await supabase.from("users").select("full_name, username").eq("id", userId!).single();
-      notifyUser(session.proposer_id, {
-        type: "session_accepted",
-        title: "Session Accepted! ✅",
-        body: `${me?.full_name ?? me?.username ?? "Your partner"} accepted your ${session.sport} session`,
-        relatedId: matchId,
-        data: { type: "session_accepted", matchId },
-      });
-    }
-    loadSession();
   }
   async function declineSession() {
-    if (!session) return;
-    await supabase.from("buddy_sessions").update({ status: "declined" }).eq("id", session.id);
-    // Notify proposer: their session was declined
-    if (session.proposer_id && session.proposer_id !== userId) {
-      const { data: me } = await supabase.from("users").select("full_name, username").eq("id", userId!).single();
-      notifyUser(session.proposer_id, {
-        type: "session_declined",
-        title: "Session Declined",
-        body: `${me?.full_name ?? me?.username ?? "Your partner"} declined the ${session.sport} session`,
-        relatedId: matchId,
-        data: { type: "session_declined", matchId },
-      });
+    if (!session || sessionActing) return;
+    setSessionActing(true);
+    try {
+      const { error } = await supabase.from("buddy_sessions").update({ status: "declined" }).eq("id", session.id);
+      if (error) throw error;
+      if (session.proposer_id && session.proposer_id !== userId) {
+        const { data: me } = await supabase.from("users").select("full_name, username").eq("id", userId!).single();
+        notifyUser(session.proposer_id, {
+          type: "session_declined",
+          title: "Session Declined",
+          body: `${me?.full_name ?? me?.username ?? "Your partner"} declined the ${session.sport} session`,
+          relatedId: matchId,
+          data: { type: "session_declined", matchId },
+        });
+      }
+      setSession(null);
+    } catch {
+      Alert.alert("Could not update session. Please try again.");
+    } finally {
+      setSessionActing(false);
     }
-    setSession(null);
   }
   /** Recalculate reliability_score for a user based on their counters */
   async function recalcReliability(uid: string) {
@@ -397,15 +411,22 @@ export default function ChatScreen() {
   }
 
   async function cancelSession() {
-    if (!session || !userId) return;
-    await supabase.from("buddy_sessions").update({ status: "cancelled" }).eq("id", session.id);
-    // Increment cancelled counter + recalc reliability
-    const { data } = await supabase.from("users").select("sessions_cancelled").eq("id", userId).single();
-    if (data) {
-      await supabase.from("users").update({ sessions_cancelled: (data.sessions_cancelled ?? 0) + 1 }).eq("id", userId);
-      recalcReliability(userId);
+    if (!session || !userId || sessionActing) return;
+    setSessionActing(true);
+    try {
+      const { error } = await supabase.from("buddy_sessions").update({ status: "cancelled" }).eq("id", session.id);
+      if (error) throw error;
+      const { data } = await supabase.from("users").select("sessions_cancelled").eq("id", userId).single();
+      if (data) {
+        await supabase.from("users").update({ sessions_cancelled: (data.sessions_cancelled ?? 0) + 1 }).eq("id", userId);
+        recalcReliability(userId);
+      }
+      setSession(null);
+    } catch {
+      Alert.alert("Could not update session. Please try again.");
+    } finally {
+      setSessionActing(false);
     }
-    setSession(null);
   }
 
   function editSession() {
@@ -430,34 +451,40 @@ export default function ChatScreen() {
   }
 
   async function confirmSession() {
-    if (!session || !userId) return;
-    await supabase.from("buddy_sessions").update({
-      status: "completed",
-      completed_at: new Date().toISOString(),
-      confirmed_by: userId,
-    }).eq("id", session.id);
-    // Increment completed count + recalc reliability for both users
-    const { data: myData } = await supabase.from("users").select("sessions_completed").eq("id", userId).single();
-    if (myData) {
-      await supabase.from("users").update({ sessions_completed: (myData.sessions_completed ?? 0) + 1 }).eq("id", userId);
-      recalcReliability(userId);
-    }
-    if (other?.id) {
-      const { data: theirData } = await supabase.from("users").select("sessions_completed").eq("id", other.id).single();
-      if (theirData) {
-        await supabase.from("users").update({ sessions_completed: (theirData.sessions_completed ?? 0) + 1 }).eq("id", other.id);
-        recalcReliability(other.id);
+    if (!session || !userId || sessionActing) return;
+    setSessionActing(true);
+    try {
+      const { error } = await supabase.from("buddy_sessions").update({
+        status: "completed",
+        completed_at: new Date().toISOString(),
+        confirmed_by: userId,
+      }).eq("id", session.id);
+      if (error) throw error;
+      const { data: myData } = await supabase.from("users").select("sessions_completed").eq("id", userId).single();
+      if (myData) {
+        await supabase.from("users").update({ sessions_completed: (myData.sessions_completed ?? 0) + 1 }).eq("id", userId);
+        recalcReliability(userId);
       }
+      if (other?.id) {
+        const { data: theirData } = await supabase.from("users").select("sessions_completed").eq("id", other.id).single();
+        if (theirData) {
+          await supabase.from("users").update({ sessions_completed: (theirData.sessions_completed ?? 0) + 1 }).eq("id", other.id);
+          recalcReliability(other.id);
+        }
+      }
+      supabase.rpc("increment_sessions_kept", { uid: userId }).then(() => {});
+      if (other?.id) supabase.rpc("increment_sessions_kept", { uid: other.id }).then(() => {});
+      setSessionCount((prev) => prev + 1);
+      loadSession();
+    } catch {
+      Alert.alert("Could not update session. Please try again.");
+    } finally {
+      setSessionActing(false);
     }
-    // Also call legacy RPC (best-effort)
-    supabase.rpc("increment_sessions_kept", { uid: userId }).then(() => {});
-    if (other?.id) supabase.rpc("increment_sessions_kept", { uid: other.id }).then(() => {});
-    setSessionCount((prev) => prev + 1);
-    loadSession();
   }
 
   async function noShowSession() {
-    if (!session || !userId) return;
+    if (!session || !userId || sessionActing) return;
     Alert.alert(
       "Session didn't happen?",
       "This will be recorded. It helps build trust in the community.",
@@ -466,26 +493,33 @@ export default function ChatScreen() {
         {
           text: "Confirm",
           onPress: async () => {
-            await supabase.from("buddy_sessions").update({
-              status: "completed",
-              no_show: true,
-              completed_at: new Date().toISOString(),
-              confirmed_by: userId,
-            }).eq("id", session.id);
-            // Increment no-show counter + recalc reliability for both
-            const { data: myData } = await supabase.from("users").select("sessions_no_show").eq("id", userId).single();
-            if (myData) {
-              await supabase.from("users").update({ sessions_no_show: (myData.sessions_no_show ?? 0) + 1 }).eq("id", userId);
-              recalcReliability(userId);
-            }
-            if (other?.id) {
-              const { data: theirData } = await supabase.from("users").select("sessions_no_show").eq("id", other.id).single();
-              if (theirData) {
-                await supabase.from("users").update({ sessions_no_show: (theirData.sessions_no_show ?? 0) + 1 }).eq("id", other.id);
-                recalcReliability(other.id);
+            setSessionActing(true);
+            try {
+              const { error } = await supabase.from("buddy_sessions").update({
+                status: "completed",
+                no_show: true,
+                completed_at: new Date().toISOString(),
+                confirmed_by: userId,
+              }).eq("id", session.id);
+              if (error) throw error;
+              const { data: myData } = await supabase.from("users").select("sessions_no_show").eq("id", userId).single();
+              if (myData) {
+                await supabase.from("users").update({ sessions_no_show: (myData.sessions_no_show ?? 0) + 1 }).eq("id", userId);
+                recalcReliability(userId);
               }
+              if (other?.id) {
+                const { data: theirData } = await supabase.from("users").select("sessions_no_show").eq("id", other.id).single();
+                if (theirData) {
+                  await supabase.from("users").update({ sessions_no_show: (theirData.sessions_no_show ?? 0) + 1 }).eq("id", other.id);
+                  recalcReliability(other.id);
+                }
+              }
+              loadSession();
+            } catch {
+              Alert.alert("Could not update session. Please try again.");
+            } finally {
+              setSessionActing(false);
             }
-            loadSession();
           },
         },
       ]
@@ -496,34 +530,38 @@ export default function ChatScreen() {
   async function proposeSession() {
     if (!userId || !other || !sessionDate.trim() || proposing) return;
     setProposing(true);
-    const sportValue = sessionSport === "Other" && sessionTitle.trim() ? sessionTitle.trim() : sessionSport;
-    await supabase.from("buddy_sessions").insert({
-      proposer_id: userId, receiver_id: other.id, match_id: matchId,
-      sport: sportValue, session_date: sessionDate.trim(),
-      session_time: useTime ? `${String(sessionHour).padStart(2,"0")}:${String(sessionMinute).padStart(2,"0")}` : null,
-      location: sessionLocation.trim() || null, notes: null, status: "pending",
-    });
-    if (sessionDate.trim()) {
-      const partnerName = other?.full_name?.split(" ")[0] ?? other?.username ?? "your partner";
-      scheduleSessionReminder(partnerName, sessionDate.trim());
+    try {
+      const sportValue = sessionSport === "Other" && sessionTitle.trim() ? sessionTitle.trim() : sessionSport;
+      const { error } = await supabase.from("buddy_sessions").insert({
+        proposer_id: userId, receiver_id: other.id, match_id: matchId,
+        sport: sportValue, session_date: sessionDate.trim(),
+        session_time: useTime ? `${String(sessionHour).padStart(2,"0")}:${String(sessionMinute).padStart(2,"0")}` : null,
+        location: sessionLocation.trim() || null, notes: null, status: "pending",
+      });
+      if (error) throw error;
+      if (sessionDate.trim()) {
+        const partnerName = other?.full_name?.split(" ")[0] ?? other?.username ?? "your partner";
+        scheduleSessionReminder(partnerName, sessionDate.trim());
+      }
+      const { data: me } = await supabase.from("users").select("full_name, username").eq("id", userId).single();
+      notifyUser(other.id, {
+        type: "session_proposed",
+        title: "New Session Proposal 📅",
+        body: `${me?.full_name ?? me?.username ?? "Your partner"} wants to do ${sportValue} on ${sessionDate.trim()}`,
+        relatedId: matchId,
+        data: { type: "session_proposed", matchId },
+      });
+      if (editingSessionRef.current) {
+        await supabase.from("buddy_sessions").update({ status: "cancelled" }).eq("id", editingSessionRef.current);
+        editingSessionRef.current = null;
+      }
+      setShowWizard(false);
+      loadSession();
+    } catch {
+      Alert.alert("Could not propose session. Please try again.");
+    } finally {
+      setProposing(false);
     }
-    // Notify the receiver
-    const { data: me } = await supabase.from("users").select("full_name, username").eq("id", userId).single();
-    notifyUser(other.id, {
-      type: "session_proposed",
-      title: "New Session Proposal 📅",
-      body: `${me?.full_name ?? me?.username ?? "Your partner"} wants to do ${sportValue} on ${sessionDate.trim()}`,
-      relatedId: matchId,
-      data: { type: "session_proposed", matchId },
-    });
-    // If editing an existing session, cancel it now that new one is saved
-    if (editingSessionRef.current) {
-      await supabase.from("buddy_sessions").update({ status: "cancelled" }).eq("id", editingSessionRef.current);
-      editingSessionRef.current = null;
-    }
-    setProposing(false);
-    setShowWizard(false);
-    loadSession();
   }
 
   // ── Profile popup ────────────────────────────────────────────────────────
@@ -664,6 +702,7 @@ export default function ChatScreen() {
           onNoShow={noShowSession}
           onCancel={session.proposer_id === userId && session.status === "pending" ? cancelSession : undefined}
           onEdit={session.proposer_id === userId && session.status === "pending" ? editSession : undefined}
+          actingOnSession={sessionActing}
         />
       )}
 
