@@ -9,10 +9,10 @@
  * Before public App Store release, migrate to react-native-purchases (RevenueCat).
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator,
+  ActivityIndicator, Platform, Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
@@ -20,6 +20,12 @@ import * as WebBrowser from "expo-web-browser";
 import { supabase } from "../lib/supabase";
 import { useTheme, SPACE, FONT, RADIUS, PALETTE } from "../lib/theme";
 import { Icon } from "../components/Icon";
+import {
+  initIAP, closeIAP, purchaseIAP, verifyAndActivatePro,
+  purchaseUpdatedListener, purchaseErrorListener, finishTransaction,
+  IAP_SKUS,
+  type SubscriptionPurchase, type PurchaseError,
+} from "../lib/iap";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -72,9 +78,57 @@ export default function ProScreen() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
+  // ── iOS IAP setup ─────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (Platform.OS !== "ios") return;
+
+    initIAP();
+
+    const purchaseSub = purchaseUpdatedListener(async (purchase: SubscriptionPurchase) => {
+      const receipt = purchase.transactionReceipt;
+      if (!receipt) return;
+      const ok = await verifyAndActivatePro(receipt, purchase.productId);
+      if (ok) {
+        await finishTransaction({ purchase, isConsumable: false });
+        setIsPro(true);
+        setSubscribing(false);
+      } else {
+        Alert.alert("Purchase Failed", "Could not verify your purchase. Please contact support.");
+        setSubscribing(false);
+      }
+    });
+
+    const errorSub = purchaseErrorListener((error: PurchaseError) => {
+      if (error.code !== "E_USER_CANCELLED") {
+        Alert.alert("Purchase Error", error.message ?? "Something went wrong.");
+      }
+      setSubscribing(false);
+    });
+
+    return () => {
+      purchaseSub.remove();
+      errorSub.remove();
+      closeIAP();
+    };
+  }, []);
+
   // ── Subscribe ─────────────────────────────────────────────────────────────
 
   async function openCheckout() {
+    // iOS: Apple IAP (App Store required) — AC1
+    if (Platform.OS === "ios") {
+      setSubscribing(true);
+      const sku = billing === "yearly" ? IAP_SKUS.yearly : IAP_SKUS.monthly;
+      try {
+        await purchaseIAP(sku);
+        // Result handled in purchaseUpdatedListener above
+      } catch {
+        setSubscribing(false);
+      }
+      return;
+    }
+    // Android (and web): Stripe web checkout — AC3
     setSubscribing(true);
     const url = `${WEB_PRO_URL}?billing=${billing}&from=mobile`;
     await WebBrowser.openBrowserAsync(url, {
@@ -82,17 +136,24 @@ export default function ProScreen() {
       controlsColor: "#FF4500",
       presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
     });
-    // Refresh after returning from browser
     await load();
     setSubscribing(false);
   }
 
   async function openBillingPortal() {
     setSubscribing(true);
-    await WebBrowser.openBrowserAsync(`${WEB_PRO_URL}?portal=1`, {
-      toolbarColor: "#0A0A0A",
-      controlsColor: "#FF4500",
-    });
+    if (Platform.OS === "ios") {
+      // Deep-link to iOS subscription management
+      await WebBrowser.openBrowserAsync("https://apps.apple.com/account/subscriptions", {
+        toolbarColor: "#0A0A0A",
+        controlsColor: "#FF4500",
+      });
+    } else {
+      await WebBrowser.openBrowserAsync(`${WEB_PRO_URL}?portal=1`, {
+        toolbarColor: "#0A0A0A",
+        controlsColor: "#FF4500",
+      });
+    }
     await load();
     setSubscribing(false);
   }
@@ -225,7 +286,9 @@ export default function ProScreen() {
         </TouchableOpacity>
 
         <Text style={[s.secureNote, { color: c.textFaint }]}>
-          🔒 Secure payment via Stripe · Cancel anytime
+          {Platform.OS === "ios"
+            ? "🔒 Secure payment via Apple · Cancel in Settings"
+            : "🔒 Secure payment via Stripe · Cancel anytime"}
         </Text>
 
         {/* Pro features */}
