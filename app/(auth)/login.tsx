@@ -39,10 +39,8 @@ export default function LoginScreen() {
     setAppleLoading(false);
     if (result.status === "error") {
       Alert.alert("Apple Sign In Failed", result.message);
-    } else if (result.status === "success" && result.isNewUser) {
-      router.replace("/(auth)/onboarding");
     }
-    // if success + existing user → auth listener in _layout redirects automatically
+    // Routing handled centrally by _layout.tsx
   }
 
   return (
@@ -101,6 +99,14 @@ export default function LoginScreen() {
                 onBlur={() => setFocusedField(null)}
               />
             </View>
+
+            <TouchableOpacity
+              style={styles.forgotBtn}
+              onPress={() => router.push("/(auth)/forgot-password")}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.forgotText}>Forgot password?</Text>
+            </TouchableOpacity>
 
             <TouchableOpacity
               style={[styles.button, loading && styles.buttonDisabled]}
@@ -204,6 +210,8 @@ const styles = StyleSheet.create({
   divider: { flexDirection: "row", alignItems: "center", gap: 12 },
   dividerLine: { flex: 1, height: 1, backgroundColor: "#1a1a1a" },
   dividerText: { color: "#333", fontSize: 13, fontWeight: "600" },
+  forgotBtn:        { alignSelf: "flex-end", paddingVertical: 4 },
+  forgotText:       { color: "#FF4500", fontSize: 13, fontWeight: "600" },
   registerBtn:      { alignItems: "center", paddingVertical: 4 },
   registerText:     { color: "#555", fontSize: 14 },
   registerLink:     { color: "#FF4500", fontWeight: "700" },

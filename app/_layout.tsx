@@ -111,7 +111,11 @@ export default function RootLayout() {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      async (event, session) => {
+        if (event === "PASSWORD_RECOVERY") {
+          router.replace("/(auth)/reset-password");
+          return;
+        }
         setAppState(await resolveAppState(session));
       }
     );
@@ -135,6 +139,8 @@ export default function RootLayout() {
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="index" />
             <Stack.Screen name="(auth)" />
+            <Stack.Screen name="(auth)/forgot-password" options={{ presentation: "card", animation: "slide_from_right" }} />
+            <Stack.Screen name="(auth)/reset-password" options={{ presentation: "card", animation: "slide_from_right" }} />
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="chat/[matchId]" options={{ presentation: "card", animation: "slide_from_right" }} />
             <Stack.Screen name="notifications" options={{ presentation: "card", animation: "slide_from_right" }} />
