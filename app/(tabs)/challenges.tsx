@@ -7,7 +7,8 @@
  * - Create challenge modal
  */
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ErrorState } from "../../components/ui/ErrorState";
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, Modal, ScrollView, TextInput,
@@ -74,6 +75,7 @@ export default function ChallengesScreen() {
 
   const [challenges,  setChallenges]  = useState<Challenge[]>([]);
   const [loading,     setLoading]     = useState(true);
+  const [error,       setError]       = useState(false);
   const [refreshing,  setRefreshing]  = useState(false);
   const [userId,      setUserId]      = useState<string | null>(null);
   const lastLoadRef = useRef(0);
@@ -97,7 +99,10 @@ export default function ChallengesScreen() {
 
   // ── Load ──────────────────────────────────────────────────────────────────
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (isRefresh = false) => {
+    try {
+    setError(false);
+    if (!isRefresh) setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     setUserId(user.id);
@@ -132,15 +137,30 @@ export default function ChallengesScreen() {
     );
 
     setChallenges(enriched);
-    setLoading(false);
     setRefreshing(false);
     lastLoadRef.current = Date.now();
+    } catch (err) {
+      console.error("[Challenges] load failed:", err);
+      if (isRefresh) {
+        Alert.alert("Error", "Could not refresh. Please try again.");
+      } else {
+        setError(true);
+      }
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useFocusEffect(useCallback(() => {
     const elapsed = Date.now() - lastLoadRef.current;
     if (elapsed > STALE_MS || challenges.length === 0) load();
   }, [load, challenges.length]));
+
+  useEffect(() => {
+    if (!loading) return;
+    const t = setTimeout(() => { setLoading(false); setError(true); }, 15_000);
+    return () => clearTimeout(t);
+  }, [loading]);
 
   // ── Detail ────────────────────────────────────────────────────────────────
 
@@ -278,7 +298,15 @@ export default function ChallengesScreen() {
   if (loading) {
     return (
       <SafeAreaView style={[s.container, { backgroundColor: c.bg }]}>
-        <ActivityIndicator color="#FF4500" style={{ marginTop: 60 }} />
+        <ActivityIndicator color={c.brand} style={{ marginTop: 60 }} />
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView style={[s.container, { backgroundColor: c.bg }]}>
+        <ErrorState onRetry={load} message="Could not load challenges." />
       </SafeAreaView>
     );
   }
@@ -306,7 +334,7 @@ export default function ChallengesScreen() {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => { setRefreshing(true); load(); }}
+            onRefresh={() => { setRefreshing(true); load(true); }}
             tintColor="#FF4500"
           />
         }

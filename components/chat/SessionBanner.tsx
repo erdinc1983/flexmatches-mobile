@@ -14,9 +14,19 @@
  */
 
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, Linking, Platform } from "react-native";
 import { useTheme, SPACE, FONT, RADIUS } from "../../lib/theme";
 import { Icon } from "../Icon";
+
+function openMaps(address: string) {
+  const encoded = encodeURIComponent(address);
+  const url = Platform.select({
+    ios:     `maps:0,0?q=${encoded}`,
+    android: `geo:0,0?q=${encoded}`,
+    default: `https://maps.google.com/?q=${encoded}`,
+  });
+  Linking.openURL(url).catch(() => {});
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type BuddySession = {
@@ -136,7 +146,9 @@ export function SessionBanner({ session, myId, partnerName, onAccept, onDecline,
               {session.sport} · {dateLabel}
             </Text>
             {session.location && (
-              <Text style={[s.sub, { color: sub }]}>📍 {session.location}</Text>
+              <TouchableOpacity onPress={() => openMaps(session.location!)} activeOpacity={0.6}>
+                <Text style={[s.sub, { color: sub, textDecorationLine: "underline" }]}>📍 {session.location}</Text>
+              </TouchableOpacity>
             )}
             <Text style={[s.sub, { color: sub }]}>
               Waiting for {partnerName} to confirm
@@ -179,7 +191,9 @@ export function SessionBanner({ session, myId, partnerName, onAccept, onDecline,
               {partnerName} proposed {session.sport} · {dateLabel}
             </Text>
             {session.location && (
-              <Text style={[s.sub, { color: c.textMuted }]}>📍 {session.location}</Text>
+              <TouchableOpacity onPress={() => openMaps(session.location!)} activeOpacity={0.6}>
+                <Text style={[s.sub, { color: c.textMuted, textDecorationLine: "underline" }]}>📍 {session.location}</Text>
+              </TouchableOpacity>
             )}
           </View>
         </View>
@@ -217,7 +231,9 @@ export function SessionBanner({ session, myId, partnerName, onAccept, onDecline,
               {session.sport} confirmed · {dateLabel}
             </Text>
             {session.location && (
-              <Text style={[s.sub, { color: txt }]}>📍 {session.location}</Text>
+              <TouchableOpacity onPress={() => openMaps(session.location!)} activeOpacity={0.6}>
+                <Text style={[s.sub, { color: txt, textDecorationLine: "underline" }]}>📍 {session.location}</Text>
+              </TouchableOpacity>
             )}
           </View>
         </View>

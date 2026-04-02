@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  ActivityIndicator, RefreshControl,
+  ActivityIndicator, RefreshControl, Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { supabase } from "../../lib/supabase";
+import { ErrorState } from "../../components/ui/ErrorState";
 import { Avatar } from "../../components/Avatar";
 import { useTheme, SPACE, FONT, RADIUS } from "../../lib/theme";
 import { Icon } from "../../components/Icon";
@@ -52,12 +53,21 @@ export default function LeaderboardScreen() {
   const [leaders, setLeaders] = useState<Leader[]>([]);
   const [tab, setTab] = useState<"global" | "friends">("global");
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => { load(); }, [tab]);
 
-  async function load() {
-    setLoading(true);
+  useEffect(() => {
+    if (!loading) return;
+    const t = setTimeout(() => { setLoading(false); setError(true); }, 15_000);
+    return () => clearTimeout(t);
+  }, [loading]);
+
+  async function load(isRefresh = false) {
+    try {
+    setError(false);
+    if (!isRefresh) setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
@@ -98,12 +108,21 @@ export default function LeaderboardScreen() {
       const rank = list.findIndex((u) => u.id === user.id);
       setMyRank(rank >= 0 ? rank + 1 : null);
     }
-    setLoading(false);
+    } catch (err) {
+      console.error("[Leaderboard] load failed:", err);
+      if (isRefresh) {
+        Alert.alert("Error", "Could not refresh. Please try again.");
+      } else {
+        setError(true);
+      }
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function onRefresh() {
     setRefreshing(true);
-    await load();
+    await load(true);
     setRefreshing(false);
   }
 
@@ -119,6 +138,18 @@ export default function LeaderboardScreen() {
     if (i === 2) return "🥉";
     return `#${i + 1}`;
   };
+
+  if (loading) return (
+    <SafeAreaView style={[s.flex, { backgroundColor: c.bg }]}>
+      <ActivityIndicator color={c.brand} size="large" style={{ flex: 1 }} />
+    </SafeAreaView>
+  );
+
+  if (error) return (
+    <SafeAreaView style={[s.flex, { backgroundColor: c.bg }]}>
+      <ErrorState onRetry={load} message="Could not load leaderboard." />
+    </SafeAreaView>
+  );
 
   return (
     <SafeAreaView style={[s.flex, { backgroundColor: c.bg }]}>

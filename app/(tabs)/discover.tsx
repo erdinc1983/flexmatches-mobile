@@ -18,9 +18,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useFocusEffect } from "expo-router";
+import { ErrorState } from "../../components/ui/ErrorState";
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  ActivityIndicator, RefreshControl, ScrollView, Modal,
+  ActivityIndicator, RefreshControl, ScrollView, Modal, Alert,
   TouchableWithoutFeedback, TextInput,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -270,6 +271,14 @@ export default function DiscoverScreen() {
   const [statuses,     setStatuses]     = useState<Record<string, RequestStatus>>({});
   const [matchIds,     setMatchIds]     = useState<Record<string, string>>({});
   const [loading,      setLoading]      = useState(true);
+  const [error,        setError]        = useState(false);
+
+  useEffect(() => {
+    if (!loading) return;
+    const t = setTimeout(() => { setLoading(false); setError(true); }, 15_000);
+    return () => clearTimeout(t);
+  }, [loading]);
+
   const [refreshing,   setRefreshing]   = useState(false);
   const [filters,      setFilters]      = useState<Filters>(EMPTY_FILTERS);
   const [viewMode,     setViewMode]     = useState<"swipe" | "list" | "map">("list");
@@ -285,7 +294,10 @@ export default function DiscoverScreen() {
   const currentUserIdRef = useRef<string>("");
 
   // ── Data loading ────────────────────────────────────────────────────────────
-  const load = useCallback(async () => {
+  const load = useCallback(async (isRefresh = false) => {
+    try {
+    setError(false);
+    if (!isRefresh) setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     currentUserIdRef.current = user.id;
@@ -406,7 +418,16 @@ export default function DiscoverScreen() {
 
     setUsers(scored);
     setStatuses(initialStatuses);
-    setLoading(false);
+    } catch (err) {
+      console.error("[Discover] load failed:", err);
+      if (isRefresh) {
+        Alert.alert("Error", "Could not refresh. Please try again.");
+      } else {
+        setError(true);
+      }
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   // Load once on mount
@@ -420,7 +441,7 @@ export default function DiscoverScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await load();
+    await load(true);
     setRefreshing(false);
   }, [load]);
 
@@ -527,6 +548,14 @@ export default function DiscoverScreen() {
     return (
       <SafeAreaView style={[s.root, { backgroundColor: c.bg }]}>
         <DiscoverSkeleton />
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView style={[s.root, { backgroundColor: c.bg }]}>
+        <ErrorState onRetry={load} message="Could not load profiles." />
       </SafeAreaView>
     );
   }

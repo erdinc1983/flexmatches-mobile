@@ -5,6 +5,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "../../lib/supabase";
+import { ErrorState } from "../../components/ui/ErrorState";
 import { useTheme, SPACE, FONT, RADIUS, PALETTE } from "../../lib/theme";
 import { Icon } from "../../components/Icon";
 
@@ -35,6 +36,7 @@ export default function GoalsScreen() {
 
   const [goals, setGoals] = useState<Goal[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
@@ -48,26 +50,44 @@ export default function GoalsScreen() {
     deadline: "",
   });
 
-  const load = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    setUserId(user.id);
+  const load = useCallback(async (isRefresh = false) => {
+    try {
+      setError(false);
+      if (!isRefresh) setLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      setUserId(user.id);
 
-    const { data } = await supabase
-      .from("goals")
-      .select("id, title, goal_type, target_value, current_value, unit, deadline, completed, created_at")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false });
+      const { data } = await supabase
+        .from("goals")
+        .select("id, title, goal_type, target_value, current_value, unit, deadline, completed, created_at")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
 
-    setGoals(data ?? []);
-    setLoading(false);
+      setGoals(data ?? []);
+    } catch (err) {
+      console.error("[Goals] load failed:", err);
+      if (isRefresh) {
+        Alert.alert("Error", "Could not refresh. Please try again.");
+      } else {
+        setError(true);
+      }
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => {
+    if (!loading) return;
+    const t = setTimeout(() => { setLoading(false); setError(true); }, 15_000);
+    return () => clearTimeout(t);
+  }, [loading]);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await load();
+    await load(true);
     setRefreshing(false);
   }, [load]);
 
@@ -134,6 +154,12 @@ export default function GoalsScreen() {
   if (loading) return (
     <SafeAreaView style={[s.flex, { backgroundColor: c.bg }]}>
       <ActivityIndicator color={c.brand} size="large" style={{ flex: 1 }} />
+    </SafeAreaView>
+  );
+
+  if (error) return (
+    <SafeAreaView style={[s.flex, { backgroundColor: c.bg }]}>
+      <ErrorState onRetry={load} message="Could not load your goals." />
     </SafeAreaView>
   );
 

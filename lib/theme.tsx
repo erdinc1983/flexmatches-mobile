@@ -309,11 +309,9 @@ const ThemeContext = createContext<ThemeContextValue>({
 const THEME_KEY = "flexmatches_theme_pref"; // "light" | "dark" | "system"
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const systemScheme = Appearance.getColorScheme();
-  const [scheme, setSchemeState] = useState<"light" | "dark">(
-    systemScheme === "light" ? "light" : "dark"
-  );
-  const userPref = useRef<"light" | "dark" | "system">("system");
+  // Default to light — AsyncStorage overrides once loaded
+  const [scheme, setSchemeState] = useState<"light" | "dark">("light");
+  const userPref = useRef<"light" | "dark" | "system">("light");
 
   // Load saved preference on mount
   useEffect(() => {
@@ -322,7 +320,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         userPref.current = saved;
         setSchemeState(saved);
       } else {
-        userPref.current = "system";
+        // No saved preference — default to light
+        userPref.current = "light";
+        setSchemeState("light");
       }
     });
   }, []);

@@ -27,6 +27,7 @@ import { notifyUser } from "../../lib/push";
 import { scheduleSessionReminder } from "../../lib/notifications";
 import { MapLocationPicker } from "../../components/MapLocationPicker";
 import { useTheme, SPACE, FONT, RADIUS } from "../../lib/theme";
+import { useNotifications } from "../../lib/notificationContext";
 import { Icon } from "../../components/Icon";
 import { Avatar } from "../../components/Avatar";
 import { SessionBanner } from "../../components/chat/SessionBanner";
@@ -182,6 +183,7 @@ export default function ChatScreen() {
   const { matchId }       = useLocalSearchParams<{ matchId: string }>();
   const { theme, isDark } = useTheme();
   const c = theme.colors;
+  const { refresh: refreshNotifs } = useNotifications();
 
   const [messages,        setMessages]        = useState<Message[]>([]);
   const [userId,          setUserId]          = useState<string | null>(null);
@@ -304,7 +306,8 @@ export default function ChatScreen() {
 
     supabase.from("messages")
       .update({ read_at: new Date().toISOString() })
-      .eq("match_id", matchId).neq("sender_id", user.id).is("read_at", null).then(() => {});
+      .eq("match_id", matchId).neq("sender_id", user.id).is("read_at", null)
+      .then(() => refreshNotifs());
 
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 100);
     loadSession();
@@ -545,23 +548,31 @@ export default function ChatScreen() {
     const trimmed = text.trim();
     if (!trimmed || !userId || sending) return;
     setSending(true);
-    setText("");
-    await supabase.from("messages").insert({
-      match_id: matchId, sender_id: userId, content: trimmed, read_at: null,
-    });
-    // Notify the other user (push + in-app)
-    if (other?.id) {
-      const { data: me } = await supabase.from("users").select("full_name, username").eq("id", userId).single();
-      notifyUser(other.id, {
-        type: "message",
-        title: me?.full_name ?? me?.username ?? "New message",
-        body: trimmed.length > 80 ? trimmed.slice(0, 77) + "…" : trimmed,
-        relatedId: matchId,
-        data: { type: "message", matchId },
+    try {
+      const { error: insertError } = await supabase.from("messages").insert({
+        match_id: matchId, sender_id: userId, content: trimmed, read_at: null,
       });
+      if (insertError) throw insertError;
+      setText("");
+      // Notify the other user (push + in-app)
+      if (other?.id) {
+        const { data: me } = await supabase.from("users").select("full_name, username").eq("id", userId).single();
+        notifyUser(other.id, {
+          type: "message",
+          title: me?.full_name ?? me?.username ?? "New message",
+          body: trimmed.length > 80 ? trimmed.slice(0, 77) + "…" : trimmed,
+          relatedId: matchId,
+          data: { type: "message", matchId },
+        }).catch((e: any) => console.warn("[sendMessage] notifyUser threw:", e));
+      }
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 80);
+    } catch (err) {
+      console.error("[sendMessage] failed:", err);
+      Alert.alert("Send Failed", "Your message could not be sent. Please try again.");
+      // text is preserved — user can retry
+    } finally {
+      setSending(false);
     }
-    setSending(false);
-    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 80);
   }
 
   // ── Formatting ────────────────────────────────────────────────────────────

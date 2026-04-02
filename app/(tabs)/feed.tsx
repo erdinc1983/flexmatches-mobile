@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  ActivityIndicator, RefreshControl, Modal, TextInput, ScrollView,
+  ActivityIndicator, RefreshControl, Modal, TextInput, ScrollView, Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { supabase } from "../../lib/supabase";
+import { ErrorState } from "../../components/ui/ErrorState";
 import { Avatar } from "../../components/Avatar";
 import { useTheme, SPACE, FONT, RADIUS, PALETTE, BRAND } from "../../lib/theme";
 import { Icon } from "../../components/Icon";
@@ -50,6 +51,7 @@ export default function FeedScreen() {
   const [me, setMe] = useState<string | null>(null);
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [posting, setPosting] = useState(false);
   const [showCompose, setShowCompose] = useState(false);
@@ -57,7 +59,10 @@ export default function FeedScreen() {
   const [composeContent, setComposeContent] = useState("");
   const [reactingId, setReactingId] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (isRefresh = false) => {
+    try {
+    setError(false);
+    if (!isRefresh) setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     setMe(user.id);
@@ -105,14 +110,29 @@ export default function FeedScreen() {
       author: authorMap[p.user_id] ?? { full_name: null, username: "?", avatar_url: null, current_streak: 0 },
       myReaction: reactionMap[p.id] ?? null,
     })));
-    setLoading(false);
+    } catch (err) {
+      console.error("[Feed] load failed:", err);
+      if (isRefresh) {
+        Alert.alert("Error", "Could not refresh. Please try again.");
+      } else {
+        setError(true);
+      }
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => {
+    if (!loading) return;
+    const t = setTimeout(() => { setLoading(false); setError(true); }, 15_000);
+    return () => clearTimeout(t);
+  }, [loading]);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await load();
+    await load(true);
     setRefreshing(false);
   }, [load]);
 
@@ -231,6 +251,8 @@ export default function FeedScreen() {
 
       {loading ? (
         <ActivityIndicator color={c.brand} size="large" style={{ flex: 1 }} />
+      ) : error ? (
+        <ErrorState onRetry={load} message="Could not load the feed." />
       ) : (
         <FlatList
           data={posts}

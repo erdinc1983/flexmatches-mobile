@@ -9,6 +9,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { ErrorState } from "../../components/ui/ErrorState";
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   ActivityIndicator, TextInput, Alert, RefreshControl, Share,
@@ -153,6 +154,7 @@ export default function ProfileScreen() {
 
   const [profile,           setProfile]           = useState<Profile | null>(null);
   const [loading,           setLoading]           = useState(true);
+  const [error,             setError]             = useState(false);
   const [editing,           setEditing]           = useState(false);
   const [saving,            setSaving]            = useState(false);
   const [uploadingPhoto,    setUploadingPhoto]    = useState(false);
@@ -166,7 +168,10 @@ export default function ProfileScreen() {
   const [userPoints,        setUserPoints]        = useState(0);
 
   // ── Data ────────────────────────────────────────────────────────────────────
-  const fetchProfile = useCallback(async () => {
+  const fetchProfile = useCallback(async (isRefresh = false) => {
+    try {
+    setError(false);
+    if (!isRefresh) setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     setUserId(user.id);
@@ -224,15 +229,29 @@ export default function ProfileScreen() {
     const pts = await calcUserPoints(user.id);
     setUserPoints(pts);
     setUserTier(calcTier(pts));
-
-    setLoading(false);
+    } catch (err) {
+      console.error("[Profile] fetchProfile failed:", err);
+      if (isRefresh) {
+        Alert.alert("Error", "Could not refresh. Please try again.");
+      } else {
+        setError(true);
+      }
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { fetchProfile(); }, [fetchProfile]);
 
+  useEffect(() => {
+    if (!loading) return;
+    const t = setTimeout(() => { setLoading(false); setError(true); }, 15_000);
+    return () => clearTimeout(t);
+  }, [loading]);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await fetchProfile();
+    await fetchProfile(true);
     setRefreshing(false);
   }, [fetchProfile]);
 
@@ -364,6 +383,14 @@ export default function ProfileScreen() {
     return (
       <SafeAreaView style={[s.root, { backgroundColor: c.bg }]}>
         <ProfileSkeleton />
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView style={[s.root, { backgroundColor: c.bg }]}>
+        <ErrorState onRetry={fetchProfile} message="Could not load your profile." />
       </SafeAreaView>
     );
   }

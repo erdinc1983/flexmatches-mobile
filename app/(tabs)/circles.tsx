@@ -8,6 +8,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ErrorState } from "../../components/ui/ErrorState";
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, TextInput, Modal, ScrollView,
@@ -163,6 +164,7 @@ export default function CirclesScreen() {
 
   const [communities,    setCommunities]    = useState<Community[]>([]);
   const [loading,        setLoading]        = useState(true);
+  const [error,          setError]          = useState(false);
   const [refreshing,     setRefreshing]     = useState(false);
   const [userId,         setUserId]         = useState<string | null>(null);
   const [search,         setSearch]         = useState("");
@@ -194,7 +196,10 @@ export default function CirclesScreen() {
   const [createStep,     setCreateStep]     = useState<1|2|3|4>(1);
 
   // ── Data ──────────────────────────────────────────────────────────────────
-  const load = useCallback(async () => {
+  const load = useCallback(async (isRefresh = false) => {
+    try {
+    setError(false);
+    if (!isRefresh) setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     setUserId(user.id);
@@ -231,8 +236,17 @@ export default function CirclesScreen() {
       member_count: countMap[cc.id] ?? 0,
       is_member:    joinedIds.has(cc.id),
     })));
-    setLoading(false);
     lastLoadRef.current = Date.now();
+    } catch (err) {
+      console.error("[Circles] load failed:", err);
+      if (isRefresh) {
+        Alert.alert("Error", "Could not refresh. Please try again.");
+      } else {
+        setError(true);
+      }
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useFocusEffect(useCallback(() => {
@@ -240,9 +254,15 @@ export default function CirclesScreen() {
     if (elapsed > STALE_MS || communities.length === 0) load();
   }, [load, communities.length]));
 
+  useEffect(() => {
+    if (!loading) return;
+    const t = setTimeout(() => { setLoading(false); setError(true); }, 15_000);
+    return () => clearTimeout(t);
+  }, [loading]);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await load();
+    await load(true);
     setRefreshing(false);
   }, [load]);
 
@@ -348,6 +368,14 @@ export default function CirclesScreen() {
     return (
       <SafeAreaView style={[s.root, { backgroundColor: c.bg }]}>
         <CirclesSkeleton />
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView style={[s.root, { backgroundColor: c.bg }]}>
+        <ErrorState onRetry={load} message="Could not load circles." />
       </SafeAreaView>
     );
   }

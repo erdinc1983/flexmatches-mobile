@@ -16,6 +16,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { supabase } from "../lib/supabase";
+import { ErrorState } from "../components/ui/ErrorState";
 import { useTheme, SPACE, FONT, RADIUS, PALETTE } from "../lib/theme";
 import { useNotifications } from "../lib/notificationContext";
 import { Icon } from "../components/Icon";
@@ -52,11 +53,14 @@ const TYPE_META: Record<string, { emoji: string; color: string; category: Catego
   discover_suggestion:  { emoji: "💡", color: "#6366F1", category: "matches" },
 
   // Messages
+  message:              { emoji: "💬", color: "#3B82F6", category: "messages" },
   new_message:          { emoji: "💬", color: "#3B82F6", category: "messages" },
 
   // Sessions
   session_proposed:     { emoji: "📅", color: "#06B6D4", category: "sessions" },
+  session_accepted:     { emoji: "🤜", color: "#22C55E", category: "sessions" },
   session_confirmed:    { emoji: "🤜", color: "#22C55E", category: "sessions" },
+  session_declined:     { emoji: "🚫", color: "#EF4444", category: "sessions" },
   session_cancelled:    { emoji: "🚫", color: "#EF4444", category: "sessions" },
   session_reminder:     { emoji: "⏰", color: "#F59E0B", category: "sessions" },
   workout_invite:       { emoji: "💪", color: "#06B6D4", category: "sessions" },
@@ -113,10 +117,10 @@ function sectionLabel(iso: string): string {
 
 function deepLink(notif: Notif) {
   const t = notif.type ?? "";
-  if (t === "new_message"       && notif.related_id) return router.push(`/chat/${notif.related_id}` as any);
+  if ((t === "message" || t === "new_message") && notif.related_id) return router.push(`/chat/${notif.related_id}` as any);
   if (t === "match_request"     || t === "match_accepted" || t === "match_rejected" || t === "discover_suggestion")
     return router.push("/(tabs)/discover" as any);
-  if (t === "session_proposed"  || t === "session_confirmed" || t === "session_reminder" || t === "workout_invite")
+  if (t === "session_proposed"  || t === "session_accepted" || t === "session_confirmed" || t === "session_declined" || t === "session_reminder" || t === "workout_invite")
     return router.push("/(tabs)/home" as any);
   if (t === "circle_invite"     || t === "circle_joined" || t === "circle_new_member" || t === "circle_event")
     return router.push("/(tabs)/circles" as any);
@@ -142,25 +146,38 @@ export default function NotificationsScreen() {
 
   const [notifs,     setNotifs]     = useState<Notif[]>([]);
   const [loading,    setLoading]    = useState(true);
+  const [error,      setError]      = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [userId,     setUserId]     = useState<string | null>(null);
   const [tab,        setTab]        = useState<Category>("all");
   const [marking,    setMarking]    = useState(false);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
-  const load = useCallback(async (uid?: string) => {
-    const id = uid ?? userId;
-    if (!id) return;
-    const { data, error } = await supabase
-      .from("notifications")
-      .select("id, type, title, body, message, read, created_at, related_id, url")
-      .eq("user_id", id)
-      .order("created_at", { ascending: false })
-      .limit(100);
-    if (error) console.warn("[Notifications] load error:", error.message);
-    console.log("[Notifications] loaded", (data ?? []).length, "rows");
-    setNotifs(data ?? []);
-    setLoading(false);
+  const load = useCallback(async (uid?: string, isRefresh = false) => {
+    try {
+      setError(false);
+      if (!isRefresh) setLoading(true);
+      const id = uid ?? userId;
+      if (!id) return;
+      const { data, error: queryError } = await supabase
+        .from("notifications")
+        .select("id, type, title, body, message, read, created_at, related_id, url")
+        .eq("user_id", id)
+        .order("created_at", { ascending: false })
+        .limit(100);
+      if (queryError) throw queryError;
+      console.log("[Notifications] loaded", (data ?? []).length, "rows");
+      setNotifs(data ?? []);
+    } catch (err) {
+      console.error("[Notifications] load failed:", err);
+      if (isRefresh) {
+        Alert.alert("Error", "Could not refresh. Please try again.");
+      } else {
+        setError(true);
+      }
+    } finally {
+      setLoading(false);
+    }
   }, [userId]);
 
   useEffect(() => {
@@ -179,9 +196,15 @@ export default function NotificationsScreen() {
     return () => { channelRef.current?.unsubscribe(); };
   }, [load, refreshBadge]);
 
+  useEffect(() => {
+    if (!loading) return;
+    const t = setTimeout(() => { setLoading(false); setError(true); }, 15_000);
+    return () => clearTimeout(t);
+  }, [loading]);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await load();
+    await load(undefined, true);
     setRefreshing(false);
   }, [load]);
 
@@ -254,6 +277,14 @@ export default function NotificationsScreen() {
     return (
       <SafeAreaView style={[s.root, { backgroundColor: c.bg }]}>
         <ActivityIndicator color={c.brand} size="large" style={{ flex: 1 }} />
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView style={[s.root, { backgroundColor: c.bg }]}>
+        <ErrorState onRetry={() => load()} message="Could not load notifications." />
       </SafeAreaView>
     );
   }

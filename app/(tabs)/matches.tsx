@@ -9,6 +9,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { ErrorState } from "../../components/ui/ErrorState";
 import {
   View, Text, StyleSheet, TouchableOpacity,
   ActivityIndicator, FlatList, Alert, Modal, TextInput, ScrollView, RefreshControl,
@@ -64,6 +65,14 @@ export default function MatchesScreen() {
   const [accepted,        setAccepted]        = useState<Match[]>([]);
   const [buddySessions,   setBuddySessions]   = useState<BuddySession[]>([]);
   const [loading,         setLoading]         = useState(true);
+  const [error,           setError]           = useState(false);
+
+  useEffect(() => {
+    if (!loading) return;
+    const t = setTimeout(() => { setLoading(false); setError(true); }, 15_000);
+    return () => clearTimeout(t);
+  }, [loading]);
+
   const [refreshing,      setRefreshing]      = useState(false);
   const [myId,            setMyId]            = useState<string | null>(null);
 
@@ -78,7 +87,10 @@ export default function MatchesScreen() {
   const [sendingSession,  setSendingSession]  = useState(false);
   const [sheetUser,       setSheetUser]       = useState<DiscoverUser | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (isRefresh = false) => {
+    try {
+    setError(false);
+    if (!isRefresh) setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     setMyId(user.id);
@@ -146,8 +158,16 @@ export default function MatchesScreen() {
       });
       setSessionCounts(counts);
     }
-
-    setLoading(false);
+    } catch (err) {
+      console.error("[Matches] load failed:", err);
+      if (isRefresh) {
+        Alert.alert("Error", "Could not refresh. Please try again.");
+      } else {
+        setError(true);
+      }
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   async function loadBuddySessions(userId: string) {
@@ -164,7 +184,7 @@ export default function MatchesScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await load();
+    await load(true);
     setRefreshing(false);
   }, [load]);
 
@@ -247,6 +267,14 @@ export default function MatchesScreen() {
     return (
       <SafeAreaView style={[s.root, { backgroundColor: c.bg }]}>
         <ActivityIndicator color={c.brand} size="large" style={{ flex: 1 }} />
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView style={[s.root, { backgroundColor: c.bg }]}>
+        <ErrorState onRetry={load} message="Could not load matches." />
       </SafeAreaView>
     );
   }

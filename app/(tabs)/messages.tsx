@@ -13,15 +13,16 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ErrorState } from "../../components/ui/ErrorState";
 import {
   View, Text, StyleSheet, FlatList,
-  ActivityIndicator, RefreshControl, Vibration,
+  ActivityIndicator, RefreshControl, Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { router, useFocusEffect } from "expo-router";
 import { supabase } from "../../lib/supabase";
-import { notifyNewMessage, requestNotificationPermission } from "../../lib/notifications";
+import { requestNotificationPermission } from "../../lib/notifications";
 import { useTheme, SPACE, FONT } from "../../lib/theme";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { MessagesSkeleton } from "../../components/ui/Skeleton";
@@ -49,6 +50,14 @@ export default function MessagesScreen() {
   const [myId,          setMyId]          = useState<string | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading,       setLoading]       = useState(true);
+  const [error,         setError]         = useState(false);
+
+  useEffect(() => {
+    if (!loading) return;
+    const t = setTimeout(() => { setLoading(false); setError(true); }, 15_000);
+    return () => clearTimeout(t);
+  }, [loading]);
+
   const [refreshing,    setRefreshing]    = useState(false);
   const [saved,         setSaved]         = useState<Set<string>>(new Set());
 
@@ -57,7 +66,10 @@ export default function MessagesScreen() {
   const lastLoadRef       = useRef(0);
   const STALE_MS          = 15_000; // refetch after 15s
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (isRefresh = false) => {
+    try {
+    setError(false);
+    if (!isRefresh) setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     setMyId(user.id);
@@ -146,8 +158,17 @@ export default function MessagesScreen() {
 
     setConversations(convos);
     conversationsRef.current = convos;
-    setLoading(false);
     lastLoadRef.current = Date.now();
+    } catch (err) {
+      console.error("[Messages] load failed:", err);
+      if (isRefresh) {
+        Alert.alert("Error", "Could not refresh. Please try again.");
+      } else {
+        setError(true);
+      }
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useFocusEffect(useCallback(() => {
@@ -165,11 +186,8 @@ export default function MessagesScreen() {
         const msg = payload.new as { sender_id: string; match_id: string; content: string; created_at: string };
         const isIncoming = myIdRef.current && msg.sender_id !== myIdRef.current;
 
-        if (isIncoming) {
-          Vibration.vibrate(300);
-          const convo = conversationsRef.current.find((c) => c.matchId === msg.match_id);
-          notifyNewMessage(convo?.name ?? "New message", msg.content);
-        }
+        // Sound + local notification is handled by NotificationContext (single source)
+        // This handler only updates the conversation list UI
 
         const current = conversationsRef.current;
         if (current.length > 0 && current.some((c) => c.matchId === msg.match_id)) {
@@ -203,7 +221,7 @@ export default function MessagesScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await load();
+    await load(true);
     setRefreshing(false);
   }, [load]);
 
@@ -236,6 +254,14 @@ export default function MessagesScreen() {
     return (
       <SafeAreaView style={[s.root, { backgroundColor: c.bg }]}>
         <MessagesSkeleton />
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView style={[s.root, { backgroundColor: c.bg }]}>
+        <ErrorState onRetry={load} message="Could not load conversations." />
       </SafeAreaView>
     );
   }

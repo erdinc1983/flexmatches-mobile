@@ -13,6 +13,8 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
+// FM-101: ErrorState for load() failure recovery
+import { ErrorState } from "../../components/ui/ErrorState";
 import { useFocusEffect } from "expo-router";
 import { router } from "expo-router";
 import {
@@ -22,6 +24,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "../../lib/supabase";
+import { useNotifications } from "../../lib/notificationContext";
 import { notifyMatchAccepted } from "../../lib/notifications";
 import { notifyUser } from "../../lib/push";
 import { useTheme, SPACE, FONT, RADIUS, PALETTE, SHADOW, TYPE } from "../../lib/theme";
@@ -80,6 +83,7 @@ type NewCircleMember = {
 export default function HomeScreen() {
   const { theme } = useTheme();
   const c = theme.colors;
+  const { unreadMessages: unreadCount, unreadCount: notifUnread, refresh: refreshNotifs } = useNotifications();
 
   const [profile,           setProfile]           = useState<HomeProfile | null>(null);
   const [pendingRequests,   setPendingRequests]   = useState<PendingRequest[]>([]);
@@ -88,11 +92,19 @@ export default function HomeScreen() {
   const [confirmedSessions, setConfirmedSessions] = useState<SessionInfo[]>([]);
   const [pendingSessions,   setPendingSessions]   = useState<SessionInfo[]>([]);
   const [upcomingSessions,  setUpcomingSessions]  = useState<SessionInfo[]>([]);
-  const [unreadCount,       setUnreadCount]       = useState(0);
+  // unreadCount comes from useNotifications() context (realtime)
   const [activePartners,    setActivePartners]    = useState<ActivePartner[]>([]);
   const [profileMissing,    setProfileMissing]    = useState<string[]>([]);
   const [nudgeDismissed,    setNudgeDismissed]    = useState(false);
   const [loading,           setLoading]           = useState(true);
+  const [error,             setError]             = useState(false);
+
+  useEffect(() => {
+    if (!loading) return;
+    const t = setTimeout(() => { setLoading(false); setError(true); }, 15_000);
+    return () => clearTimeout(t);
+  }, [loading]);
+
   const [refreshing,        setRefreshing]        = useState(false);
   const [gymToggling,       setGymToggling]       = useState(false);
   const [sheetUser,         setSheetUser]         = useState<DiscoverUser | null>(null);
@@ -118,7 +130,10 @@ export default function HomeScreen() {
   }, []);
 
   // ── Load ─────────────────────────────────────────────────────────────────────
-  const load = useCallback(async () => {
+  const load = useCallback(async (isRefresh = false) => {
+    try {
+    setError(false);
+    if (!isRefresh) setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     const uid = user.id;
@@ -195,21 +210,7 @@ export default function HomeScreen() {
       sessionPartnerMap = new Map((partnerRows ?? []).map((u: any) => [u.id, u]));
     }
 
-    // Unread messages — filter by THIS user's accepted match IDs only
-    let unread = 0;
-    try {
-      const myMatchIds = (acceptedMatches ?? []).map((m: any) => m.id);
-      if (myMatchIds.length > 0) {
-        const { count } = await supabase
-          .from("messages")
-          .select("id", { count: "exact", head: true })
-          .in("match_id", myMatchIds)
-          .neq("sender_id", uid)
-          .is("read_at", null);
-        unread = count ?? 0;
-      }
-    } catch { /* table may not have read_at — safe to ignore */ }
-    setUnreadCount(unread);
+    // Unread count comes from useNotifications() context (realtime)
 
     // Auto-expire gym status after 4 hours
     let atGym = profileData?.is_at_gym ?? false;
@@ -421,23 +422,34 @@ export default function HomeScreen() {
     }));
     setNewCircles(matchingNew);
 
-    setLoading(false);
     lastLoadRef.current = Date.now();
+    } catch (err) {
+      console.error("[Home] load failed:", err);
+      if (isRefresh) {
+        Alert.alert("Error", "Could not refresh. Please try again.");
+      } else {
+        setError(true);
+      }
+    } finally {
+      setLoading(false);
+    }
   }, [today]);
 
   useFocusEffect(useCallback(() => {
-    // Skip re-fetch if data was loaded recently (< 30s ago)
+    // Always refresh notification counts (instant — from context)
+    refreshNotifs();
+    // Skip heavy re-fetch if data was loaded recently (< 30s ago)
     const elapsed = Date.now() - lastLoadRef.current;
     if (elapsed > STALE_MS || !profile) {
       load();
     }
     // Close any open modal when the tab loses focus
     return () => { setSelectedSession(null); };
-  }, [load, profile]));
+  }, [load, profile, refreshNotifs]));
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await load();
+    await load(true);
     setRefreshing(false);
   }, [load]);
 
@@ -648,6 +660,14 @@ export default function HomeScreen() {
     );
   }
 
+  if (error) {
+    return (
+      <SafeAreaView style={[s.root, { backgroundColor: c.bg }]}>
+        <ErrorState onRetry={load} message="Could not load your home feed." />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={[s.root, { backgroundColor: c.bg }]}>
       <ScrollView
@@ -659,7 +679,7 @@ export default function HomeScreen() {
         <HomeHeader
           name={name}
           avatarUrl={profile?.avatar_url}
-          unreadCount={unreadCount}
+          unreadCount={notifUnread}
         />
 
         <MomentumStrip
