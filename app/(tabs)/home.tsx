@@ -19,8 +19,10 @@ import { useFocusEffect } from "expo-router";
 import { router } from "expo-router";
 import {
   ScrollView, ActivityIndicator, Alert, RefreshControl,
-  StyleSheet, View, Text, TouchableOpacity, Pressable,
+  StyleSheet, View, Text, TouchableOpacity, Pressable, Modal,
 } from "react-native";
+import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "../../lib/supabase";
@@ -73,6 +75,7 @@ type NewCircle = {
   event_date:   string | null;
   event_time:   string | null;
   member_count: number;
+  created_by:   string | null;
 };
 
 type NewCircleMember = {
@@ -396,7 +399,7 @@ export default function HomeScreen() {
         let score     = shared.length * 30;
         if (myLevel && u.fitness_level === myLevel)                   score += 20;
         if (myCity && u.city?.toLowerCase() === myCity.toLowerCase()) score += 25;
-        const reasons = buildMatchReasons(u, profileData ?? {});
+        const reasons = buildMatchReasons(u, { ...profileData, sports: profileData?.sports ?? undefined });
         return { ...u, shared_sports: shared, reasons, score };
       })
       .sort((a: any, b: any) => b.score - a.score)
@@ -419,7 +422,7 @@ export default function HomeScreen() {
     const userSports: string[] = profileData?.sports ?? [];
     const { data: newCircleData } = await supabase
       .from("communities")
-      .select("id, name, avatar_emoji, sport, city, field, description, max_members, event_date, event_time, created_at")
+      .select("id, name, avatar_emoji, sport, city, field, description, max_members, event_date, event_time, created_at, created_by")
       .gte("created_at", sevenDaysAgo)
       .order("created_at", { ascending: false });
 
@@ -446,6 +449,7 @@ export default function HomeScreen() {
       event_date:   cc.event_date ?? null,
       event_time:   cc.event_time ?? null,
       member_count: 0,
+      created_by:   cc.created_by ?? null,
     }));
     setNewCircles(matchingNew);
 
@@ -622,9 +626,11 @@ export default function HomeScreen() {
       training_intent: data.training_intent ?? null,
       lat:             data.lat ?? null,
       lng:             data.lng ?? null,
-      matchScore:      0,
-      reasons:         suggested.reasons,
-      isNew:           false,
+      matchScore:          0,
+      reasons:             suggested.reasons,
+      isNew:               false,
+      sessions_completed:  0,
+      reliability_score:   0,
     });
   }
 
@@ -828,83 +834,21 @@ export default function HomeScreen() {
 
       {/* ── New Circle detail popup ──────────────────────────────────── */}
       {selectedNewCircle && (
-        <TouchableOpacity
-          style={nc.backdrop}
-          activeOpacity={1}
-          onPress={() => setSelectedNewCircle(null)}
-        >
-          <TouchableOpacity style={[nc.card, { backgroundColor: c.bgCard }]} activeOpacity={1} onPress={(e) => e.stopPropagation()}>
-            <TouchableOpacity style={nc.closeBtn} onPress={() => setSelectedNewCircle(null)} hitSlop={10}>
-              <Icon name="close" size={20} color={c.textMuted} />
-            </TouchableOpacity>
-
-            <View style={nc.top}>
-              <View style={[nc.emoji, { backgroundColor: c.bgCardAlt }]}>
-                <Text style={{ fontSize: 36 }}>{selectedNewCircle.avatar_emoji}</Text>
-              </View>
-              <Text style={[nc.name, { color: c.text }]}>{selectedNewCircle.name}</Text>
-              <View style={nc.chips}>
-                {selectedNewCircle.sport && (
-                  <View style={[nc.chip, { backgroundColor: c.bgCardAlt, borderColor: c.borderMedium }]}>
-                    <Text style={[nc.chipText, { color: c.textMuted }]}>{selectedNewCircle.sport}</Text>
-                  </View>
-                )}
-                {selectedNewCircle.city && (
-                  <View style={[nc.chip, { backgroundColor: c.bgCardAlt, borderColor: c.borderMedium }]}>
-                    <Icon name="location" size={10} color={c.textMuted} />
-                    <Text style={[nc.chipText, { color: c.textMuted }]}>{selectedNewCircle.city}</Text>
-                  </View>
-                )}
-              </View>
-              {selectedNewCircle.event_date && (
-                <View style={[nc.field, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}>
-                  <Text style={{ fontSize: 14 }}>📅</Text>
-                  <Text style={[nc.fieldText, { color: c.textSecondary }]}>
-                    {formatNewCircleDate(selectedNewCircle.event_date)}
-                    {selectedNewCircle.event_time ? `  ·  ${selectedNewCircle.event_time}` : ""}
-                  </Text>
-                </View>
-              )}
-              {selectedNewCircle.field && (
-                <View style={[nc.field, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}>
-                  <Text style={{ fontSize: 14 }}>📍</Text>
-                  <Text style={[nc.fieldText, { color: c.textSecondary }]} numberOfLines={2}>{selectedNewCircle.field}</Text>
-                </View>
-              )}
-              {selectedNewCircle.description && (
-                <Text style={[nc.desc, { color: c.textMuted }]}>{selectedNewCircle.description}</Text>
-              )}
-            </View>
-
-            <View style={[nc.divider, { backgroundColor: c.border }]} />
-            <Text style={[nc.memberHeader, { color: c.textMuted }]}>
-              {newCircleMembers.length}{selectedNewCircle.max_members ? `/${selectedNewCircle.max_members}` : ""} MEMBER{newCircleMembers.length !== 1 ? "S" : ""}
-            </Text>
-            {loadingCircleMem ? (
-              <ActivityIndicator color={c.brand} size="small" style={{ marginVertical: SPACE[12] }} />
-            ) : (
-              <ScrollView style={{ maxHeight: 160 }} showsVerticalScrollIndicator={false}>
-                {newCircleMembers.map((m) => (
-                  <View key={m.id} style={nc.memberRow}>
-                    <Avatar url={m.avatar_url} name={m.full_name ?? m.username} size={30} />
-                    <Text style={[nc.memberName, { color: c.text }]}>{m.full_name ?? m.username}</Text>
-                  </View>
-                ))}
-                {newCircleMembers.length === 0 && (
-                  <Text style={[{ fontSize: FONT.size.sm, color: c.textFaint, textAlign: "center", paddingVertical: SPACE[8] }]}>No members yet — be the first!</Text>
-                )}
-              </ScrollView>
-            )}
-
-            <TouchableOpacity
-              style={[nc.joinBtn, { backgroundColor: c.brand }]}
-              onPress={() => joinCircle(selectedNewCircle.id)}
-              activeOpacity={0.85}
-            >
-              <Text style={nc.joinText}>Join Circle</Text>
-            </TouchableOpacity>
-          </TouchableOpacity>
-        </TouchableOpacity>
+        <NewCircleModal
+          circle={selectedNewCircle}
+          members={newCircleMembers}
+          loadingMembers={loadingCircleMem}
+          currentUserId={profile?.id ?? null}
+          onJoin={() => joinCircle(selectedNewCircle.id)}
+          onDismiss={() => {
+            setSelectedNewCircle(null);
+            // Persist dismiss so it never shows on home again
+            dismissedCircleIdsRef.current.add(selectedNewCircle.id);
+            setNewCircles((prev) => prev.filter((c) => c.id !== selectedNewCircle.id));
+            AsyncStorage.setItem(DISMISSED_CIRCLES_KEY, JSON.stringify([...dismissedCircleIdsRef.current]));
+          }}
+          onClose={() => setSelectedNewCircle(null)}
+        />
       )}
     </SafeAreaView>
   );
@@ -1312,26 +1256,206 @@ const ncr = StyleSheet.create({
   joinTxt:  { color: "#fff", fontWeight: FONT.weight.bold, fontSize: FONT.size.sm },
 });
 
+// ─── Sport background photos (Unsplash, free to use) ─────────────────────────
+const SPORT_PHOTOS: Record<string, string> = {
+  basketball: "https://images.unsplash.com/photo-1546519638-68e109498ffc?w=800&q=80",
+  football:   "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=800&q=80",
+  soccer:     "https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=800&q=80",
+  tennis:     "https://images.unsplash.com/photo-1599391398131-cd12dfc6c24e?w=800&q=80",
+  swimming:   "https://images.unsplash.com/photo-1560090995-01632a28895b?w=800&q=80",
+  cycling:    "https://images.unsplash.com/photo-1541625602330-2277a4c46182?w=800&q=80",
+  running:    "https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?w=800&q=80",
+  yoga:       "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=800&q=80",
+  pilates:    "https://images.unsplash.com/photo-1518611012118-696072aa579a?w=800&q=80",
+  boxing:     "https://images.unsplash.com/photo-1549719386-74dfcbf7dbed?w=800&q=80",
+  hiking:     "https://images.unsplash.com/photo-1551632811-561732d1e306?w=800&q=80",
+  climbing:   "https://images.unsplash.com/photo-1522163182402-834f871fd851?w=800&q=80",
+  gym:        "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=800&q=80",
+  crossfit:   "https://images.unsplash.com/photo-1583454110551-21f2fa2afe61?w=800&q=80",
+  volleyball: "https://images.unsplash.com/photo-1612872087720-bb876e2e67d1?w=800&q=80",
+  default:    "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=800&q=80",
+};
+
+function getSportPhoto(sport: string | null): string {
+  if (!sport) return SPORT_PHOTOS.default;
+  const lower = sport.toLowerCase();
+  for (const [key, url] of Object.entries(SPORT_PHOTOS)) {
+    if (lower.includes(key)) return url;
+  }
+  return SPORT_PHOTOS.default;
+}
+
+// ─── New Circle Modal ─────────────────────────────────────────────────────────
+function NewCircleModal({ circle, members, loadingMembers, currentUserId, onJoin, onDismiss, onClose }: {
+  circle:          NewCircle;
+  members:         NewCircleMember[];
+  loadingMembers:  boolean;
+  currentUserId:   string | null;
+  onJoin:          () => void;
+  onDismiss:       () => void;  // X = dismiss forever from home
+  onClose:         () => void;  // close without dismissing
+}) {
+  const { theme } = useTheme();
+  const c = theme.colors;
+  const isCreator = circle.created_by !== null && circle.created_by === currentUserId;
+  const photoUrl  = getSportPhoto(circle.sport);
+
+  return (
+    <Pressable style={nc.backdrop} onPress={onClose}>
+      <Pressable style={nc.sheet} onPress={(e) => e.stopPropagation()}>
+
+        {/* ── Sport hero image with gradient ── */}
+        <View style={nc.heroWrap}>
+          <Image
+            source={{ uri: photoUrl }}
+            style={nc.heroImg}
+            contentFit="cover"
+            cachePolicy="disk"
+          />
+          <LinearGradient
+            colors={["transparent", "rgba(0,0,0,0.75)"]}
+            style={nc.heroGrad}
+          />
+          {/* Close (X) — top-right */}
+          <TouchableOpacity style={nc.closeBtn} onPress={onClose} hitSlop={12}>
+            <View style={nc.closeBg}>
+              <Icon name="close" size={16} color="#fff" />
+            </View>
+          </TouchableOpacity>
+          {/* Sport badge — top-left */}
+          {circle.sport && (
+            <View style={nc.sportBadge}>
+              <Text style={nc.sportBadgeText}>{circle.sport}</Text>
+            </View>
+          )}
+          {/* Circle name overlaid on gradient */}
+          <View style={nc.heroBottom}>
+            <Text style={nc.heroName} numberOfLines={2}>{circle.name}</Text>
+            {circle.city && (
+              <View style={nc.heroLocRow}>
+                <Icon name="location" size={12} color="rgba(255,255,255,0.8)" />
+                <Text style={nc.heroLoc}>{circle.city}</Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* ── Details body ── */}
+        <View style={[nc.body, { backgroundColor: c.bgCard }]}>
+          {/* Date & Location */}
+          {(circle.event_date || circle.field) && (
+            <View style={nc.metaRow}>
+              {circle.event_date && (
+                <View style={[nc.metaChip, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}>
+                  <Text style={nc.metaEmoji}>📅</Text>
+                  <Text style={[nc.metaText, { color: c.textSecondary }]}>
+                    {formatNewCircleDate(circle.event_date)}{circle.event_time ? `  ·  ${circle.event_time}` : ""}
+                  </Text>
+                </View>
+              )}
+              {circle.field && (
+                <View style={[nc.metaChip, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}>
+                  <Text style={nc.metaEmoji}>📍</Text>
+                  <Text style={[nc.metaText, { color: c.textSecondary }]} numberOfLines={1}>{circle.field}</Text>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* Description */}
+          {circle.description && (
+            <Text style={[nc.desc, { color: c.textMuted }]} numberOfLines={3}>{circle.description}</Text>
+          )}
+
+          {/* Members */}
+          <View style={nc.membersSection}>
+            <Text style={[nc.membersLabel, { color: c.textMuted }]}>
+              {loadingMembers ? "Loading members..." :
+                `${members.length}${circle.max_members ? `/${circle.max_members}` : ""} member${members.length !== 1 ? "s" : ""}`
+              }
+            </Text>
+            {loadingMembers ? (
+              <ActivityIndicator color={c.brand} size="small" />
+            ) : (
+              <View style={nc.avatarRow}>
+                {members.slice(0, 6).map((m) => (
+                  <View key={m.id} style={nc.avatarItem}>
+                    <Avatar url={m.avatar_url} name={m.full_name ?? m.username} size={34} />
+                  </View>
+                ))}
+                {members.length === 0 && (
+                  <Text style={[nc.emptyMembers, { color: c.textFaint }]}>Be the first to join!</Text>
+                )}
+              </View>
+            )}
+          </View>
+
+          {/* Action buttons */}
+          <View style={nc.actions}>
+            {!isCreator && (
+              <TouchableOpacity
+                style={[nc.joinBtn, { backgroundColor: c.brand }]}
+                onPress={onJoin}
+                activeOpacity={0.85}
+              >
+                <Text style={nc.joinText}>Join Circle</Text>
+              </TouchableOpacity>
+            )}
+            {isCreator && (
+              <View style={[nc.joinBtn, { backgroundColor: c.bgCardAlt, borderWidth: 1, borderColor: c.border }]}>
+                <Text style={[nc.joinText, { color: c.textMuted }]}>You created this circle</Text>
+              </View>
+            )}
+            <TouchableOpacity
+              style={[nc.dismissBtn, { borderColor: c.border }]}
+              onPress={onDismiss}
+              activeOpacity={0.7}
+            >
+              <Text style={[nc.dismissText, { color: c.textMuted }]}>Not interested</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+      </Pressable>
+    </Pressable>
+  );
+}
+
 // ─── New Circle popup styles ──────────────────────────────────────────────────
 const nc = StyleSheet.create({
-  backdrop:    { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "center", alignItems: "center", padding: SPACE[20], zIndex: 100 },
-  card:        { width: "100%", borderRadius: RADIUS.xxl, padding: SPACE[20], maxHeight: "80%" },
-  closeBtn:    { alignSelf: "flex-end", marginBottom: SPACE[4] },
-  top:         { alignItems: "center", gap: SPACE[8] },
-  emoji:       { width: 72, height: 72, borderRadius: RADIUS.xl, alignItems: "center", justifyContent: "center" },
-  name:        { fontSize: FONT.size.xl, fontWeight: FONT.weight.black, textAlign: "center" },
-  chips:       { flexDirection: "row", gap: SPACE[6], flexWrap: "wrap", justifyContent: "center" },
-  chip:        { flexDirection: "row", alignItems: "center", gap: 3, borderRadius: RADIUS.pill, paddingHorizontal: SPACE[8], paddingVertical: 3, borderWidth: 1 },
-  chipText:    { fontSize: FONT.size.xs, fontWeight: FONT.weight.semibold },
-  field:       { flexDirection: "row", alignItems: "flex-start", gap: SPACE[6], paddingHorizontal: SPACE[12], paddingVertical: SPACE[8], borderRadius: RADIUS.md, borderWidth: 1, marginTop: SPACE[4] },
-  fieldText:   { flex: 1, fontSize: FONT.size.sm },
-  desc:        { fontSize: FONT.size.sm, textAlign: "center", lineHeight: FONT.size.sm * 1.5 },
-  divider:     { height: 1, marginVertical: SPACE[14] },
-  memberHeader:{ fontSize: FONT.size.xs, fontWeight: FONT.weight.bold, textTransform: "uppercase", letterSpacing: 1, marginBottom: SPACE[8] },
-  memberRow:   { flexDirection: "row", alignItems: "center", gap: SPACE[10], paddingVertical: SPACE[6] },
-  memberName:  { fontSize: FONT.size.md, fontWeight: FONT.weight.semibold },
-  joinBtn:     { borderRadius: RADIUS.lg, paddingVertical: SPACE[14], alignItems: "center", marginTop: SPACE[12] },
-  joinText:    { color: "#fff", fontSize: FONT.size.md, fontWeight: FONT.weight.extrabold },
+  backdrop:       { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end", zIndex: 100 },
+  sheet:          { borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: "hidden", maxHeight: "88%" },
+  // Hero image
+  heroWrap:       { height: 200, position: "relative" },
+  heroImg:        { width: "100%", height: "100%" },
+  heroGrad:       { position: "absolute", bottom: 0, left: 0, right: 0, height: 120 },
+  closeBtn:       { position: "absolute", top: SPACE[14], right: SPACE[14] },
+  closeBg:        { width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(0,0,0,0.45)", alignItems: "center", justifyContent: "center" },
+  sportBadge:     { position: "absolute", top: SPACE[14], left: SPACE[14], backgroundColor: "rgba(0,0,0,0.45)", paddingHorizontal: SPACE[10], paddingVertical: 5, borderRadius: RADIUS.pill },
+  sportBadgeText: { color: "#fff", fontSize: FONT.size.xs, fontWeight: FONT.weight.bold, textTransform: "uppercase", letterSpacing: 0.8 },
+  heroBottom:     { position: "absolute", bottom: SPACE[16], left: SPACE[16], right: SPACE[16], gap: 4 },
+  heroName:       { color: "#fff", fontSize: 22, fontWeight: FONT.weight.black, textShadowColor: "rgba(0,0,0,0.4)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
+  heroLocRow:     { flexDirection: "row", alignItems: "center", gap: 4 },
+  heroLoc:        { color: "rgba(255,255,255,0.85)", fontSize: FONT.size.sm },
+  // Body
+  body:           { paddingHorizontal: SPACE[20], paddingTop: SPACE[16], paddingBottom: SPACE[24], gap: SPACE[14] },
+  metaRow:        { gap: SPACE[8] },
+  metaChip:       { flexDirection: "row", alignItems: "center", gap: SPACE[6], paddingHorizontal: SPACE[12], paddingVertical: SPACE[8], borderRadius: RADIUS.md, borderWidth: 1 },
+  metaEmoji:      { fontSize: 13 },
+  metaText:       { fontSize: FONT.size.sm, flex: 1 },
+  desc:           { fontSize: FONT.size.sm, lineHeight: FONT.size.sm * 1.55 },
+  // Members
+  membersSection: { gap: SPACE[8] },
+  membersLabel:   { fontSize: FONT.size.xs, fontWeight: FONT.weight.bold, textTransform: "uppercase", letterSpacing: 1 },
+  avatarRow:      { flexDirection: "row", alignItems: "center" },
+  avatarItem:     { borderWidth: 2, borderColor: "#fff", borderRadius: 19, marginRight: -8 },
+  emptyMembers:   { fontSize: FONT.size.sm, marginLeft: SPACE[4] },
+  // Actions
+  actions:        { gap: SPACE[10] },
+  joinBtn:        { borderRadius: RADIUS.lg, paddingVertical: SPACE[14], alignItems: "center" },
+  joinText:       { color: "#fff", fontSize: FONT.size.md, fontWeight: FONT.weight.extrabold },
+  dismissBtn:     { borderRadius: RADIUS.lg, paddingVertical: SPACE[10], alignItems: "center", borderWidth: 1 },
+  dismissText:    { fontSize: FONT.size.sm, fontWeight: FONT.weight.semibold },
 });
 
 // ─── Session Detail Modal ─────────────────────────────────────────────────────
@@ -1445,6 +1569,7 @@ function SessionDetailModal({ session, onClose, onCancel, onReschedule }: {
   }
 
   async function handleCancel() {
+    if (!session) return;
     Alert.alert(
       "Cancel session?",
       `This will cancel your ${session.sport} session with ${session.partner_name}.`,
@@ -1456,7 +1581,7 @@ function SessionDetailModal({ session, onClose, onCancel, onReschedule }: {
   }
 
   async function handleReschedule() {
-    if (!newDate) return;
+    if (!session || !newDate) return;
     setSubmitting(true);
     const timeVal = useTime
       ? `${String(newHour).padStart(2,"0")}:${String(newMinute).padStart(2,"0")}`
