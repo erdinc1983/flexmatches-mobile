@@ -479,7 +479,8 @@ export default function HomeScreen() {
     try {
       // Atomic RPC: handles consecutive-day logic + duplicate prevention server-side
       const { data: result, error: rpcError } = await supabase.rpc("log_checkin", {
-        p_user_id: profile.id,
+        p_user_id:    profile.id,
+        p_local_date: today,
       });
       if (rpcError) throw rpcError;
 
