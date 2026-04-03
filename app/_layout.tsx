@@ -181,13 +181,10 @@ export default function RootLayout() {
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="index" />
             <Stack.Screen name="(auth)" />
-            <Stack.Screen name="(auth)/forgot-password" options={{ presentation: "card", animation: "slide_from_right" }} />
-            <Stack.Screen name="(auth)/reset-password" options={{ presentation: "card", animation: "slide_from_right" }} />
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="chat/[matchId]" options={{ presentation: "card", animation: "slide_from_right" }} />
             <Stack.Screen name="notifications" options={{ presentation: "card", animation: "slide_from_right" }} />
             <Stack.Screen name="search" options={{ presentation: "card", animation: "slide_from_right" }} />
-            <Stack.Screen name="(tabs)/leaderboard" options={{ presentation: "card", animation: "slide_from_right" }} />
           </Stack>
         </NotificationProvider>
         </AppDataProvider>
