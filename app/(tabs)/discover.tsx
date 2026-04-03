@@ -105,7 +105,7 @@ function intentBonus(myIntent: string | null, theirIntent: string | null): numbe
   return 2; // same intent but not complementary (both want guidance)
 }
 const NEW_THRESHOLD = 7 * 24 * 60 * 60 * 1000;
-const PAGE_SIZE     = 40;
+const PAGE_SIZE     = 20;
 const SELECT_FIELDS = "id, username, full_name, bio, city, fitness_level, age, gender, sports, current_streak, last_active, avatar_url, is_at_gym, availability, training_intent, lat, lng, created_at, sessions_completed, reliability_score";
 
 function mapUser(u: any): DiscoverUser {
