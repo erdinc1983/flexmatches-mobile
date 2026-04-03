@@ -47,7 +47,7 @@ export type CirclePreview = {
   description:  string | null;
   event_date:   string | null;
   event_time:   string | null;
-  created_by:   string | null;
+  creator_id:   string | null;
 };
 
 export type SessionInfo = {

@@ -75,7 +75,7 @@ type NewCircle = {
   event_date:   string | null;
   event_time:   string | null;
   member_count: number;
-  created_by:   string | null;
+  creator_id:   string | null;
 };
 
 type NewCircleMember = {
@@ -191,7 +191,7 @@ export default function HomeScreen() {
         .eq("session_date", today)
         .in("status", ["accepted", "pending"]),
       supabase.from("community_members")
-        .select("community:communities(id, name, avatar_emoji, sport, city, field, description, event_date, event_time, created_by)")
+        .select("community:communities(id, name, avatar_emoji, sport, city, field, description, event_date, event_time, creator_id)")
         .eq("user_id", uid)
         .limit(3),
       supabase.from("matches")
@@ -352,7 +352,7 @@ export default function HomeScreen() {
         description:  cc.description ?? null,
         event_date:   cc.event_date ?? null,
         event_time:   cc.event_time ?? null,
-        created_by:   cc.created_by ?? null,
+        creator_id:   cc.creator_id ?? null,
       }))
     );
 
@@ -459,7 +459,7 @@ export default function HomeScreen() {
       event_date:   cc.event_date ?? null,
       event_time:   cc.event_time ?? null,
       member_count: 0,
-      created_by:   cc.created_by ?? null,
+      creator_id:   cc.creator_id ?? null,
     }));
     setNewCircles(matchingNew);
 
@@ -1332,7 +1332,7 @@ function NewCircleModal({ circle, members, loadingMembers, currentUserId, onJoin
 }) {
   const { theme } = useTheme();
   const c = theme.colors;
-  const isCreator = circle.created_by !== null && circle.created_by === currentUserId;
+  const isCreator = circle.creator_id !== null && circle.creator_id === currentUserId;
   const photoUrl  = getSportPhoto(circle.sport);
 
   return (
@@ -1467,7 +1467,7 @@ function MyCircleModal({ circle, members, loadingMembers, currentUserId, onCance
 }) {
   const { theme } = useTheme();
   const c = theme.colors;
-  const isCreator = circle.created_by !== null && circle.created_by === currentUserId;
+  const isCreator = circle.creator_id !== null && circle.creator_id === currentUserId;
   const photoUrl  = getSportPhoto(circle.sport);
 
   // ── Edit state ────────────────────────────────────────────────────────────
