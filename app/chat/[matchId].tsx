@@ -776,9 +776,14 @@ export default function ChatScreen() {
         <BlurOverlay onPress={() => setShowActionMenu(false)}>
         <View style={am.sheetWrap}>
         <View style={[am.sheet, { backgroundColor: c.bgCard }]}>
-          <Text style={[am.sheetTitle, { color: c.text }]}>
-            Plan with {other?.full_name?.split(" ")[0] ?? otherName}
-          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <Text style={[am.sheetTitle, { color: c.text }]}>
+              Plan with {other?.full_name?.split(" ")[0] ?? otherName}
+            </Text>
+            <TouchableOpacity onPress={() => setShowActionMenu(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="close" size={22} color={c.textMuted} />
+            </TouchableOpacity>
+          </View>
 
           {/* Today */}
           <TouchableOpacity
