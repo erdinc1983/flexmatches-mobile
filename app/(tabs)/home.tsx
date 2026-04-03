@@ -134,6 +134,8 @@ export default function HomeScreen() {
     try {
     setError(false);
     if (!isRefresh) setLoading(true);
+    // After a crash the session JWT may not be refreshed yet — force a refresh first
+    await supabase.auth.refreshSession().catch(() => {});
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     const uid = user.id;
@@ -220,6 +222,9 @@ export default function HomeScreen() {
         supabase.from("users").update({ is_at_gym: false, gym_checkin_at: null }).eq("id", uid).then(() => {});
       }
     }
+
+    // If profile is still null after refresh, something is wrong — show retry
+    if (!profileData) { setError(true); return; }
 
     setProfile({
       id:                  uid,
