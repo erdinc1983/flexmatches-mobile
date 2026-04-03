@@ -338,23 +338,39 @@ export default function HomeScreen() {
 
 
     // Circles — user's own, mapped with correct field name
-    setCircles((myCircleData ?? [])
+    const myCircleList = (myCircleData ?? [])
       .map((row: any) => row.community)
-      .filter(Boolean)
-      .map((cc: any) => ({
-        id:           cc.id,
-        name:         cc.name,
-        icon:         cc.avatar_emoji ?? "🏋️",
-        member_count: cc.member_count ?? 0,
-        sport:        cc.sport ?? null,
-        city:         cc.city ?? null,
-        field:        cc.field ?? null,
-        description:  cc.description ?? null,
-        event_date:   cc.event_date ?? null,
-        event_time:   cc.event_time ?? null,
-        creator_id:   cc.creator_id ?? null,
-      }))
-    );
+      .filter(Boolean);
+
+    // Batch member count for local circles (avoid N+1)
+    const myCircleListIds = myCircleList.map((cc: any) => cc.id);
+    let myCircleCountMap: Record<string, number> = {};
+    if (myCircleListIds.length > 0) {
+      const { data: myCounts } = await supabase
+        .from("community_members")
+        .select("community_id")
+        .in("community_id", myCircleListIds);
+      for (const row of myCounts ?? []) {
+        myCircleCountMap[(row as any).community_id] = (myCircleCountMap[(row as any).community_id] ?? 0) + 1;
+      }
+    }
+
+    // Build myCircleIds from already-fetched data (no extra query needed)
+    const myCircleIds = new Set(myCircleListIds as string[]);
+
+    setCircles(myCircleList.map((cc: any) => ({
+      id:           cc.id,
+      name:         cc.name,
+      icon:         cc.avatar_emoji ?? "🏋️",
+      member_count: myCircleCountMap[cc.id] ?? 0,
+      sport:        cc.sport ?? null,
+      city:         cc.city ?? null,
+      field:        cc.field ?? null,
+      description:  cc.description ?? null,
+      event_date:   cc.event_date ?? null,
+      event_time:   cc.event_time ?? null,
+      creator_id:   cc.creator_id ?? null,
+    })));
 
     // Build partnerId → matchId map for deep-link navigation
     const partnerMatchMap = new Map<string, string>();
@@ -432,22 +448,31 @@ export default function HomeScreen() {
     const userSports: string[] = profileData?.sports ?? [];
     const { data: newCircleData } = await supabase
       .from("communities")
-      .select("id, name, avatar_emoji, sport, city, field, description, max_members, event_date, event_time, created_at, created_by")
+      .select("id, name, avatar_emoji, sport, city, field, description, max_members, event_date, event_time, created_at, creator_id")
       .gte("created_at", sevenDaysAgo)
       .order("created_at", { ascending: false });
 
-    // Filter: matches user's sports AND user is not already a member
-    const { data: myMemberships } = await supabase
-      .from("community_members")
-      .select("community_id")
-      .eq("user_id", uid);
-    const myCircleIds = new Set((myMemberships ?? []).map((m: any) => m.community_id));
-
+    // myCircleIds already built above from myCircleData — no extra query needed
     const matchingNew = (newCircleData ?? []).filter((cc: any) =>
       !myCircleIds.has(cc.id) &&
       !dismissedCircleIdsRef.current.has(cc.id) &&
       userSports.some((sp) => cc.sport?.toLowerCase().includes(sp.toLowerCase()) || sp.toLowerCase().includes(cc.sport?.toLowerCase() ?? ""))
-    ).map((cc: any) => ({
+    );
+
+    // Batch member count for new circles
+    const newCircleIds = matchingNew.map((cc: any) => cc.id);
+    let newCircleCountMap: Record<string, number> = {};
+    if (newCircleIds.length > 0) {
+      const { data: newCounts } = await supabase
+        .from("community_members")
+        .select("community_id")
+        .in("community_id", newCircleIds);
+      for (const row of newCounts ?? []) {
+        newCircleCountMap[(row as any).community_id] = (newCircleCountMap[(row as any).community_id] ?? 0) + 1;
+      }
+    }
+
+    setNewCircles(matchingNew.map((cc: any) => ({
       id:           cc.id,
       name:         cc.name,
       avatar_emoji: cc.avatar_emoji ?? "🏟️",
@@ -458,10 +483,9 @@ export default function HomeScreen() {
       max_members:  cc.max_members ?? null,
       event_date:   cc.event_date ?? null,
       event_time:   cc.event_time ?? null,
-      member_count: 0,
+      member_count: newCircleCountMap[cc.id] ?? 0,
       creator_id:   cc.creator_id ?? null,
-    }));
-    setNewCircles(matchingNew);
+    })));
 
     lastLoadRef.current = Date.now();
     } catch (err) {

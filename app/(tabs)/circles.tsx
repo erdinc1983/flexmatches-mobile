@@ -178,6 +178,13 @@ export default function CirclesScreen() {
   const [circleMembers,  setCircleMembers]  = useState<CircleMember[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [joiningId,      setJoiningId]      = useState<string | null>(null);
+  const [popupView,      setPopupView]      = useState<"detail" | "edit">("detail");
+  const [editName,       setEditName]       = useState("");
+  const [editDesc,       setEditDesc]       = useState("");
+  const [editField,      setEditField]      = useState("");
+  const [editDate,       setEditDate]       = useState("");
+  const [editTime,       setEditTime]       = useState("");
+  const [editSaving,     setEditSaving]     = useState(false);
 
   // Create form state
   const [formName,       setFormName]       = useState("");
@@ -270,6 +277,12 @@ export default function CirclesScreen() {
   // ── Circle detail ─────────────────────────────────────────────────────────
   async function openCircle(circle: Community) {
     setSelectedCircle(circle);
+    setPopupView("detail");
+    setEditName(circle.name);
+    setEditDesc(circle.description ?? "");
+    setEditField(circle.field ?? "");
+    setEditDate(circle.event_date ?? "");
+    setEditTime(circle.event_time ?? "");
     setLoadingMembers(true);
     const { data } = await supabase
       .from("community_members")
@@ -279,6 +292,42 @@ export default function CirclesScreen() {
       (data ?? []).map((row: any) => row.user).filter(Boolean) as CircleMember[]
     );
     setLoadingMembers(false);
+  }
+
+  async function saveCircleEdit() {
+    if (!selectedCircle || !editName.trim()) return;
+    setEditSaving(true);
+    await supabase.from("communities").update({
+      name:        editName.trim(),
+      description: editDesc.trim() || null,
+      field:       editField.trim() || null,
+      event_date:  editDate || null,
+      event_time:  editTime.trim() || null,
+    }).eq("id", selectedCircle.id);
+    setCommunities((prev) => prev.map((c) =>
+      c.id === selectedCircle.id
+        ? { ...c, name: editName.trim(), description: editDesc.trim() || null, field: editField.trim() || null, event_date: editDate || null, event_time: editTime.trim() || null }
+        : c
+    ));
+    setSelectedCircle((prev) => prev ? { ...prev, name: editName.trim(), description: editDesc.trim() || null, field: editField.trim() || null, event_date: editDate || null, event_time: editTime.trim() || null } : prev);
+    setEditSaving(false);
+    setPopupView("detail");
+  }
+
+  function confirmDeleteCircle() {
+    if (!selectedCircle) return;
+    Alert.alert(
+      "Cancel event?",
+      "This will permanently delete the circle and remove all members.",
+      [
+        { text: "Keep it", style: "cancel" },
+        { text: "Delete circle", style: "destructive", onPress: async () => {
+          await supabase.from("communities").delete().eq("id", selectedCircle.id);
+          setCommunities((prev) => prev.filter((c) => c.id !== selectedCircle.id));
+          setSelectedCircle(null);
+        }},
+      ]
+    );
   }
 
   // ── Actions ────────────────────────────────────────────────────────────────
@@ -498,114 +547,181 @@ export default function CirclesScreen() {
         }
       />
 
-      {/* ── Circle detail popup (absolute overlay, NOT Modal) ─────────────── */}
+      {/* ── Circle detail popup ───────────────────────────────────────────────── */}
       {selectedCircle && (
         <TouchableOpacity
           style={s.popupBackdrop}
           activeOpacity={1}
-          onPress={() => setSelectedCircle(null)}
+          onPress={() => { setSelectedCircle(null); setPopupView("detail"); }}
         >
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ width: "100%" }}>
           <TouchableOpacity
             style={[s.popupCard, { backgroundColor: c.bgCard }]}
             activeOpacity={1}
             onPress={(e) => e.stopPropagation()}
           >
             {/* Close */}
-            <TouchableOpacity style={s.popupClose} onPress={() => setSelectedCircle(null)} hitSlop={10}>
+            <TouchableOpacity
+              style={s.popupClose}
+              onPress={() => popupView === "edit" ? setPopupView("detail") : setSelectedCircle(null)}
+              hitSlop={10}
+            >
               <Icon name="close" size={20} color={c.textMuted} />
             </TouchableOpacity>
 
-            {/* Emoji + title */}
-            <View style={s.popupTop}>
-              <View style={[s.popupEmoji, { backgroundColor: c.bgCardAlt }]}>
-                <Text style={{ fontSize: 36 }}>{selectedCircle.avatar_emoji}</Text>
-              </View>
-              <Text style={[s.popupName, { color: c.text }]}>{selectedCircle.name}</Text>
-              <View style={s.popupChips}>
-                {selectedCircle.sport && (
-                  <View style={[s.chip, { backgroundColor: c.bgCardAlt, borderColor: c.borderMedium }]}>
-                    <Text style={[s.chipText, { color: c.textMuted }]}>{selectedCircle.sport}</Text>
-                  </View>
-                )}
-                {selectedCircle.city && (
-                  <View style={[s.chip, { backgroundColor: c.bgCardAlt, borderColor: c.borderMedium }]}>
-                    <Icon name="location" size={10} color={c.textMuted} />
-                    <Text style={[s.chipText, { color: c.textMuted }]}>{selectedCircle.city}</Text>
-                  </View>
-                )}
-              </View>
-              {selectedCircle.field && (
-                <View style={[s.popupField, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}>
-                  <Icon name="location" size={14} color={c.textMuted} />
-                  <Text style={[s.popupFieldText, { color: c.textSecondary }]} numberOfLines={2}>
-                    {selectedCircle.field}
-                  </Text>
+            {/* ── Detail view ── */}
+            {popupView === "detail" && (<>
+              <View style={s.popupTop}>
+                <View style={[s.popupEmoji, { backgroundColor: c.bgCardAlt }]}>
+                  <Text style={{ fontSize: 36 }}>{selectedCircle.avatar_emoji}</Text>
                 </View>
-              )}
-              {selectedCircle.event_date && (
-                <View style={[s.popupField, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}>
-                  <Icon name="calendar" size={14} color={c.textMuted} />
-                  <Text style={[s.popupFieldText, { color: c.textSecondary }]}>
-                    {formatCircleDate(selectedCircle.event_date)}
-                    {selectedCircle.event_time ? `  ·  ${selectedCircle.event_time}` : ""}
-                  </Text>
+                <Text style={[s.popupName, { color: c.text }]}>{selectedCircle.name}</Text>
+                <View style={s.popupChips}>
+                  {selectedCircle.sport && (
+                    <View style={[s.chip, { backgroundColor: c.bgCardAlt, borderColor: c.borderMedium }]}>
+                      <Text style={[s.chipText, { color: c.textMuted }]}>{selectedCircle.sport}</Text>
+                    </View>
+                  )}
+                  {selectedCircle.city && (
+                    <View style={[s.chip, { backgroundColor: c.bgCardAlt, borderColor: c.borderMedium }]}>
+                      <Icon name="location" size={10} color={c.textMuted} />
+                      <Text style={[s.chipText, { color: c.textMuted }]}>{selectedCircle.city}</Text>
+                    </View>
+                  )}
                 </View>
-              )}
-              {selectedCircle.description && (
-                <Text style={[s.popupDesc, { color: c.textMuted }]}>{selectedCircle.description}</Text>
-              )}
-            </View>
-
-            {/* Member list */}
-            <View style={[s.popupDivider, { backgroundColor: c.border }]} />
-            <Text style={[s.popupMemberHeader, { color: c.textMuted }]}>
-              {selectedCircle.member_count}{selectedCircle.max_members ? `/${selectedCircle.max_members}` : ""} MEMBER{selectedCircle.member_count !== 1 ? "S" : ""}
-            </Text>
-            {loadingMembers ? (
-              <ActivityIndicator color={c.brand} size="small" style={{ marginVertical: SPACE[16] }} />
-            ) : (
-              <ScrollView style={s.memberList} showsVerticalScrollIndicator={false}>
-                {circleMembers.map((m) => (
-                  <View key={m.id} style={s.memberRow}>
-                    <Avatar url={m.avatar_url} name={m.full_name ?? m.username} size={32} />
-                    <Text style={[s.memberName, { color: c.text }]}>
-                      {m.full_name ?? m.username}
+                {selectedCircle.field && (
+                  <View style={[s.popupField, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}>
+                    <Icon name="location" size={14} color={c.textMuted} />
+                    <Text style={[s.popupFieldText, { color: c.textSecondary }]} numberOfLines={2}>
+                      {selectedCircle.field}
                     </Text>
                   </View>
-                ))}
+                )}
+                {selectedCircle.event_date && (
+                  <View style={[s.popupField, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}>
+                    <Icon name="calendar" size={14} color={c.textMuted} />
+                    <Text style={[s.popupFieldText, { color: c.textSecondary }]}>
+                      {formatCircleDate(selectedCircle.event_date)}
+                      {selectedCircle.event_time ? `  ·  ${selectedCircle.event_time}` : ""}
+                    </Text>
+                  </View>
+                )}
+                {selectedCircle.description && (
+                  <Text style={[s.popupDesc, { color: c.textMuted }]}>{selectedCircle.description}</Text>
+                )}
+              </View>
+
+              <View style={[s.popupDivider, { backgroundColor: c.border }]} />
+              <Text style={[s.popupMemberHeader, { color: c.textMuted }]}>
+                {selectedCircle.member_count}{selectedCircle.max_members ? `/${selectedCircle.max_members}` : ""} MEMBER{selectedCircle.member_count !== 1 ? "S" : ""}
+              </Text>
+              {loadingMembers ? (
+                <ActivityIndicator color={c.brand} size="small" style={{ marginVertical: SPACE[16] }} />
+              ) : (
+                <ScrollView style={s.memberList} showsVerticalScrollIndicator={false}>
+                  {circleMembers.map((m) => (
+                    <View key={m.id} style={s.memberRow}>
+                      <Avatar url={m.avatar_url} name={m.full_name ?? m.username} size={32} />
+                      <Text style={[s.memberName, { color: c.text }]}>{m.full_name ?? m.username}</Text>
+                    </View>
+                  ))}
+                </ScrollView>
+              )}
+
+              {/* Join / Leave */}
+              {(() => {
+                const isFull = !selectedCircle.is_member &&
+                  selectedCircle.max_members != null &&
+                  selectedCircle.member_count >= selectedCircle.max_members;
+                return (
+                  <TouchableOpacity
+                    style={[
+                      s.popupJoinBtn,
+                      selectedCircle.is_member
+                        ? { borderWidth: 1, borderColor: c.brandBorder, backgroundColor: "transparent" }
+                        : isFull
+                          ? { backgroundColor: c.border, opacity: 0.7 }
+                          : { backgroundColor: c.brand },
+                      joiningId === selectedCircle.id && { opacity: 0.6 },
+                    ]}
+                    onPress={() => joinOrLeave(selectedCircle.id, selectedCircle.is_member)}
+                    disabled={!!joiningId || isFull}
+                    activeOpacity={0.85}
+                  >
+                    {joiningId === selectedCircle.id
+                      ? <ActivityIndicator color={selectedCircle.is_member ? c.brand : "#fff"} size="small" />
+                      : <Text style={[s.popupJoinText, { color: selectedCircle.is_member ? c.brand : "#fff" }]}>
+                          {selectedCircle.is_member ? "Leave Circle" : isFull ? "Circle Full" : "Join Circle"}
+                        </Text>
+                    }
+                  </TouchableOpacity>
+                );
+              })()}
+
+              {/* Creator actions */}
+              {selectedCircle.creator_id === userId && (
+                <View style={s.creatorRow}>
+                  <TouchableOpacity
+                    style={[s.creatorBtn, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}
+                    onPress={() => setPopupView("edit")}
+                    activeOpacity={0.8}
+                  >
+                    <Icon name="edit" size={14} color={c.brand} />
+                    <Text style={[s.creatorBtnText, { color: c.brand }]}>Edit</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[s.creatorBtn, { backgroundColor: "#FEF2F2", borderColor: "#FECACA" }]}
+                    onPress={confirmDeleteCircle}
+                    activeOpacity={0.8}
+                  >
+                    <Icon name="close" size={14} color="#DC2626" />
+                    <Text style={[s.creatorBtnText, { color: "#DC2626" }]}>Cancel Event</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </>)}
+
+            {/* ── Edit view ── */}
+            {popupView === "edit" && (
+              <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: SCREEN_H * 0.55 }}>
+                <Text style={[s.editLabel, { color: c.textMuted }]}>Circle Name</Text>
+                <TextInput style={[s.editInput, { backgroundColor: c.bgCardAlt, borderColor: c.border, color: c.text }]} value={editName} onChangeText={setEditName} placeholder="Circle name" placeholderTextColor={c.textFaint} />
+
+                <Text style={[s.editLabel, { color: c.textMuted }]}>Description</Text>
+                <TextInput style={[s.editInput, s.editTextArea, { backgroundColor: c.bgCardAlt, borderColor: c.border, color: c.text }]} value={editDesc} onChangeText={setEditDesc} placeholder="What's this circle about?" placeholderTextColor={c.textFaint} multiline numberOfLines={3} />
+
+                <Text style={[s.editLabel, { color: c.textMuted }]}>Location / Venue</Text>
+                <TextInput style={[s.editInput, { backgroundColor: c.bgCardAlt, borderColor: c.border, color: c.text }]} value={editField} onChangeText={setEditField} placeholder="e.g. Central Park Court 3" placeholderTextColor={c.textFaint} />
+
+                <Text style={[s.editLabel, { color: c.textMuted }]}>Event Date (YYYY-MM-DD)</Text>
+                <TextInput style={[s.editInput, { backgroundColor: c.bgCardAlt, borderColor: c.border, color: c.text }]} value={editDate} onChangeText={setEditDate} placeholder="2025-06-15" placeholderTextColor={c.textFaint} keyboardType="numbers-and-punctuation" />
+
+                <Text style={[s.editLabel, { color: c.textMuted }]}>Event Time (HH:MM)</Text>
+                <TextInput style={[s.editInput, { backgroundColor: c.bgCardAlt, borderColor: c.border, color: c.text }]} value={editTime} onChangeText={setEditTime} placeholder="09:00" placeholderTextColor={c.textFaint} keyboardType="numbers-and-punctuation" />
+
+                <TouchableOpacity
+                  style={[s.popupJoinBtn, { backgroundColor: editSaving || !editName.trim() ? c.bgCardAlt : c.brand, marginTop: SPACE[12] }]}
+                  onPress={saveCircleEdit}
+                  disabled={editSaving || !editName.trim()}
+                  activeOpacity={0.85}
+                >
+                  {editSaving
+                    ? <ActivityIndicator color="#fff" size="small" />
+                    : <Text style={[s.popupJoinText, { color: "#fff" }]}>Save Changes</Text>
+                  }
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[s.popupJoinBtn, { borderWidth: 1, borderColor: c.border, backgroundColor: "transparent", marginTop: SPACE[8] }]}
+                  onPress={() => setPopupView("detail")}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[s.popupJoinText, { color: c.textMuted }]}>Cancel</Text>
+                </TouchableOpacity>
               </ScrollView>
             )}
 
-            {/* Join / Leave */}
-            {(() => {
-              const isFull = !selectedCircle.is_member &&
-                selectedCircle.max_members != null &&
-                selectedCircle.member_count >= selectedCircle.max_members;
-              return (
-                <TouchableOpacity
-                  style={[
-                    s.popupJoinBtn,
-                    selectedCircle.is_member
-                      ? { borderWidth: 1, borderColor: c.brandBorder, backgroundColor: "transparent" }
-                      : isFull
-                        ? { backgroundColor: c.border, opacity: 0.7 }
-                        : { backgroundColor: c.brand },
-                    joiningId === selectedCircle.id && { opacity: 0.6 },
-                  ]}
-                  onPress={() => joinOrLeave(selectedCircle.id, selectedCircle.is_member)}
-                  disabled={!!joiningId || isFull}
-                  activeOpacity={0.85}
-                >
-                  {joiningId === selectedCircle.id
-                    ? <ActivityIndicator color={selectedCircle.is_member ? c.brand : "#fff"} size="small" />
-                    : <Text style={[s.popupJoinText, { color: selectedCircle.is_member ? c.brand : "#fff" }]}>
-                        {selectedCircle.is_member ? "Leave Circle" : isFull ? "Circle Full" : "Join Circle"}
-                      </Text>
-                  }
-                </TouchableOpacity>
-              );
-            })()}
           </TouchableOpacity>
+          </KeyboardAvoidingView>
         </TouchableOpacity>
       )}
 
@@ -932,7 +1048,7 @@ function CircleCard({ item, onPress, onJoin, joining = false }: { item: Communit
 const s = StyleSheet.create({
   root:            { flex: 1 },
   hero:            { height: 160, overflow: "hidden" },
-  heroGradient:    { flex: 1, paddingHorizontal: SPACE[20], justifyContent: "flex-end", paddingBottom: SPACE[18] },
+  heroGradient:    { flex: 1, paddingHorizontal: SPACE[20], justifyContent: "flex-end", paddingBottom: SPACE[16] },
   heroContent:     { flexDirection: "row", alignItems: "center" },
   heroTitle:       { fontSize: FONT.size.xxxl, fontWeight: FONT.weight.black, color: "#fff", letterSpacing: -0.5 },
   heroSub:         { fontSize: FONT.size.xs, color: "rgba(255,255,255,0.80)", marginTop: 3 },
@@ -989,6 +1105,12 @@ const s = StyleSheet.create({
   memberName:      { fontSize: FONT.size.md, fontWeight: FONT.weight.semibold },
   popupJoinBtn:    { borderRadius: RADIUS.pill, paddingVertical: SPACE[14], alignItems: "center", marginTop: SPACE[12] },
   popupJoinText:   { fontSize: FONT.size.md, fontWeight: FONT.weight.extrabold },
+  creatorRow:      { flexDirection: "row", gap: SPACE[10], marginTop: SPACE[10] },
+  creatorBtn:      { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: SPACE[6], paddingVertical: SPACE[12], borderRadius: RADIUS.lg, borderWidth: 1 },
+  creatorBtnText:  { fontSize: FONT.size.sm, fontWeight: FONT.weight.bold },
+  editLabel:       { fontSize: FONT.size.xs, fontWeight: FONT.weight.bold, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: SPACE[6], marginTop: SPACE[12] },
+  editInput:       { borderRadius: RADIUS.md, borderWidth: 1, paddingHorizontal: SPACE[12], paddingVertical: SPACE[10], fontSize: FONT.size.sm },
+  editTextArea:    { minHeight: 80, textAlignVertical: "top" },
 
   // Create modal
   modal:           { flex: 1 },

@@ -22,7 +22,7 @@ export function CirclesPreviewSection({ circles, onPress }: Props) {
   return (
     <View style={{ gap: SPACE[10] }}>
       <SectionHeader
-        title="Local Circles"
+        title="My Circles"
         action={{ label: "See all", onPress: () => router.push("/(tabs)/circles" as any) }}
       />
       <View style={s.grid}>
