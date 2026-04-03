@@ -4,18 +4,20 @@
  */
 
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, Pressable } from "react-native";
+import { Icon } from "../Icon";
 import { router } from "expo-router";
 import { useTheme, SPACE, FONT, RADIUS, SHADOW, TYPE } from "../../lib/theme";
 import { SectionHeader } from "../ui/SectionHeader";
 import type { CirclePreview } from "./types";
 
 type Props = {
-  circles:  CirclePreview[];
-  onPress?: (circle: CirclePreview) => void;
+  circles:   CirclePreview[];
+  onPress?:  (circle: CirclePreview) => void;
+  onDismiss?: (id: string) => void;
 };
 
-export function CirclesPreviewSection({ circles, onPress }: Props) {
+export function CirclesPreviewSection({ circles, onPress, onDismiss }: Props) {
   if (circles.length === 0) return null;
   const visible = circles.slice(0, 4);
 
@@ -27,14 +29,14 @@ export function CirclesPreviewSection({ circles, onPress }: Props) {
       />
       <View style={s.grid}>
         {visible.map((circle) => (
-          <CircleCard key={circle.id} circle={circle} onPress={onPress} />
+          <CircleCard key={circle.id} circle={circle} onPress={onPress} onDismiss={onDismiss} />
         ))}
       </View>
     </View>
   );
 }
 
-function CircleCard({ circle, onPress }: { circle: CirclePreview; onPress?: (c: CirclePreview) => void }) {
+function CircleCard({ circle, onPress, onDismiss }: { circle: CirclePreview; onPress?: (c: CirclePreview) => void; onDismiss?: (id: string) => void }) {
   const { theme, isDark } = useTheme();
   const c = theme.colors;
 
@@ -63,6 +65,17 @@ function CircleCard({ circle, onPress }: { circle: CirclePreview; onPress?: (c: 
       onPress={() => onPress ? onPress(circle) : router.push("/(tabs)/circles" as any)}
       activeOpacity={0.85}
     >
+      {/* Dismiss X */}
+      {onDismiss && (
+        <Pressable
+          style={s.dismissBtn}
+          onPress={(e) => { e.stopPropagation?.(); onDismiss(circle.id); }}
+          hitSlop={8}
+        >
+          <Icon name="close" size={12} color={c.textFaint} />
+        </Pressable>
+      )}
+
       {/* Warm gradient-ish header area */}
       <View style={[s.cardTop, { backgroundColor: bg }]}>
         <Text style={s.emoji}>{emoji}</Text>
@@ -72,7 +85,7 @@ function CircleCard({ circle, onPress }: { circle: CirclePreview; onPress?: (c: 
       <View style={[s.cardBody, { backgroundColor: c.bgCard }]}>
         <Text style={[s.name, { color: c.text }]} numberOfLines={1}>{circle.name}</Text>
         <Text style={[s.members, { color: c.textMuted }]}>
-          {circle.member_count} Members Nearby
+          {circle.member_count} {circle.member_count === 1 ? "Member" : "Members"}
         </Text>
         <View style={[s.viewBtn, { backgroundColor: c.brand }]}>
           <Text style={s.joinText}>View Details</Text>
@@ -90,6 +103,7 @@ const s = StyleSheet.create({
   cardBody:{ padding: SPACE[12], gap: SPACE[6] },
   name:    { ...TYPE.cardTitle },
   members: { ...TYPE.caption },
-  viewBtn: { borderRadius: RADIUS.pill, paddingVertical: SPACE[10], alignItems: "center", marginTop: SPACE[6] },
-  joinText:{ color: "#fff", ...TYPE.caption, fontWeight: FONT.weight.bold },
+  viewBtn:    { borderRadius: RADIUS.pill, paddingVertical: SPACE[10], alignItems: "center", marginTop: SPACE[6] },
+  joinText:   { color: "#fff", ...TYPE.caption, fontWeight: FONT.weight.bold },
+  dismissBtn: { position: "absolute", top: SPACE[8], right: SPACE[8], zIndex: 1, padding: SPACE[4] },
 });

@@ -50,9 +50,10 @@ import {
   PrimaryAction, computePrimaryAction, buildMatchReasons, localToday,
 } from "../../components/home/types";
 
-const NUDGE_KEY         = "profile_nudge_dismissed_at";
-const NUDGE_TTL         = 7 * 24 * 60 * 60 * 1000; // 7 days
-const DISMISSED_CIRCLES_KEY = "dismissed_circle_ids";
+const NUDGE_KEY              = "profile_nudge_dismissed_at";
+const NUDGE_TTL              = 7 * 24 * 60 * 60 * 1000; // 7 days
+const DISMISSED_CIRCLES_KEY  = "dismissed_circle_ids";      // new circles (not yet joined)
+const DISMISSED_MY_CIRCLES_KEY = "dismissed_my_circle_ids"; // joined circles dismissed from home
 
 type ActivePartner = {
   id:         string;
@@ -127,7 +128,8 @@ export default function HomeScreen() {
   const today    = localToday();
   const lastLoadRef = useRef(0);
   const STALE_MS = 5 * 60_000; // 5 min cache per tab
-  const dismissedCircleIdsRef = useRef<Set<string>>(new Set());
+  const dismissedCircleIdsRef   = useRef<Set<string>>(new Set());
+  const dismissedMyCircleIdsRef = useRef<Set<string>>(new Set());
 
   // Check nudge dismiss state once on mount
   useEffect(() => {
@@ -137,11 +139,12 @@ export default function HomeScreen() {
         if (Date.now() - dismissed < NUDGE_TTL) setNudgeDismissed(true);
       }
     });
-    // Load permanently dismissed circle IDs
+    // Load permanently dismissed circle IDs (new circles + my circles)
     AsyncStorage.getItem(DISMISSED_CIRCLES_KEY).then((val) => {
-      if (val) {
-        try { dismissedCircleIdsRef.current = new Set(JSON.parse(val)); } catch {}
-      }
+      if (val) { try { dismissedCircleIdsRef.current = new Set(JSON.parse(val)); } catch {} }
+    });
+    AsyncStorage.getItem(DISMISSED_MY_CIRCLES_KEY).then((val) => {
+      if (val) { try { dismissedMyCircleIdsRef.current = new Set(JSON.parse(val)); } catch {} }
     });
   }, []);
 
@@ -358,19 +361,27 @@ export default function HomeScreen() {
     // Build myCircleIds from already-fetched data (no extra query needed)
     const myCircleIds = new Set(myCircleListIds as string[]);
 
-    setCircles(myCircleList.map((cc: any) => ({
-      id:           cc.id,
-      name:         cc.name,
-      icon:         cc.avatar_emoji ?? "🏋️",
-      member_count: myCircleCountMap[cc.id] ?? 0,
-      sport:        cc.sport ?? null,
-      city:         cc.city ?? null,
-      field:        cc.field ?? null,
-      description:  cc.description ?? null,
-      event_date:   cc.event_date ?? null,
-      event_time:   cc.event_time ?? null,
-      creator_id:   cc.creator_id ?? null,
-    })));
+    const todayStr = today; // "YYYY-MM-DD"
+    setCircles(myCircleList
+      .filter((cc: any) =>
+        // Only active circles on home (past events stay on Circles tab)
+        (!cc.event_date || cc.event_date >= todayStr) &&
+        // Dismissed from home by user
+        !dismissedMyCircleIdsRef.current.has(cc.id)
+      )
+      .map((cc: any) => ({
+        id:           cc.id,
+        name:         cc.name,
+        icon:         cc.avatar_emoji ?? "🏋️",
+        member_count: myCircleCountMap[cc.id] ?? 0,
+        sport:        cc.sport ?? null,
+        city:         cc.city ?? null,
+        field:        cc.field ?? null,
+        description:  cc.description ?? null,
+        event_date:   cc.event_date ?? null,
+        event_time:   cc.event_time ?? null,
+        creator_id:   cc.creator_id ?? null,
+      })));
 
     // Build partnerId → matchId map for deep-link navigation
     const partnerMatchMap = new Map<string, string>();
@@ -838,7 +849,15 @@ export default function HomeScreen() {
           }}
         />
 
-        <CirclesPreviewSection circles={circles} onPress={openMyCircle} />
+        <CirclesPreviewSection
+          circles={circles}
+          onPress={openMyCircle}
+          onDismiss={(id) => {
+            setCircles((prev) => prev.filter((cc) => cc.id !== id));
+            dismissedMyCircleIdsRef.current.add(id);
+            AsyncStorage.setItem(DISMISSED_MY_CIRCLES_KEY, JSON.stringify([...dismissedMyCircleIdsRef.current]));
+          }}
+        />
 
         {/* ── Challenges shortcut ── */}
         <TouchableOpacity

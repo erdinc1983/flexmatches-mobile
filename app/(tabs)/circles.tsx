@@ -403,11 +403,16 @@ export default function CirclesScreen() {
     setFormEventDate(""); setFormEventHour(9); setFormEventMin(0); setFormUseTime(false); setFormEmoji("🏋️");
   }
 
-  // ── Filter ─────────────────────────────────────────────────────────────────
+  // ── Active vs Past split ────────────────────────────────────────────────────
+  const todayStr = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
+  const activeCircles = communities.filter((c) => !c.event_date || c.event_date >= todayStr);
+  const pastCircles   = communities.filter((c) => c.event_date && c.event_date < todayStr);
+
+  // ── Filter (search + category applied to active only) ───────────────────────
   const catActivities = filterCat
     ? (ACTIVITY_CATEGORIES.find((c) => c.key === filterCat)?.activities ?? []) as readonly string[]
     : [];
-  const filtered = communities.filter((c) => {
+  const filtered = activeCircles.filter((c) => {
     const matchSearch = !search.trim() ||
       c.name.toLowerCase().includes(search.toLowerCase()) ||
       (c.city ?? "").toLowerCase().includes(search.toLowerCase());
@@ -512,7 +517,7 @@ export default function CirclesScreen() {
       <FlatList
         data={listData}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={[s.list, listData.length === 0 && { flex: 1 }]}
+        contentContainerStyle={s.list}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.brand} />}
         renderItem={({ item, index }) => {
@@ -538,12 +543,48 @@ export default function CirclesScreen() {
           );
         }}
         ListEmptyComponent={
-          <EmptyState
-            icon="circlesActive"
-            title="No circles yet"
-            subtitle="Create a circle for your local fitness community."
-            action={{ label: "Create a Circle", onPress: () => setShowCreate(true) }}
-          />
+          listData.length === 0 && pastCircles.length === 0 ? (
+            <EmptyState
+              icon="circlesActive"
+              title="No circles yet"
+              subtitle="Create a circle for your local fitness community."
+              action={{ label: "Create a Circle", onPress: () => setShowCreate(true) }}
+            />
+          ) : null
+        }
+        ListFooterComponent={
+          pastCircles.length > 0 ? (
+            <View style={{ marginTop: SPACE[24] }}>
+              <Text style={[s.sectionLabel, { color: c.textMuted }]}>PAST EVENTS</Text>
+              {pastCircles.map((item) => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[s.card, pe.card, { backgroundColor: c.bgCard, borderColor: c.border }]}
+                  onPress={() => openCircle(item)}
+                  activeOpacity={0.8}
+                >
+                  <View style={[s.cardEmoji, { backgroundColor: c.bgCardAlt, opacity: 0.6 }]}>
+                    <Text style={s.cardEmojiText}>{item.avatar_emoji}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <View style={pe.nameRow}>
+                      <Text style={[s.cardName, { color: c.textSecondary, flex: 1 }]} numberOfLines={1}>{item.name}</Text>
+                      <View style={pe.endedBadge}>
+                        <Text style={pe.endedText}>Ended</Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: FONT.size.xs, color: c.textFaint, marginTop: 2 }}>
+                      {[item.sport, item.city].filter(Boolean).join(" · ")}
+                      {item.event_date ? `  ·  ${formatCircleDate(item.event_date)}` : ""}
+                    </Text>
+                    <Text style={[pe.memberCount, { color: c.textFaint }]}>
+                      {item.member_count} {item.member_count === 1 ? "member" : "members"}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null
         }
       />
 
@@ -1192,4 +1233,12 @@ const tp = StyleSheet.create({
   arrowTxt: { fontSize: 16, lineHeight: 20 },
   val:      { fontSize: 36, fontWeight: FONT.weight.black, width: 60, textAlign: "center" },
   colon:    { fontSize: 36, fontWeight: FONT.weight.black, marginBottom: 2 },
+});
+
+const pe = StyleSheet.create({
+  card:        { opacity: 0.8 },
+  nameRow:     { flexDirection: "row", alignItems: "center", gap: SPACE[8], flex: 1 },
+  endedBadge:  { backgroundColor: "#F3F4F6", borderRadius: RADIUS.pill, paddingHorizontal: SPACE[8], paddingVertical: 2 },
+  endedText:   { fontSize: 11, fontWeight: FONT.weight.bold, color: "#6B7280", textTransform: "uppercase", letterSpacing: 0.5 },
+  memberCount: { fontSize: FONT.size.xs, marginTop: 2 },
 });
