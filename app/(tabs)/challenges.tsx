@@ -82,7 +82,7 @@ export default function ChallengesScreen() {
   const [refreshing,  setRefreshing]  = useState(false);
   const [userId,      setUserId]      = useState<string | null>(null);
   const lastLoadRef = useRef(0);
-  const STALE_MS = 30_000;
+  const STALE_MS = 5 * 60_000; // 5 min cache per tab
 
   // Detail modal
   const [selected,      setSelected]      = useState<Challenge | null>(null);

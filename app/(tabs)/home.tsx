@@ -117,7 +117,7 @@ export default function HomeScreen() {
 
   const today    = localToday();
   const lastLoadRef = useRef(0);
-  const STALE_MS = 30_000; // refetch after 30s
+  const STALE_MS = 5 * 60_000; // 5 min cache per tab
 
   // Check nudge dismiss state once on mount
   useEffect(() => {

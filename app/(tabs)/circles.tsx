@@ -171,7 +171,7 @@ export default function CirclesScreen() {
   const [filterCat,      setFilterCat]      = useState("");
   const [showCreate,     setShowCreate]     = useState(false);
   const lastLoadRef = useRef(0);
-  const STALE_MS = 30_000;
+  const STALE_MS = 5 * 60_000; // 5 min cache per tab
 
   // Detail popup
   const [selectedCircle, setSelectedCircle] = useState<Community | null>(null);

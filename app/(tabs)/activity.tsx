@@ -47,7 +47,7 @@ export default function ActivityScreen() {
   const [gymToggling, setGymToggling] = useState(false);
 
   const lastLoadRef = useRef(0);
-  const STALE_MS    = 30_000;
+  const STALE_MS = 5 * 60_000; // 5 min cache per tab
 
   const load = useCallback(async (isRefresh = false) => {
     try {

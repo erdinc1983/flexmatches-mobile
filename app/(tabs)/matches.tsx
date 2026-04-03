@@ -77,7 +77,7 @@ export default function MatchesScreen() {
   const [myId,            setMyId]            = useState<string | null>(null);
 
   const lastLoadRef = useRef(0);
-  const STALE_MS    = 30_000;
+  const STALE_MS = 5 * 60_000; // 5 min cache per tab
 
   // Session scheduling
   const [sessionCounts,   setSessionCounts]   = useState<Record<string, number>>({});
