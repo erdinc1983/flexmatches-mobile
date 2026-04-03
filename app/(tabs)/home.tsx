@@ -48,8 +48,9 @@ import {
   PrimaryAction, computePrimaryAction, buildMatchReasons, localToday,
 } from "../../components/home/types";
 
-const NUDGE_KEY = "profile_nudge_dismissed_at";
-const NUDGE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
+const NUDGE_KEY         = "profile_nudge_dismissed_at";
+const NUDGE_TTL         = 7 * 24 * 60 * 60 * 1000; // 7 days
+const DISMISSED_CIRCLES_KEY = "dismissed_circle_ids";
 
 type ActivePartner = {
   id:         string;
@@ -120,6 +121,7 @@ export default function HomeScreen() {
   const today    = localToday();
   const lastLoadRef = useRef(0);
   const STALE_MS = 5 * 60_000; // 5 min cache per tab
+  const dismissedCircleIdsRef = useRef<Set<string>>(new Set());
 
   // Check nudge dismiss state once on mount
   useEffect(() => {
@@ -127,6 +129,12 @@ export default function HomeScreen() {
       if (val) {
         const dismissed = parseInt(val, 10);
         if (Date.now() - dismissed < NUDGE_TTL) setNudgeDismissed(true);
+      }
+    });
+    // Load permanently dismissed circle IDs
+    AsyncStorage.getItem(DISMISSED_CIRCLES_KEY).then((val) => {
+      if (val) {
+        try { dismissedCircleIdsRef.current = new Set(JSON.parse(val)); } catch {}
       }
     });
   }, []);
@@ -423,7 +431,9 @@ export default function HomeScreen() {
     const myCircleIds = new Set((myMemberships ?? []).map((m: any) => m.community_id));
 
     const matchingNew = (newCircleData ?? []).filter((cc: any) =>
-      !myCircleIds.has(cc.id) && userSports.some((sp) => cc.sport?.toLowerCase().includes(sp.toLowerCase()) || sp.toLowerCase().includes(cc.sport?.toLowerCase() ?? ""))
+      !myCircleIds.has(cc.id) &&
+      !dismissedCircleIdsRef.current.has(cc.id) &&
+      userSports.some((sp) => cc.sport?.toLowerCase().includes(sp.toLowerCase()) || sp.toLowerCase().includes(cc.sport?.toLowerCase() ?? ""))
     ).map((cc: any) => ({
       id:           cc.id,
       name:         cc.name,
@@ -766,7 +776,13 @@ export default function HomeScreen() {
           circles={newCircles}
           onPress={openNewCircle}
           onJoin={joinCircle}
-          onDismiss={(id) => setNewCircles((prev) => prev.filter((c) => c.id !== id))}
+          onDismiss={(id) => {
+            // Remove from UI
+            setNewCircles((prev) => prev.filter((c) => c.id !== id));
+            // Persist so it never shows again on this device
+            dismissedCircleIdsRef.current.add(id);
+            AsyncStorage.setItem(DISMISSED_CIRCLES_KEY, JSON.stringify([...dismissedCircleIdsRef.current]));
+          }}
         />
 
         <CirclesPreviewSection circles={circles} />
