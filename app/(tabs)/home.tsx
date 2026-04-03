@@ -101,7 +101,7 @@ export default function HomeScreen() {
 
   useEffect(() => {
     if (!loading) return;
-    const t = setTimeout(() => { setLoading(false); setError(true); }, 15_000);
+    const t = setTimeout(() => { setLoading(false); setError(true); }, 30_000);
     return () => clearTimeout(t);
   }, [loading]);
 
@@ -177,9 +177,8 @@ export default function HomeScreen() {
         .select("id, sender_id, receiver_id")
         .eq("status", "accepted")
         .or(`sender_id.eq.${uid},receiver_id.eq.${uid}`),
-      supabase.from("blocks")
-        .select("blocked_id")
-        .eq("blocker_id", uid),
+      // blocks table may not exist yet — fail gracefully
+      supabase.from("blocks").select("blocked_id").eq("blocker_id", uid).then((r) => ({ data: r.data ?? [], error: null })),
     ]);
 
     // Fetch sender profiles for pending matches separately (FK join unreliable with RLS)
@@ -275,25 +274,34 @@ export default function HomeScreen() {
     setConfirmedSessions(allSessions.filter((s) => s.status === "accepted"));
     setPendingSessions(allSessions.filter((s) => s.status === "pending" && (sessionData as any[])?.find((r: any) => r.id === s.id)?.receiver_id === uid));
 
-    // Upcoming sessions — today + next 14 days (ALL sessions, proposer or receiver)
+    // Upcoming sessions — today + next 14 days (separate partner query — RLS-safe)
     const fourteenDays = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
     const fourteenDaysStr = `${fourteenDays.getFullYear()}-${String(fourteenDays.getMonth()+1).padStart(2,"0")}-${String(fourteenDays.getDate()).padStart(2,"0")}`;
     const { data: upcomingData } = await supabase
       .from("buddy_sessions")
-      .select(`
-        id, match_id, sport, session_date, session_time, location, status, proposer_id, receiver_id,
-        proposer:users!buddy_sessions_proposer_id_fkey(full_name, username),
-        receiver:users!buddy_sessions_receiver_id_fkey(full_name, username)
-      `)
+      .select("id, match_id, sport, session_date, session_time, location, status, proposer_id, receiver_id")
       .or(`proposer_id.eq.${uid},receiver_id.eq.${uid}`)
       .gte("session_date", today)
       .lte("session_date", fourteenDaysStr)
       .in("status", ["pending", "accepted"])
       .order("session_date", { ascending: true });
 
+    // Fetch partner names separately (FK join unreliable with RLS)
+    const upcomingPartnerIds = (upcomingData ?? []).map((s: any) =>
+      s.proposer_id === uid ? s.receiver_id : s.proposer_id
+    ).filter(Boolean);
+    let upcomingPartnerMap = new Map<string, any>();
+    if (upcomingPartnerIds.length > 0) {
+      const { data: upcomingPartners } = await supabase
+        .from("users")
+        .select("id, full_name, username")
+        .in("id", upcomingPartnerIds);
+      upcomingPartnerMap = new Map((upcomingPartners ?? []).map((u: any) => [u.id, u]));
+    }
+
     setUpcomingSessions((upcomingData ?? []).map((s: any) => {
-      const isProposer = s.proposer_id === uid;
-      const partner    = isProposer ? s.receiver : s.proposer;
+      const partnerId = s.proposer_id === uid ? s.receiver_id : s.proposer_id;
+      const partner   = upcomingPartnerMap.get(partnerId);
       return {
         id:           s.id,
         match_id:     s.match_id,
@@ -305,6 +313,7 @@ export default function HomeScreen() {
         partner_name: partner?.full_name ?? partner?.username ?? "Partner",
       };
     }));
+
 
     // Circles — user's own, mapped with correct field name
     setCircles((myCircleData ?? [])

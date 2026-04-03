@@ -304,7 +304,7 @@ export default function DiscoverScreen() {
 
   useEffect(() => {
     if (!loading) return;
-    const t = setTimeout(() => { setLoading(false); setError(true); }, 15_000);
+    const t = setTimeout(() => { setLoading(false); setError(true); }, 30_000);
     return () => clearTimeout(t);
   }, [loading]);
 
@@ -354,12 +354,10 @@ export default function DiscoverScreen() {
         .select("id, receiver_id, sender_id, status")
         .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
         .in("status", ["pending", "accepted"]),
-      supabase.from("passes")
-        .select("passed_id")
-        .eq("user_id", user.id),
-      supabase.from("blocks")
-        .select("blocked_id")
-        .eq("blocker_id", user.id),
+      // passes table may not exist yet — fail gracefully
+      supabase.from("passes").select("passed_id").eq("user_id", user.id).then((r) => ({ data: r.data ?? [], error: null })),
+      // blocks table may not exist yet — fail gracefully
+      supabase.from("blocks").select("blocked_id").eq("blocker_id", user.id).then((r) => ({ data: r.data ?? [], error: null })),
     ]);
 
     const me: MyProfile = {
