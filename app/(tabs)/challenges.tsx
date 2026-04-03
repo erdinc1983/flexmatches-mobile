@@ -161,7 +161,7 @@ export default function ChallengesScreen() {
 
   useEffect(() => {
     if (!loading) return;
-    const t = setTimeout(() => { setLoading(false); setError(true); }, 15_000);
+    const t = setTimeout(() => { setLoading(false); setError(true); }, 30_000);
     return () => clearTimeout(t);
   }, [loading]);
 
