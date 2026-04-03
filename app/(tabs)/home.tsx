@@ -134,9 +134,12 @@ export default function HomeScreen() {
     try {
     setError(false);
     if (!isRefresh) setLoading(true);
-    // After a crash the session JWT may not be refreshed yet — force a refresh first
-    await supabase.auth.refreshSession().catch(() => {});
-    const { data: { user } } = await supabase.auth.getUser();
+    let { data: { user } } = await supabase.auth.getUser();
+    // After a crash the session JWT may be stale — refresh once and retry
+    if (!user) {
+      await supabase.auth.refreshSession().catch(() => {});
+      ({ data: { user } } = await supabase.auth.getUser());
+    }
     if (!user) return;
     const uid = user.id;
 
