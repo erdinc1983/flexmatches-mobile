@@ -484,13 +484,19 @@ export default function DiscoverScreen() {
     }
   }, [loadingMore, hasMore, rawOffset]);
 
-  // Reload on focus if stale (>30s) or empty; always reset filters
+  // Trigger load once appUser becomes available
+  useEffect(() => {
+    if (appUser && users.length === 0) load();
+  }, [appUser]);
+
+  // Reload on focus if stale or empty; always reset filters
   useFocusEffect(useCallback(() => {
     setFilters(EMPTY_FILTERS);
     setSearchQuery("");
+    if (!appUser) return;
     const elapsed = Date.now() - lastLoadRef.current;
     if (elapsed > STALE_MS || users.length === 0) load();
-  }, [load, users.length]));
+  }, [load, users.length, appUser]));
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

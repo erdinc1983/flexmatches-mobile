@@ -85,7 +85,7 @@ export default function HomeScreen() {
   const { theme } = useTheme();
   const c = theme.colors;
   const { unreadMessages: unreadCount, unreadCount: notifUnread, refresh: refreshNotifs } = useNotifications();
-  const { appUser, updateAppUser } = useAppData();
+  const { appUser, appUserLoading, updateAppUser } = useAppData();
 
   const [profile,           setProfile]           = useState<HomeProfile | null>(null);
   const [pendingRequests,   setPendingRequests]   = useState<PendingRequest[]>([]);
@@ -145,9 +145,9 @@ export default function HomeScreen() {
     if (!user) return;
     const uid = user.id;
 
-    // Use global AppDataContext for own profile — no users table query needed
+    // Use global AppDataContext for own profile — wait if still loading
     const profileData = appUser;
-    if (!profileData) { setError(true); return; }
+    if (!profileData) return; // AppDataContext not ready yet — don't error
 
     const monthAgo    = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
     const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
@@ -452,17 +452,24 @@ export default function HomeScreen() {
     }
   }, [today]);
 
+  // Trigger load once appUser becomes available (resolves race with AppDataContext)
+  useEffect(() => {
+    if (appUser && !profile) load();
+  }, [appUser]);
+
   useFocusEffect(useCallback(() => {
     // Always refresh notification counts (instant — from context)
     refreshNotifs();
-    // Skip heavy re-fetch if data was loaded recently (< 30s ago)
+    // Skip if appUser not ready yet
+    if (!appUser) return;
+    // Skip heavy re-fetch if data was loaded recently
     const elapsed = Date.now() - lastLoadRef.current;
     if (elapsed > STALE_MS || !profile) {
       load();
     }
     // Close any open modal when the tab loses focus
     return () => { setSelectedSession(null); };
-  }, [load, profile, refreshNotifs]));
+  }, [load, profile, refreshNotifs, appUser]));
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
