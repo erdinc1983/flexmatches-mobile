@@ -11,10 +11,11 @@ import { SectionHeader } from "../ui/SectionHeader";
 import type { CirclePreview } from "./types";
 
 type Props = {
-  circles: CirclePreview[];
+  circles:  CirclePreview[];
+  onPress?: (circle: CirclePreview) => void;
 };
 
-export function CirclesPreviewSection({ circles }: Props) {
+export function CirclesPreviewSection({ circles, onPress }: Props) {
   if (circles.length === 0) return null;
   const visible = circles.slice(0, 4);
 
@@ -26,14 +27,14 @@ export function CirclesPreviewSection({ circles }: Props) {
       />
       <View style={s.grid}>
         {visible.map((circle) => (
-          <CircleCard key={circle.id} circle={circle} />
+          <CircleCard key={circle.id} circle={circle} onPress={onPress} />
         ))}
       </View>
     </View>
   );
 }
 
-function CircleCard({ circle }: { circle: CirclePreview }) {
+function CircleCard({ circle, onPress }: { circle: CirclePreview; onPress?: (c: CirclePreview) => void }) {
   const { theme, isDark } = useTheme();
   const c = theme.colors;
 
@@ -57,7 +58,11 @@ function CircleCard({ circle }: { circle: CirclePreview }) {
   const bg    = isDark ? (BG_DARK[emoji] ?? "#1A1610") : (BG_LIGHT[emoji] ?? "#F5F0EA");
 
   return (
-    <View style={[s.card, { borderColor: c.border, ...SHADOW.sm }]}>
+    <TouchableOpacity
+      style={[s.card, { borderColor: c.border, ...SHADOW.sm }]}
+      onPress={() => onPress ? onPress(circle) : router.push("/(tabs)/circles" as any)}
+      activeOpacity={0.85}
+    >
       {/* Warm gradient-ish header area */}
       <View style={[s.cardTop, { backgroundColor: bg }]}>
         <Text style={s.emoji}>{emoji}</Text>
@@ -69,15 +74,11 @@ function CircleCard({ circle }: { circle: CirclePreview }) {
         <Text style={[s.members, { color: c.textMuted }]}>
           {circle.member_count} Members Nearby
         </Text>
-        <TouchableOpacity
-          style={[s.joinBtn, { backgroundColor: c.brand }]}
-          onPress={() => router.push("/(tabs)/circles" as any)}
-          activeOpacity={0.85}
-        >
-          <Text style={s.joinText}>Join Circle</Text>
-        </TouchableOpacity>
+        <View style={[s.viewBtn, { backgroundColor: c.brand }]}>
+          <Text style={s.joinText}>View Details</Text>
+        </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -89,6 +90,6 @@ const s = StyleSheet.create({
   cardBody:{ padding: SPACE[12], gap: SPACE[6] },
   name:    { ...TYPE.cardTitle },
   members: { ...TYPE.caption },
-  joinBtn: { borderRadius: RADIUS.pill, paddingVertical: SPACE[10], alignItems: "center", marginTop: SPACE[6] },
+  viewBtn: { borderRadius: RADIUS.pill, paddingVertical: SPACE[10], alignItems: "center", marginTop: SPACE[6] },
   joinText:{ color: "#fff", ...TYPE.caption, fontWeight: FONT.weight.bold },
 });

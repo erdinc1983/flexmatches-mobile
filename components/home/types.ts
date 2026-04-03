@@ -41,6 +41,13 @@ export type CirclePreview = {
   name:         string;
   icon:         string;
   member_count: number;
+  sport:        string | null;
+  city:         string | null;
+  field:        string | null;
+  description:  string | null;
+  event_date:   string | null;
+  event_time:   string | null;
+  created_by:   string | null;
 };
 
 export type SessionInfo = {

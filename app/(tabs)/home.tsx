@@ -119,6 +119,9 @@ export default function HomeScreen() {
   const [selectedNewCircle, setSelectedNewCircle] = useState<NewCircle | null>(null);
   const [newCircleMembers,  setNewCircleMembers]  = useState<NewCircleMember[]>([]);
   const [loadingCircleMem,  setLoadingCircleMem]  = useState(false);
+  const [selectedCircle,    setSelectedCircle]    = useState<CirclePreview | null>(null);
+  const [circleMembers,     setCircleMembers]     = useState<NewCircleMember[]>([]);
+  const [loadingCircle,     setLoadingCircle]     = useState(false);
   const [selectedSession,   setSelectedSession]   = useState<SessionInfo | null>(null);
 
   const today    = localToday();
@@ -188,7 +191,7 @@ export default function HomeScreen() {
         .eq("session_date", today)
         .in("status", ["accepted", "pending"]),
       supabase.from("community_members")
-        .select("community:communities(id, name, avatar_emoji)")
+        .select("community:communities(id, name, avatar_emoji, sport, city, field, description, event_date, event_time, created_by)")
         .eq("user_id", uid)
         .limit(3),
       supabase.from("matches")
@@ -343,6 +346,13 @@ export default function HomeScreen() {
         name:         cc.name,
         icon:         cc.avatar_emoji ?? "🏋️",
         member_count: cc.member_count ?? 0,
+        sport:        cc.sport ?? null,
+        city:         cc.city ?? null,
+        field:        cc.field ?? null,
+        description:  cc.description ?? null,
+        event_date:   cc.event_date ?? null,
+        event_time:   cc.event_time ?? null,
+        created_by:   cc.created_by ?? null,
       }))
     );
 
@@ -664,6 +674,19 @@ export default function HomeScreen() {
     setLoadingCircleMem(false);
   }
 
+  async function openMyCircle(circle: CirclePreview) {
+    setSelectedCircle(circle);
+    setLoadingCircle(true);
+    const { data } = await supabase
+      .from("community_members")
+      .select("user:users(id, username, full_name, avatar_url)")
+      .eq("community_id", circle.id);
+    setCircleMembers(
+      (data ?? []).map((row: any) => row.user).filter(Boolean) as NewCircleMember[]
+    );
+    setLoadingCircle(false);
+  }
+
   async function dismissNudge() {
     setNudgeDismissed(true);
     await AsyncStorage.setItem(NUDGE_KEY, String(Date.now()));
@@ -791,7 +814,7 @@ export default function HomeScreen() {
           }}
         />
 
-        <CirclesPreviewSection circles={circles} />
+        <CirclesPreviewSection circles={circles} onPress={openMyCircle} />
 
         {/* ── Challenges shortcut ── */}
         <TouchableOpacity
@@ -848,6 +871,16 @@ export default function HomeScreen() {
             AsyncStorage.setItem(DISMISSED_CIRCLES_KEY, JSON.stringify([...dismissedCircleIdsRef.current]));
           }}
           onClose={() => setSelectedNewCircle(null)}
+        />
+      )}
+
+      {/* ── My Circle detail popup (Local Circles) ──────────────────── */}
+      {selectedCircle && (
+        <MyCircleModal
+          circle={selectedCircle}
+          members={circleMembers}
+          loadingMembers={loadingCircle}
+          onClose={() => setSelectedCircle(null)}
         />
       )}
     </SafeAreaView>
@@ -1414,6 +1447,105 @@ function NewCircleModal({ circle, members, loadingMembers, currentUserId, onJoin
               <Text style={[nc.dismissText, { color: c.textMuted }]}>Not interested</Text>
             </TouchableOpacity>
           </View>
+        </View>
+
+      </Pressable>
+    </Pressable>
+  );
+}
+
+// ─── My Circle Modal (Local Circles) ─────────────────────────────────────────
+function MyCircleModal({ circle, members, loadingMembers, onClose }: {
+  circle:         CirclePreview;
+  members:        NewCircleMember[];
+  loadingMembers: boolean;
+  onClose:        () => void;
+}) {
+  const { theme } = useTheme();
+  const c = theme.colors;
+  const photoUrl = getSportPhoto(circle.sport);
+
+  return (
+    <Pressable style={nc.backdrop} onPress={onClose}>
+      <Pressable style={nc.sheet} onPress={(e) => e.stopPropagation()}>
+
+        {/* Hero image */}
+        <View style={nc.heroWrap}>
+          <Image source={{ uri: photoUrl }} style={nc.heroImg} contentFit="cover" cachePolicy="disk" />
+          <LinearGradient colors={["transparent", "rgba(0,0,0,0.75)"]} style={nc.heroGrad} />
+          <TouchableOpacity style={nc.closeBtn} onPress={onClose} hitSlop={12}>
+            <View style={nc.closeBg}>
+              <Icon name="close" size={16} color="#fff" />
+            </View>
+          </TouchableOpacity>
+          {circle.sport && (
+            <View style={nc.sportBadge}>
+              <Text style={nc.sportBadgeText}>{circle.sport}</Text>
+            </View>
+          )}
+          <View style={nc.heroBottom}>
+            <Text style={nc.heroName} numberOfLines={2}>{circle.name}</Text>
+            {circle.city && (
+              <View style={nc.heroLocRow}>
+                <Icon name="location" size={12} color="rgba(255,255,255,0.8)" />
+                <Text style={nc.heroLoc}>{circle.city}</Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* Body */}
+        <View style={[nc.body, { backgroundColor: c.bgCard }]}>
+          {(circle.event_date || circle.field) && (
+            <View style={nc.metaRow}>
+              {circle.event_date && (
+                <View style={[nc.metaChip, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}>
+                  <Text style={nc.metaEmoji}>📅</Text>
+                  <Text style={[nc.metaText, { color: c.textSecondary }]}>
+                    {formatNewCircleDate(circle.event_date)}{circle.event_time ? `  ·  ${circle.event_time}` : ""}
+                  </Text>
+                </View>
+              )}
+              {circle.field && (
+                <View style={[nc.metaChip, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}>
+                  <Text style={nc.metaEmoji}>📍</Text>
+                  <Text style={[nc.metaText, { color: c.textSecondary }]} numberOfLines={1}>{circle.field}</Text>
+                </View>
+              )}
+            </View>
+          )}
+
+          {circle.description && (
+            <Text style={[nc.desc, { color: c.textMuted }]} numberOfLines={3}>{circle.description}</Text>
+          )}
+
+          <View style={nc.membersSection}>
+            <Text style={[nc.membersLabel, { color: c.textMuted }]}>
+              {loadingMembers ? "Loading members..." : `${members.length} member${members.length !== 1 ? "s" : ""}`}
+            </Text>
+            {loadingMembers ? (
+              <ActivityIndicator color={c.brand} size="small" />
+            ) : (
+              <View style={nc.avatarRow}>
+                {members.slice(0, 6).map((m) => (
+                  <View key={m.id} style={nc.avatarItem}>
+                    <Avatar url={m.avatar_url} name={m.full_name ?? m.username} size={34} />
+                  </View>
+                ))}
+                {members.length === 0 && (
+                  <Text style={[nc.emptyMembers, { color: c.textFaint }]}>No members yet</Text>
+                )}
+              </View>
+            )}
+          </View>
+
+          <TouchableOpacity
+            style={[nc.joinBtn, { backgroundColor: c.brand }]}
+            onPress={() => { onClose(); router.push("/(tabs)/circles" as any); }}
+            activeOpacity={0.85}
+          >
+            <Text style={nc.joinText}>Open Circle</Text>
+          </TouchableOpacity>
         </View>
 
       </Pressable>
