@@ -46,6 +46,7 @@ export function Avatar({ url, name, size = 48 }: Props) {
     <Image
       source={{ uri: src }}
       placeholder={{ blurhash: BLURHASH }}
+      cachePolicy="disk"
       transition={200}
       style={{ width: size, height: size, borderRadius: radius }}
       contentFit="cover"

@@ -20,6 +20,7 @@ import { supabase } from "../../lib/supabase";
 import { notifyMatchAccepted } from "../../lib/notifications";
 import { notifyUser } from "../../lib/push";
 import { useTheme, SPACE, FONT, RADIUS, PALETTE } from "../../lib/theme";
+import { useAppData } from "../../lib/appDataContext";
 import { Icon } from "../../components/Icon";
 import { Avatar } from "../../components/Avatar";
 import { ProfileSheet } from "../../components/discover/ProfileSheet";
@@ -60,6 +61,7 @@ type BuddySession = {
 export default function MatchesScreen() {
   const { theme } = useTheme();
   const c = theme.colors;
+  const { appUser } = useAppData();
 
   const [pending,         setPending]         = useState<Match[]>([]);
   const [accepted,        setAccepted]        = useState<Match[]>([]);
@@ -205,12 +207,10 @@ export default function MatchesScreen() {
       const partnerName = match.other_user.full_name ?? match.other_user.username;
       notifyMatchAccepted(partnerName, matchId);
       // Push to the sender who sent the request
-      const { data: { user } } = await supabase.auth.getUser();
-      const myName = user ? (await supabase.from("users").select("full_name, username").eq("id", user.id).single()).data : null;
       notifyUser(match.sender_id, {
         type: "match_accepted",
         title: "Match Accepted! 🎉",
-        body: `${myName?.full_name ?? myName?.username ?? "Someone"} accepted your request. Start chatting!`,
+        body: `${appUser?.full_name ?? appUser?.username ?? "Someone"} accepted your request. Start chatting!`,
         relatedId: matchId,
         data: { type: "match_accepted", matchId },
       });

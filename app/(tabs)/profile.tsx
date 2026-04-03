@@ -21,6 +21,7 @@ import { CityAutocomplete } from "../../components/CityAutocomplete";
 import * as ImagePicker from "expo-image-picker";
 import { supabase } from "../../lib/supabase";
 import { useTheme, SPACE, FONT, RADIUS, PALETTE, BRAND } from "../../lib/theme";
+import { useAppData } from "../../lib/appDataContext";
 import { Icon } from "../../components/Icon";
 import { Avatar } from "../../components/Avatar";
 import { ProfileSkeleton } from "../../components/ui/Skeleton";
@@ -152,6 +153,7 @@ export default function ProfileScreen() {
   const { theme } = useTheme();
   const c = theme.colors;
   const { unreadCount } = useNotifications();
+  const { appUser, refreshAppUser, updateAppUser } = useAppData();
 
   const [profile,           setProfile]           = useState<Profile | null>(null);
   const [loading,           setLoading]           = useState(true);
@@ -180,26 +182,25 @@ export default function ProfileScreen() {
     if (!user) return;
     setUserId(user.id);
 
+    // Use AppDataContext for own profile — no users table query needed
+    const data = appUser;
+    if (!data) return;
+    setIsAdmin(data.is_admin ?? false);
+
     const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
     const [
-      { data },
       { count: totalWorkouts },
       { count: matchCount },
       { count: monthlyWorkouts },
-      { data: adminData },
       { data: badges },
       { count: sessionsCompleted },
       { count: receivedTotal },
       { count: receivedResponded },
     ] = await Promise.all([
-      supabase.from("users")
-        .select("username, full_name, bio, city, gym_name, fitness_level, age, gender, occupation, company, industry, education_level, career_goals, weight, target_weight, availability, sports, certifications, avatar_url, is_pro, training_intent, show_me, current_streak, longest_streak")
-        .eq("id", user.id).single(),
-      supabase.from("workouts").select("*", { count: "exact", head: true }).eq("user_id", user.id),
-      supabase.from("matches").select("*", { count: "exact", head: true }).eq("status", "accepted")
+      supabase.from("workouts").select("id", { count: "exact", head: true }).eq("user_id", user.id),
+      supabase.from("matches").select("id", { count: "exact", head: true }).eq("status", "accepted")
         .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`),
-      supabase.from("workouts").select("*", { count: "exact", head: true }).eq("user_id", user.id).gte("logged_at", monthAgo),
-      supabase.from("users").select("is_admin").eq("id", user.id).single(),
+      supabase.from("workouts").select("id", { count: "exact", head: true }).eq("user_id", user.id).gte("logged_at", monthAgo),
       supabase.from("user_badges").select("badge_key").eq("user_id", user.id),
       supabase.from("buddy_sessions").select("id", { count: "exact", head: true })
         .or(`proposer_id.eq.${user.id},receiver_id.eq.${user.id}`).eq("status", "completed"),
@@ -208,26 +209,23 @@ export default function ProfileScreen() {
         .in("status", ["accepted", "declined"]),
     ]);
 
-    if (data) {
-      const rTotal     = receivedTotal ?? 0;
-      const rResponded = receivedResponded ?? 0;
-      const full: Profile = {
-        ...data,
-        sports:              data.sports ?? [],
-        certifications:      data.certifications ?? [],
-        avatar_url:          data.avatar_url ?? null,
-        current_streak:      data.current_streak ?? 0,
-        longest_streak:      data.longest_streak ?? 0,
-        total_workouts:      totalWorkouts ?? 0,
-        match_count:         matchCount ?? 0,
-        sessions_completed:  sessionsCompleted ?? 0,
-        response_rate:       rTotal > 0 ? Math.round((rResponded / rTotal) * 100) : null,
-      };
-      setProfile(full);
-      setForm(full);
-      setWorkoutsThisMonth(monthlyWorkouts ?? 0);
-    }
-    setIsAdmin(adminData?.is_admin ?? false);
+    const rTotal     = receivedTotal ?? 0;
+    const rResponded = receivedResponded ?? 0;
+    const full: Profile = {
+      ...data,
+      sports:              data.sports ?? [],
+      certifications:      (data as any).certifications ?? [],
+      avatar_url:          data.avatar_url ?? null,
+      current_streak:      data.current_streak ?? 0,
+      longest_streak:      (data as any).longest_streak ?? 0,
+      total_workouts:      totalWorkouts ?? 0,
+      match_count:         matchCount ?? 0,
+      sessions_completed:  sessionsCompleted ?? 0,
+      response_rate:       rTotal > 0 ? Math.round((rResponded / rTotal) * 100) : null,
+    };
+    setProfile(full);
+    setForm(full);
+    setWorkoutsThisMonth(monthlyWorkouts ?? 0);
     setEarnedBadges((badges ?? []).map((b: { badge_key: string }) => b.badge_key as BadgeKey));
 
     const pts = await calcUserPoints(user.id);
@@ -304,6 +302,14 @@ export default function ProfileScreen() {
     if (error) { Alert.alert("Error", error.message); return; }
     setProfile(form);
     setEditing(false);
+    // Sync changes back to global context
+    updateAppUser({
+      full_name: form.full_name, bio: form.bio, city: form.city,
+      gym_name: form.gym_name, fitness_level: form.fitness_level,
+      age: form.age, gender: form.gender, sports: form.sports,
+      availability: form.availability, training_intent: form.training_intent,
+      show_me: form.show_me,
+    });
   }
 
   function toggleSport(sport: string) {
@@ -367,6 +373,7 @@ export default function ProfileScreen() {
       await supabase.from("users").update({ avatar_url: publicUrl }).eq("id", userId!);
       setProfile(p => p ? { ...p, avatar_url: publicUrl } : p);
       setForm(f => f ? { ...f, avatar_url: publicUrl } : f);
+      updateAppUser({ avatar_url: publicUrl });
     } catch (e: any) {
       Alert.alert("Error", e.message);
     } finally {

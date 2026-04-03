@@ -9,6 +9,7 @@ import { useFocusEffect } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import { ErrorState } from "../../components/ui/ErrorState";
 import { useTheme, SPACE, FONT, RADIUS, PALETTE } from "../../lib/theme";
+import { useAppData } from "../../lib/appDataContext";
 import { Icon } from "../../components/Icon";
 
 type Workout = {
@@ -28,6 +29,7 @@ const SPORT_EMOJI: Record<string, string> = {
 export default function ActivityScreen() {
   const { theme } = useTheme();
   const c = theme.colors;
+  const { appUser, updateAppUser } = useAppData();
 
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,24 +59,25 @@ export default function ActivityScreen() {
     if (!user) return;
     setUserId(user.id);
 
-    const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    // Use AppDataContext for own profile fields — no users table query needed
+    setStreak(appUser?.current_streak ?? 0);
 
-    const [{ data: wData }, { data: profile }, { count: mCount }] = await Promise.all([
+    const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const [{ data: wData }, { count: mCount }] = await Promise.all([
       supabase.from("workouts").select("id, exercise_type, notes, duration_min, logged_at").eq("user_id", user.id).order("logged_at", { ascending: false }).limit(50),
-      supabase.from("users").select("current_streak, is_at_gym, gym_checkin_at").eq("id", user.id).single(),
-      supabase.from("workouts").select("*", { count: "exact", head: true }).eq("user_id", user.id).gte("logged_at", monthAgo),
+      supabase.from("workouts").select("id", { count: "exact", head: true }).eq("user_id", user.id).gte("logged_at", monthAgo),
     ]);
 
     setWorkouts(wData ?? []);
-    setStreak(profile?.current_streak ?? 0);
     setMonthCount(mCount ?? 0);
 
-    let atGym = profile?.is_at_gym ?? false;
-    if (atGym && profile?.gym_checkin_at) {
-      const age = Date.now() - new Date(profile.gym_checkin_at).getTime();
+    let atGym = appUser?.is_at_gym ?? false;
+    if (atGym && appUser?.gym_checkin_at) {
+      const age = Date.now() - new Date(appUser.gym_checkin_at).getTime();
       if (age > 4 * 60 * 60 * 1000) {
         atGym = false;
         supabase.from("users").update({ is_at_gym: false, gym_checkin_at: null }).eq("id", user.id).then(() => {});
+        updateAppUser({ is_at_gym: false, gym_checkin_at: null });
       }
     }
     setIsAtGym(atGym);

@@ -90,6 +90,7 @@ export function GridCard({ user, status, onPress, onConnect, matchId }: Props) {
           source={{ uri: photoUrl }}
           style={StyleSheet.absoluteFill}
           contentFit="cover"
+          cachePolicy="disk"
           placeholder={{ blurhash: "LKHBBd~q9F%M%MIUofRj00M{D%of" }}
           transition={200}
         />

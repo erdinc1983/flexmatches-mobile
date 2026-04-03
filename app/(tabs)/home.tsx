@@ -28,6 +28,7 @@ import { useNotifications } from "../../lib/notificationContext";
 import { notifyMatchAccepted } from "../../lib/notifications";
 import { notifyUser } from "../../lib/push";
 import { useTheme, SPACE, FONT, RADIUS, PALETTE, SHADOW, TYPE } from "../../lib/theme";
+import { useAppData } from "../../lib/appDataContext";
 import { Icon } from "../../components/Icon";
 import { Avatar } from "../../components/Avatar";
 
@@ -84,6 +85,7 @@ export default function HomeScreen() {
   const { theme } = useTheme();
   const c = theme.colors;
   const { unreadMessages: unreadCount, unreadCount: notifUnread, refresh: refreshNotifs } = useNotifications();
+  const { appUser, updateAppUser } = useAppData();
 
   const [profile,           setProfile]           = useState<HomeProfile | null>(null);
   const [pendingRequests,   setPendingRequests]   = useState<PendingRequest[]>([]);
@@ -143,12 +145,15 @@ export default function HomeScreen() {
     if (!user) return;
     const uid = user.id;
 
+    // Use global AppDataContext for own profile — no users table query needed
+    const profileData = appUser;
+    if (!profileData) { setError(true); return; }
+
     const monthAgo    = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
     const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
 
     // Phase 1 — parallel queries (no FK joins — RLS-safe)
     const [
-      { data: profileData },
       { count: matchCount },
       { count: workoutMonth },
       { data: pendingMatchRows },
@@ -158,12 +163,9 @@ export default function HomeScreen() {
       { data: acceptedMatches },
       { data: blockData },
     ] = await Promise.all([
-      supabase.from("users")
-        .select("id, username, full_name, avatar_url, current_streak, last_checkin_date, is_at_gym, gym_checkin_at, sports, fitness_level, city, availability, bio, gym_name")
-        .eq("id", uid).single(),
       supabase.from("matches").select("*", { count: "exact", head: true })
         .eq("status", "accepted").or(`sender_id.eq.${uid},receiver_id.eq.${uid}`),
-      supabase.from("workouts").select("*", { count: "exact", head: true })
+      supabase.from("workouts").select("id", { count: "exact", head: true })
         .eq("user_id", uid).gte("logged_at", monthAgo),
       supabase.from("matches")
         .select("id, sender_id")
@@ -216,31 +218,29 @@ export default function HomeScreen() {
 
     // Unread count comes from useNotifications() context (realtime)
 
-    // Auto-expire gym status after 4 hours
-    let atGym = profileData?.is_at_gym ?? false;
-    if (atGym && profileData?.gym_checkin_at) {
+    // Auto-expire gym status after 3 hours
+    let atGym = profileData.is_at_gym ?? false;
+    if (atGym && profileData.gym_checkin_at) {
       const age = Date.now() - new Date(profileData.gym_checkin_at).getTime();
       if (age > 3 * 60 * 60 * 1000) {
         atGym = false;
         supabase.from("users").update({ is_at_gym: false, gym_checkin_at: null }).eq("id", uid).then(() => {});
+        updateAppUser({ is_at_gym: false, gym_checkin_at: null });
       }
     }
 
-    // If profile is still null after refresh, something is wrong — show retry
-    if (!profileData) { setError(true); return; }
-
     setProfile({
       id:                  uid,
-      username:            profileData?.username ?? "",
-      full_name:           profileData?.full_name ?? null,
-      avatar_url:          profileData?.avatar_url ?? null,
-      current_streak:      profileData?.current_streak ?? 0,
-      last_checkin_date:   profileData?.last_checkin_date ?? null,
+      username:            profileData.username ?? "",
+      full_name:           profileData.full_name ?? null,
+      avatar_url:          profileData.avatar_url ?? null,
+      current_streak:      profileData.current_streak ?? 0,
+      last_checkin_date:   profileData.last_checkin_date ?? null,
       match_count:         matchCount ?? 0,
       workout_count_month: workoutMonth ?? 0,
       is_at_gym:           atGym,
-      gym_checkin_at:      profileData?.gym_checkin_at ?? null,
-      gym_name:            profileData?.gym_name ?? null,
+      gym_checkin_at:      profileData.gym_checkin_at ?? null,
+      gym_name:            profileData.gym_name ?? null,
     });
 
     // Profile completeness check

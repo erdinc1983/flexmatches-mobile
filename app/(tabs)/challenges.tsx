@@ -123,21 +123,25 @@ export default function ChallengesScreen() {
     const myMap: Record<string, number> = {};
     for (const p of myParts ?? []) myMap[p.challenge_id] = p.current_value;
 
-    // Get participant counts in parallel
-    const enriched = await Promise.all(
-      (cData ?? []).map(async (ch: any) => {
-        const { count } = await supabase
-          .from("challenge_participants")
-          .select("id", { count: "exact", head: true })
-          .eq("challenge_id", ch.id);
-        return {
-          ...ch,
-          participant_count: count ?? 0,
-          my_value:          ch.id in myMap ? myMap[ch.id] : null,
-          joined:            ch.id in myMap,
-        } as Challenge;
-      }),
-    );
+    // Fetch all participant counts in one query, group in JS (replaces N+1)
+    const challengeIds = (cData ?? []).map((ch: any) => ch.id);
+    const { data: allCounts } = challengeIds.length > 0
+      ? await supabase.from("challenge_participants")
+          .select("challenge_id")
+          .in("challenge_id", challengeIds)
+      : { data: [] };
+
+    const countMap: Record<string, number> = {};
+    for (const row of allCounts ?? []) {
+      countMap[row.challenge_id] = (countMap[row.challenge_id] ?? 0) + 1;
+    }
+
+    const enriched = (cData ?? []).map((ch: any) => ({
+      ...ch,
+      participant_count: countMap[ch.id] ?? 0,
+      my_value:          ch.id in myMap ? myMap[ch.id] : null,
+      joined:            ch.id in myMap,
+    } as Challenge));
 
     setChallenges(enriched);
     setRefreshing(false);

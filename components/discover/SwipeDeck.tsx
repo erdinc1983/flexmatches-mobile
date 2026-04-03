@@ -251,6 +251,7 @@ function SwipeCardContent({ user, status, onInfoPress }: {
           source={{ uri: photoUrl }}
           style={StyleSheet.absoluteFill}
           contentFit="cover"
+          cachePolicy="disk"
           placeholder={{ blurhash: "LKHBBd~q9F%M%MIUofRj00M{D%of" }}
           transition={200}
         />

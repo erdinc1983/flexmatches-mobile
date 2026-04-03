@@ -6,6 +6,7 @@ import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
 import { ThemeProvider, useTheme, FONT, SPACE, PALETTE } from "../lib/theme";
 import { NotificationProvider } from "../lib/notificationContext";
+import { AppDataProvider } from "../lib/appDataContext";
 import { registerPushToken } from "../lib/push";
 import { Button } from "../components/ui/Button";
 
@@ -175,6 +176,7 @@ export default function RootLayout() {
   return (
     <ThemeProvider>
       <RawErrorBoundary>
+        <AppDataProvider>
         <NotificationProvider>
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="index" />
@@ -188,6 +190,7 @@ export default function RootLayout() {
             <Stack.Screen name="(tabs)/leaderboard" options={{ presentation: "card", animation: "slide_from_right" }} />
           </Stack>
         </NotificationProvider>
+        </AppDataProvider>
       </RawErrorBoundary>
     </ThemeProvider>
   );

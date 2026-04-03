@@ -29,6 +29,7 @@ import * as Haptics from "expo-haptics";
 import { supabase } from "../../lib/supabase";
 import { notifyUser } from "../../lib/push";
 import { useTheme, SPACE, FONT, RADIUS, PALETTE } from "../../lib/theme";
+import { useAppData } from "../../lib/appDataContext";
 import { Icon } from "../../components/Icon";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { DiscoverSkeleton } from "../../components/ui/Skeleton";
@@ -293,6 +294,7 @@ const fp = StyleSheet.create({
 export default function DiscoverScreen() {
   const { theme } = useTheme();
   const c = theme.colors;
+  const { appUser } = useAppData();
 
   const [myProfile,    setMyProfile]    = useState<MyProfile | null>(null);
   const [users,        setUsers]        = useState<DiscoverUser[]>([]);   // new people (swipe deck)
@@ -341,15 +343,15 @@ export default function DiscoverScreen() {
 
     supabase.from("users").update({ last_active: new Date().toISOString() }).eq("id", user.id).then(() => {});
 
+    // Use AppDataContext for own profile — no users table query needed
+    const meData = appUser;
+    if (!meData) return;
+
     const [
-      { data: meData },
       { data: matchData },
       { data: passData },
       { data: blockData },
     ] = await Promise.all([
-      supabase.from("users")
-        .select("id, sports, fitness_level, availability, city, training_intent, show_me, lat, lng, gender")
-        .eq("id", user.id).single(),
       supabase.from("matches")
         .select("id, receiver_id, sender_id, status")
         .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
@@ -362,15 +364,15 @@ export default function DiscoverScreen() {
 
     const me: MyProfile = {
       id:              user.id,
-      sports:          meData?.sports ?? null,
-      fitness_level:   meData?.fitness_level ?? null,
-      availability:    meData?.availability ?? null,
-      city:            meData?.city ?? null,
-      training_intent: meData?.training_intent ?? null,
-      show_me:         meData?.show_me ?? null,
-      lat:             meData?.lat ?? null,
-      lng:             meData?.lng ?? null,
-      gender:          meData?.gender ?? null,
+      sports:          meData.sports ?? null,
+      fitness_level:   meData.fitness_level ?? null,
+      availability:    meData.availability ?? null,
+      city:            meData.city ?? null,
+      training_intent: meData.training_intent ?? null,
+      show_me:         meData.show_me ?? null,
+      lat:             meData.lat ?? null,
+      lng:             meData.lng ?? null,
+      gender:          meData.gender ?? null,
     };
     setMyProfile(me);
 

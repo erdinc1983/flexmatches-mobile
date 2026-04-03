@@ -34,34 +34,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const [userId, setUserId] = useState<string | null>(null);
 
   const fetchCount = useCallback(async (uid: string) => {
-    // Notification bell count
-    const { count, error: nErr } = await supabase
-      .from("notifications")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", uid)
-      .eq("read", false);
-    if (nErr) console.warn("[NotifCtx] count error:", nErr.message);
-    console.log("[NotifCtx] unread notifications:", count, "unread messages: pending...");
-    setUnreadCount(count ?? 0);
-
-    // Unread messages count (for Chat tab badge)
-    const { data: myMatches } = await supabase
-      .from("matches")
-      .select("id")
-      .eq("status", "accepted")
-      .or(`sender_id.eq.${uid},receiver_id.eq.${uid}`);
-    const matchIds = (myMatches ?? []).map((m: any) => m.id);
-    if (matchIds.length > 0) {
-      const { count: msgCount } = await supabase
-        .from("messages")
-        .select("id", { count: "exact", head: true })
-        .in("match_id", matchIds)
-        .neq("sender_id", uid)
-        .is("read_at", null);
-      setUnreadMessages(msgCount ?? 0);
-    } else {
-      setUnreadMessages(0);
-    }
+    // Single RPC replaces 3 sequential queries
+    const { data, error } = await supabase.rpc("get_unread_counts", { p_user_id: uid });
+    if (error) { console.warn("[NotifCtx] fetchCount error:", error.message); return; }
+    setUnreadCount(data?.unread_notifications ?? 0);
+    setUnreadMessages(data?.unread_messages ?? 0);
   }, []);
 
   const refresh = useCallback(async () => {
