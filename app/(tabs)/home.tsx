@@ -19,7 +19,7 @@ import { useFocusEffect } from "expo-router";
 import { router } from "expo-router";
 import {
   ScrollView, ActivityIndicator, Alert, RefreshControl,
-  StyleSheet, View, Text, TouchableOpacity, Pressable, Modal,
+  StyleSheet, View, Text, TouchableOpacity, Pressable, Modal, TextInput, KeyboardAvoidingView, Platform,
 } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
@@ -880,6 +880,8 @@ export default function HomeScreen() {
           circle={selectedCircle}
           members={circleMembers}
           loadingMembers={loadingCircle}
+          currentUserId={profile?.id ?? null}
+          onCancelCircle={(id) => setCircles((prev) => prev.filter((cc) => cc.id !== id))}
           onClose={() => setSelectedCircle(null)}
         />
       )}
@@ -1455,25 +1457,73 @@ function NewCircleModal({ circle, members, loadingMembers, currentUserId, onJoin
 }
 
 // ─── My Circle Modal (Local Circles) ─────────────────────────────────────────
-function MyCircleModal({ circle, members, loadingMembers, onClose }: {
-  circle:         CirclePreview;
-  members:        NewCircleMember[];
-  loadingMembers: boolean;
-  onClose:        () => void;
+function MyCircleModal({ circle, members, loadingMembers, currentUserId, onCancelCircle, onClose }: {
+  circle:          CirclePreview;
+  members:         NewCircleMember[];
+  loadingMembers:  boolean;
+  currentUserId:   string | null;
+  onCancelCircle:  (id: string) => void;
+  onClose:         () => void;
 }) {
   const { theme } = useTheme();
   const c = theme.colors;
-  const photoUrl = getSportPhoto(circle.sport);
+  const isCreator = circle.created_by !== null && circle.created_by === currentUserId;
+  const photoUrl  = getSportPhoto(circle.sport);
+
+  // ── Edit state ────────────────────────────────────────────────────────────
+  const [view,        setView]        = useState<"detail" | "edit">("detail");
+  const [editName,    setEditName]    = useState(circle.name);
+  const [editDesc,    setEditDesc]    = useState(circle.description ?? "");
+  const [editField,   setEditField]   = useState(circle.field ?? "");
+  const [editDate,    setEditDate]    = useState(circle.event_date ?? "");
+  const [editTime,    setEditTime]    = useState(circle.event_time ?? "");
+  const [saving,      setSaving]      = useState(false);
+
+  async function handleSave() {
+    if (!editName.trim()) return;
+    setSaving(true);
+    await supabase.from("communities").update({
+      name:        editName.trim(),
+      description: editDesc.trim() || null,
+      field:       editField.trim() || null,
+      event_date:  editDate || null,
+      event_time:  editTime.trim() || null,
+    }).eq("id", circle.id);
+    setSaving(false);
+    setView("detail");
+    // Reflect name change locally
+    circle.name        = editName.trim();
+    circle.description = editDesc.trim() || null;
+    circle.field       = editField.trim() || null;
+    circle.event_date  = editDate || null;
+    circle.event_time  = editTime.trim() || null;
+  }
+
+  function handleCancelCircle() {
+    Alert.alert(
+      "Cancel event?",
+      "This will permanently delete the circle and remove all members.",
+      [
+        { text: "Keep it", style: "cancel" },
+        { text: "Delete circle", style: "destructive", onPress: async () => {
+          await supabase.from("communities").delete().eq("id", circle.id);
+          onCancelCircle(circle.id);
+          onClose();
+        }},
+      ]
+    );
+  }
 
   return (
     <Pressable style={nc.backdrop} onPress={onClose}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ width: "100%" }}>
       <Pressable style={nc.sheet} onPress={(e) => e.stopPropagation()}>
 
         {/* Hero image */}
         <View style={nc.heroWrap}>
           <Image source={{ uri: photoUrl }} style={nc.heroImg} contentFit="cover" cachePolicy="disk" />
           <LinearGradient colors={["transparent", "rgba(0,0,0,0.75)"]} style={nc.heroGrad} />
-          <TouchableOpacity style={nc.closeBtn} onPress={onClose} hitSlop={12}>
+          <TouchableOpacity style={nc.closeBtn} onPress={view === "edit" ? () => setView("detail") : onClose} hitSlop={12}>
             <View style={nc.closeBg}>
               <Icon name="close" size={16} color="#fff" />
             </View>
@@ -1484,7 +1534,7 @@ function MyCircleModal({ circle, members, loadingMembers, onClose }: {
             </View>
           )}
           <View style={nc.heroBottom}>
-            <Text style={nc.heroName} numberOfLines={2}>{circle.name}</Text>
+            <Text style={nc.heroName} numberOfLines={2}>{view === "edit" ? editName || circle.name : circle.name}</Text>
             {circle.city && (
               <View style={nc.heroLocRow}>
                 <Icon name="location" size={12} color="rgba(255,255,255,0.8)" />
@@ -1494,64 +1544,174 @@ function MyCircleModal({ circle, members, loadingMembers, onClose }: {
           </View>
         </View>
 
-        {/* Body */}
-        <View style={[nc.body, { backgroundColor: c.bgCard }]}>
-          {(circle.event_date || circle.field) && (
-            <View style={nc.metaRow}>
-              {circle.event_date && (
-                <View style={[nc.metaChip, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}>
-                  <Text style={nc.metaEmoji}>📅</Text>
-                  <Text style={[nc.metaText, { color: c.textSecondary }]}>
-                    {formatNewCircleDate(circle.event_date)}{circle.event_time ? `  ·  ${circle.event_time}` : ""}
-                  </Text>
-                </View>
-              )}
-              {circle.field && (
-                <View style={[nc.metaChip, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}>
-                  <Text style={nc.metaEmoji}>📍</Text>
-                  <Text style={[nc.metaText, { color: c.textSecondary }]} numberOfLines={1}>{circle.field}</Text>
-                </View>
-              )}
-            </View>
-          )}
-
-          {circle.description && (
-            <Text style={[nc.desc, { color: c.textMuted }]} numberOfLines={3}>{circle.description}</Text>
-          )}
-
-          <View style={nc.membersSection}>
-            <Text style={[nc.membersLabel, { color: c.textMuted }]}>
-              {loadingMembers ? "Loading members..." : `${members.length} member${members.length !== 1 ? "s" : ""}`}
-            </Text>
-            {loadingMembers ? (
-              <ActivityIndicator color={c.brand} size="small" />
-            ) : (
-              <View style={nc.avatarRow}>
-                {members.slice(0, 6).map((m) => (
-                  <View key={m.id} style={nc.avatarItem}>
-                    <Avatar url={m.avatar_url} name={m.full_name ?? m.username} size={34} />
+        {/* ── Detail view ── */}
+        {view === "detail" && (
+          <View style={[nc.body, { backgroundColor: c.bgCard }]}>
+            {(circle.event_date || circle.field) && (
+              <View style={nc.metaRow}>
+                {circle.event_date && (
+                  <View style={[nc.metaChip, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}>
+                    <Text style={nc.metaEmoji}>📅</Text>
+                    <Text style={[nc.metaText, { color: c.textSecondary }]}>
+                      {formatNewCircleDate(circle.event_date)}{circle.event_time ? `  ·  ${circle.event_time}` : ""}
+                    </Text>
                   </View>
-                ))}
-                {members.length === 0 && (
-                  <Text style={[nc.emptyMembers, { color: c.textFaint }]}>No members yet</Text>
+                )}
+                {circle.field && (
+                  <View style={[nc.metaChip, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}>
+                    <Text style={nc.metaEmoji}>📍</Text>
+                    <Text style={[nc.metaText, { color: c.textSecondary }]} numberOfLines={1}>{circle.field}</Text>
+                  </View>
                 )}
               </View>
             )}
-          </View>
 
-          <TouchableOpacity
-            style={[nc.joinBtn, { backgroundColor: c.brand }]}
-            onPress={() => { onClose(); router.push("/(tabs)/circles" as any); }}
-            activeOpacity={0.85}
-          >
-            <Text style={nc.joinText}>Open Circle</Text>
-          </TouchableOpacity>
-        </View>
+            {circle.description && (
+              <Text style={[nc.desc, { color: c.textMuted }]} numberOfLines={3}>{circle.description}</Text>
+            )}
+
+            <View style={nc.membersSection}>
+              <Text style={[nc.membersLabel, { color: c.textMuted }]}>
+                {loadingMembers ? "Loading members..." : `${members.length} member${members.length !== 1 ? "s" : ""}`}
+              </Text>
+              {loadingMembers ? (
+                <ActivityIndicator color={c.brand} size="small" />
+              ) : (
+                <View style={nc.avatarRow}>
+                  {members.slice(0, 6).map((m) => (
+                    <View key={m.id} style={nc.avatarItem}>
+                      <Avatar url={m.avatar_url} name={m.full_name ?? m.username} size={34} />
+                    </View>
+                  ))}
+                  {members.length === 0 && (
+                    <Text style={[nc.emptyMembers, { color: c.textFaint }]}>No members yet</Text>
+                  )}
+                </View>
+              )}
+            </View>
+
+            <View style={nc.actions}>
+              <TouchableOpacity
+                style={[nc.joinBtn, { backgroundColor: c.brand }]}
+                onPress={() => { onClose(); router.push("/(tabs)/circles" as any); }}
+                activeOpacity={0.85}
+              >
+                <Text style={nc.joinText}>Open Circle</Text>
+              </TouchableOpacity>
+
+              {isCreator && (
+                <View style={mc.creatorRow}>
+                  <TouchableOpacity
+                    style={[mc.creatorBtn, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}
+                    onPress={() => setView("edit")}
+                    activeOpacity={0.8}
+                  >
+                    <Icon name="edit" size={15} color={c.brand} />
+                    <Text style={[mc.creatorBtnText, { color: c.brand }]}>Edit</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[mc.creatorBtn, { backgroundColor: "#FEF2F2", borderColor: "#FECACA" }]}
+                    onPress={handleCancelCircle}
+                    activeOpacity={0.8}
+                  >
+                    <Icon name="close" size={15} color="#DC2626" />
+                    <Text style={[mc.creatorBtnText, { color: "#DC2626" }]}>Cancel Event</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
+
+        {/* ── Edit view ── */}
+        {view === "edit" && (
+          <ScrollView style={[nc.body, { backgroundColor: c.bgCard }]} keyboardShouldPersistTaps="handled">
+            <Text style={[mc.editLabel, { color: c.textMuted }]}>Circle Name</Text>
+            <TextInput
+              style={[mc.editInput, { backgroundColor: c.bgCardAlt, borderColor: c.border, color: c.text }]}
+              value={editName}
+              onChangeText={setEditName}
+              placeholder="Circle name"
+              placeholderTextColor={c.textFaint}
+            />
+
+            <Text style={[mc.editLabel, { color: c.textMuted }]}>Description</Text>
+            <TextInput
+              style={[mc.editInput, mc.editTextArea, { backgroundColor: c.bgCardAlt, borderColor: c.border, color: c.text }]}
+              value={editDesc}
+              onChangeText={setEditDesc}
+              placeholder="What's this circle about?"
+              placeholderTextColor={c.textFaint}
+              multiline
+              numberOfLines={3}
+            />
+
+            <Text style={[mc.editLabel, { color: c.textMuted }]}>Location / Venue</Text>
+            <TextInput
+              style={[mc.editInput, { backgroundColor: c.bgCardAlt, borderColor: c.border, color: c.text }]}
+              value={editField}
+              onChangeText={setEditField}
+              placeholder="e.g. Central Park Court 3"
+              placeholderTextColor={c.textFaint}
+            />
+
+            <Text style={[mc.editLabel, { color: c.textMuted }]}>Event Date (YYYY-MM-DD)</Text>
+            <TextInput
+              style={[mc.editInput, { backgroundColor: c.bgCardAlt, borderColor: c.border, color: c.text }]}
+              value={editDate}
+              onChangeText={setEditDate}
+              placeholder="2025-06-15"
+              placeholderTextColor={c.textFaint}
+              keyboardType="numbers-and-punctuation"
+            />
+
+            <Text style={[mc.editLabel, { color: c.textMuted }]}>Event Time (HH:MM)</Text>
+            <TextInput
+              style={[mc.editInput, { backgroundColor: c.bgCardAlt, borderColor: c.border, color: c.text }]}
+              value={editTime}
+              onChangeText={setEditTime}
+              placeholder="09:00"
+              placeholderTextColor={c.textFaint}
+              keyboardType="numbers-and-punctuation"
+            />
+
+            <View style={[nc.actions, { marginTop: 4 }]}>
+              <TouchableOpacity
+                style={[nc.joinBtn, { backgroundColor: saving ? c.bgCardAlt : c.brand }]}
+                onPress={handleSave}
+                disabled={saving || !editName.trim()}
+                activeOpacity={0.85}
+              >
+                {saving
+                  ? <ActivityIndicator color="#fff" size="small" />
+                  : <Text style={nc.joinText}>Save Changes</Text>
+                }
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[nc.dismissBtn, { borderColor: c.border }]}
+                onPress={() => setView("detail")}
+                activeOpacity={0.7}
+              >
+                <Text style={[nc.dismissText, { color: c.textMuted }]}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        )}
 
       </Pressable>
+      </KeyboardAvoidingView>
     </Pressable>
   );
 }
+
+const mc = StyleSheet.create({
+  creatorRow:     { flexDirection: "row", gap: SPACE[10] },
+  creatorBtn:     { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: SPACE[6], paddingVertical: SPACE[12], borderRadius: RADIUS.lg, borderWidth: 1 },
+  creatorBtnText: { fontSize: FONT.size.sm, fontWeight: FONT.weight.bold },
+  editLabel:      { fontSize: FONT.size.xs, fontWeight: FONT.weight.bold, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: SPACE[6], marginTop: SPACE[12] },
+  editInput:      { borderRadius: RADIUS.md, borderWidth: 1, paddingHorizontal: SPACE[12], paddingVertical: SPACE[10], fontSize: FONT.size.sm },
+  editTextArea:   { minHeight: 80, textAlignVertical: "top" },
+});
 
 // ─── New Circle popup styles ──────────────────────────────────────────────────
 const nc = StyleSheet.create({
