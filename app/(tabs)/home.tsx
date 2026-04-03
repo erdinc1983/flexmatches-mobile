@@ -450,7 +450,7 @@ export default function HomeScreen() {
     } finally {
       setLoading(false);
     }
-  }, [today]);
+  }, [today, appUser, updateAppUser]);
 
   // Trigger load once appUser becomes available (resolves race with AppDataContext)
   useEffect(() => {

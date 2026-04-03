@@ -445,7 +445,7 @@ export default function DiscoverScreen() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [appUser]);
 
   // ── Load next page ───────────────────────────────────────────────────────────
   const loadMore = useCallback(async () => {
