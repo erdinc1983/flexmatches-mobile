@@ -61,22 +61,25 @@ export function Skeleton({ width, height, radius = 8, style }: Props) {
  * Pre-built skeleton layouts for common screens.
  */
 
-export function HomeSkeleton() {
+// Fix 7: sectionsOnly=true skips header/strip skeletons (they render from cached appUser)
+export function HomeSkeleton({ sectionsOnly = false }: { sectionsOnly?: boolean } = {}) {
   const { theme } = useTheme();
   const c = theme.colors;
   return (
     <Animated.View style={[sk.container, { backgroundColor: c.bg }]}>
-      {/* Header */}
-      <Animated.View style={sk.row}>
-        <Skeleton width={50} height={50} radius={25} />
-        <Animated.View style={{ gap: 8, flex: 1 }}>
-          <Skeleton width={100} height={12} />
-          <Skeleton width={160} height={18} />
-        </Animated.View>
-      </Animated.View>
-
-      {/* Stat row */}
-      <Skeleton width="100%" height={72} radius={20} />
+      {/* Header + stat row only shown on true first load */}
+      {!sectionsOnly && (
+        <>
+          <Animated.View style={sk.row}>
+            <Skeleton width={50} height={50} radius={25} />
+            <Animated.View style={{ gap: 8, flex: 1 }}>
+              <Skeleton width={100} height={12} />
+              <Skeleton width={160} height={18} />
+            </Animated.View>
+          </Animated.View>
+          <Skeleton width="100%" height={72} radius={20} />
+        </>
+      )}
 
       {/* Hero card */}
       <Skeleton width="100%" height={180} radius={24} />

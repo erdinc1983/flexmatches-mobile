@@ -1,12 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, ActivityIndicator, Alert, KeyboardAvoidingView,
   Platform, ScrollView, StatusBar, Linking,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { PENDING_REF_KEY } from "../_layout";
 
 const TERMS_URL   = "https://www.flexmatches.com/terms";
 const PRIVACY_URL = "https://www.flexmatches.com/privacy-policy";
+import { Image } from "expo-image";
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as AppleAuthentication from "expo-apple-authentication";
@@ -14,13 +17,13 @@ import { supabase } from "../../lib/supabase";
 import { signInWithApple, isAppleAuthAvailable } from "../../lib/appleAuth";
 
 function getStrength(pw: string): { label: string; color: string; bars: number } {
-  if (pw.length < 6) return { label: "Too short", color: "#FF4500", bars: 1 };
+  if (pw.length < 6) return { label: "Too short", color: "#E53E3E", bars: 1 };
   const has8    = pw.length >= 8;
   const hasUpper = /[A-Z]/.test(pw);
   const hasNum   = /[0-9]/.test(pw);
   const score = [has8, hasUpper, hasNum].filter(Boolean).length;
-  if (score === 0) return { label: "Weak",   color: "#FF4500", bars: 1 };
-  if (score === 1) return { label: "Weak",   color: "#FF4500", bars: 1 };
+  if (score === 0) return { label: "Weak",   color: "#E53E3E", bars: 1 };
+  if (score === 1) return { label: "Weak",   color: "#E53E3E", bars: 1 };
   if (score === 2) return { label: "Medium", color: "#F59E0B", bars: 2 };
   return              { label: "Strong", color: "#22C55E", bars: 3 };
 }
@@ -37,16 +40,35 @@ export default function RegisterScreen() {
   const [showPassword,   setShowPassword]   = useState(false);
   const [showConfirm,    setShowConfirm]    = useState(false);
 
-  const [emailError, setEmailError] = useState<string | null>(null);
+  const [emailError,      setEmailError]      = useState<string | null>(null);
+  const [usernameStatus, setUsernameStatus]  = useState<"idle" | "checking" | "available" | "taken">("idle");
+  const usernameTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function validateEmail(v: string) {
     const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
     setEmailError(valid || v.length === 0 ? null : "Please enter a valid email address");
   }
 
-  const strength     = password.length > 0 ? getStrength(password) : null;
+  const strength       = password.length > 0 ? getStrength(password) : null;
   const passwordsMatch = confirm.length > 0 && password === confirm;
-  const canSubmit    = !!email && !!username && strength?.label === "Strong" && passwordsMatch;
+  const canSubmit      = !!email && !!username && strength?.label === "Strong" && passwordsMatch
+                         && usernameStatus === "available";
+
+  function handleUsernameChange(v: string) {
+    setUsername(v);
+    setUsernameStatus("idle");
+    if (usernameTimer.current) clearTimeout(usernameTimer.current);
+    if (v.trim().length < 3) return;
+    setUsernameStatus("checking");
+    usernameTimer.current = setTimeout(async () => {
+      const { data } = await supabase
+        .from("users")
+        .select("id")
+        .eq("username", v.trim().toLowerCase())
+        .maybeSingle();
+      setUsernameStatus(data ? "taken" : "available");
+    }, 300);
+  }
 
   useEffect(() => {
     isAppleAuthAvailable().then(setAppleAvailable);
@@ -72,10 +94,29 @@ export default function RegisterScreen() {
       return;
     }
     setLoading(true);
-    const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { username } } });
+    const normalizedUsername = username.trim().toLowerCase();
+    const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { username: normalizedUsername } } });
     if (error) { setLoading(false); Alert.alert("Error", error.message); return; }
     if (data.user) {
-      await supabase.from("users").upsert({ id: data.user.id, username });
+      await supabase.from("users").upsert({ id: data.user.id, username: normalizedUsername });
+      // Apply pending referral code (fire-and-forget)
+      const refCode = await AsyncStorage.getItem(PENDING_REF_KEY);
+      if (refCode) {
+        const { data: referrer } = await supabase
+          .from("users")
+          .select("id")
+          .eq("referral_code", refCode)
+          .neq("id", data.user.id)
+          .maybeSingle();
+        if (referrer) {
+          await supabase.from("referrals").insert({
+            referrer_id: referrer.id,
+            referred_user_id: data.user.id,
+          }).then(() => AsyncStorage.removeItem(PENDING_REF_KEY));
+        } else {
+          await AsyncStorage.removeItem(PENDING_REF_KEY);
+        }
+      }
       // Routing handled centrally by _layout.tsx (needsOnboarding check)
     } else {
       Alert.alert("Account created!", "Check your email to verify your account.");
@@ -95,7 +136,7 @@ export default function RegisterScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0A0A0A" />
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
@@ -104,9 +145,11 @@ export default function RegisterScreen() {
           </TouchableOpacity>
 
           <View style={styles.header}>
-            <View style={styles.iconWrap}>
-              <Text style={styles.icon}>🚀</Text>
-            </View>
+            <Image
+              source={require("../../assets/images/icon.png")}
+              style={styles.logoImg}
+              contentFit="contain"
+            />
             <Text style={styles.title}>Create account</Text>
             <Text style={styles.subtitle}>Join thousands of fitness enthusiasts</Text>
           </View>
@@ -115,16 +158,34 @@ export default function RegisterScreen() {
             {/* Username */}
             <View style={styles.field}>
               <Text style={styles.label}>Username</Text>
-              <TextInput
-                style={[styles.input, focusedField === "username" && styles.inputFocused]}
-                placeholder="flexkral"
-                placeholderTextColor="#333"
-                value={username}
-                onChangeText={setUsername}
-                autoCapitalize="none"
-                onFocus={() => setFocusedField("username")}
-                onBlur={() => setFocusedField(null)}
-              />
+              <View style={styles.inputWrap}>
+                <TextInput
+                  style={[styles.inputInner, focusedField === "username" && styles.inputFocused,
+                    usernameStatus === "taken" && { borderColor: "#E53E3E" }]}
+                  placeholder="flexkral"
+                  placeholderTextColor="#333"
+                  value={username}
+                  onChangeText={handleUsernameChange}
+                  autoCapitalize="none"
+                  onFocus={() => setFocusedField("username")}
+                  onBlur={() => setFocusedField(null)}
+                />
+                {usernameStatus === "checking" && (
+                  <ActivityIndicator size="small" color="#888" style={{ paddingRight: 14 }} />
+                )}
+                {usernameStatus === "available" && (
+                  <Text style={{ paddingRight: 14, fontSize: 18 }}>✅</Text>
+                )}
+                {usernameStatus === "taken" && (
+                  <Text style={{ paddingRight: 14, fontSize: 18 }}>❌</Text>
+                )}
+              </View>
+              {usernameStatus === "taken" && (
+                <Text style={styles.errorHint}>Username already taken</Text>
+              )}
+              {usernameStatus === "available" && (
+                <Text style={[styles.errorHint, { color: "#22C55E" }]}>Username available</Text>
+              )}
             </View>
 
             {/* Email */}
@@ -182,7 +243,7 @@ export default function RegisterScreen() {
               <View style={styles.inputWrap}>
                 <TextInput
                   style={[styles.inputInner, focusedField === "confirm" && styles.inputFocused,
-                    confirm.length > 0 && !passwordsMatch && { borderColor: "#FF4500" }]}
+                    confirm.length > 0 && !passwordsMatch && { borderColor: "#E53E3E" }]}
                   placeholder="Repeat your password"
                   placeholderTextColor="#333"
                   value={confirm}
@@ -260,60 +321,59 @@ export default function RegisterScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0A0A0A" },
+  container: { flex: 1, backgroundColor: "#FFFFFF" },
   scroll: { flexGrow: 1, paddingHorizontal: 24, paddingBottom: 40 },
-  backBtn: { marginTop: 8, marginBottom: 32, width: 40, height: 40, alignItems: "center", justifyContent: "center" },
-  backText: { fontSize: 26, color: "#555" },
-  header: { alignItems: "center", marginBottom: 40, gap: 10 },
-  iconWrap: { width: 72, height: 72, borderRadius: 22, backgroundColor: "#1a1a1a", alignItems: "center", justifyContent: "center", marginBottom: 8, borderWidth: 1, borderColor: "#222" },
-  icon: { fontSize: 36 },
-  title: { fontSize: 32, fontWeight: "900", color: "#fff", letterSpacing: -1 },
-  subtitle: { fontSize: 15, color: "#555", textAlign: "center" },
-  form: { gap: 20 },
-  field: { gap: 8 },
-  label: { fontSize: 13, color: "#666", fontWeight: "700", letterSpacing: 0.3, textTransform: "uppercase" },
+  backBtn: { marginTop: 8, marginBottom: 24, width: 40, height: 40, alignItems: "center", justifyContent: "center" },
+  backText: { fontSize: 26, color: "#999" },
+  header: { alignItems: "center", marginBottom: 36, gap: 8 },
+  logoImg: { width: 80, height: 80, borderRadius: 20, marginBottom: 8 },
+  title: { fontSize: 30, fontWeight: "900", color: "#111", letterSpacing: -0.5 },
+  subtitle: { fontSize: 15, color: "#888", textAlign: "center" },
+  form: { gap: 18 },
+  field: { gap: 7 },
+  label: { fontSize: 12, color: "#888", fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase" },
   input: {
-    backgroundColor: "#111",
-    borderRadius: 16,
+    backgroundColor: "#F5F5F5",
+    borderRadius: 14,
     paddingHorizontal: 18,
-    paddingVertical: 16,
-    color: "#FFF",
+    paddingVertical: 15,
+    color: "#111",
     fontSize: 16,
     borderWidth: 1.5,
-    borderColor: "#222",
+    borderColor: "#E8E8E8",
   },
-  inputFocused: { borderColor: "#FF4500", backgroundColor: "#130800" },
+  inputFocused: { borderColor: "#FF6B00", backgroundColor: "#FFF8F3" },
   button: {
-    backgroundColor: "#FF4500",
-    borderRadius: 18,
-    paddingVertical: 18,
+    backgroundColor: "#FF6B00",
+    borderRadius: 16,
+    paddingVertical: 17,
     alignItems: "center",
     marginTop: 8,
-    shadowColor: "#FF4500",
-    shadowOpacity: 0.35,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 8,
+    shadowColor: "#FF6B00",
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
   },
-  buttonDisabled: { opacity: 0.5, shadowOpacity: 0 },
-  buttonText: { color: "#FFF", fontSize: 17, fontWeight: "800", letterSpacing: -0.3 },
+  buttonDisabled: { opacity: 0.45, shadowOpacity: 0 },
+  buttonText: { color: "#FFF", fontSize: 17, fontWeight: "800", letterSpacing: -0.2 },
   loginBtn:         { alignItems: "center", paddingVertical: 4 },
-  loginText:        { color: "#555", fontSize: 14 },
-  loginLink:        { color: "#FF4500", fontWeight: "700" },
-  legal:            { textAlign: "center", fontSize: 11, color: "#2a2a2a", marginTop: 4 },
-  legalLink:        { color: "#FF4500", textDecorationLine: "underline" },
+  loginText:        { color: "#888", fontSize: 14 },
+  loginLink:        { color: "#FF6B00", fontWeight: "700" },
+  legal:            { textAlign: "center", fontSize: 11, color: "#BBB", marginTop: 4 },
+  legalLink:        { color: "#FF6B00", textDecorationLine: "underline" },
   divider:          { flexDirection: "row", alignItems: "center", gap: 12 },
-  dividerLine:      { flex: 1, height: 1, backgroundColor: "#1a1a1a" },
-  dividerText:      { color: "#333", fontSize: 13, fontWeight: "600" },
-  appleBtn:         { width: "100%", height: 56 },
-  appleLoading:     { height: 56, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, backgroundColor: "#111", borderRadius: 18, borderWidth: 1, borderColor: "#222" },
+  dividerLine:      { flex: 1, height: 1, backgroundColor: "#EFEFEF" },
+  dividerText:      { color: "#BBB", fontSize: 13, fontWeight: "600" },
+  appleBtn:         { width: "100%", height: 52 },
+  appleLoading:     { height: 52, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, backgroundColor: "#F5F5F5", borderRadius: 14, borderWidth: 1, borderColor: "#E8E8E8" },
   appleLoadingText: { color: "#888", fontSize: 15, fontWeight: "600" },
-  inputWrap:     { flexDirection: "row", alignItems: "center", backgroundColor: "#111", borderRadius: 16, borderWidth: 1.5, borderColor: "#222" },
-  inputInner:    { flex: 1, paddingHorizontal: 18, paddingVertical: 16, color: "#FFF", fontSize: 16 },
+  inputWrap:     { flexDirection: "row", alignItems: "center", backgroundColor: "#F5F5F5", borderRadius: 14, borderWidth: 1.5, borderColor: "#E8E8E8" },
+  inputInner:    { flex: 1, paddingHorizontal: 18, paddingVertical: 15, color: "#111", fontSize: 16 },
   eyeBtn:        { paddingHorizontal: 14, paddingVertical: 14 },
   eyeIcon:       { fontSize: 18 },
   strengthRow:   { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 },
   strengthBar:   { flex: 1, height: 3, borderRadius: 2 },
   strengthLabel: { fontSize: 12, fontWeight: "700", minWidth: 50 },
-  errorHint:     { fontSize: 12, color: "#FF4500", marginTop: 2 },
+  errorHint:     { fontSize: 12, color: "#E53E3E", marginTop: 2 },
 });

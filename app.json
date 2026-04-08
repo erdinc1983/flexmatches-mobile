@@ -7,11 +7,11 @@
     "icon": "./assets/images/icon.png",
     "scheme": "flexmatchesmobile",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.flexmatches.app",
-      "buildNumber": "4",
+      "buildNumber": "20",
       "infoPlist": {
         "UIBackgroundModes": [
           "remote-notification"
@@ -88,13 +88,12 @@
     },
     "android": {
       "package": "com.flexmatches.app",
-      "versionCode": 1,
+      "versionCode": 7,
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#FF6B00",
+        "foregroundImage": "./assets/images/android-icon-foreground.png"
       },
+      "googleServicesFile": "./google-services.json",
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "permissions": [
@@ -130,7 +129,6 @@
         }
       ],
       "expo-secure-store",
-      "expo-apple-authentication",
       [
         "expo-notifications",
         {
@@ -149,7 +147,7 @@
     ],
     "experiments": {
       "typedRoutes": true,
-      "reactCompiler": true
+      "reactCompiler": false
     },
     "extra": {
       "router": {},

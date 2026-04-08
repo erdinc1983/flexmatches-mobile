@@ -17,12 +17,12 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, router } from "expo-router";
 import { ErrorState } from "../../components/ui/ErrorState";
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, RefreshControl, ScrollView, Modal, Alert,
-  TouchableWithoutFeedback, TextInput,
+  TouchableWithoutFeedback, TextInput, InteractionManager,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
@@ -294,7 +294,7 @@ const fp = StyleSheet.create({
 export default function DiscoverScreen() {
   const { theme } = useTheme();
   const c = theme.colors;
-  const { appUser } = useAppData();
+  const { appUser, appUserLoading } = useAppData();
 
   const [myProfile,    setMyProfile]    = useState<MyProfile | null>(null);
   const [users,        setUsers]        = useState<DiscoverUser[]>([]);   // new people (swipe deck)
@@ -305,10 +305,10 @@ export default function DiscoverScreen() {
   const [error,        setError]        = useState(false);
 
   useEffect(() => {
-    if (!loading) return;
+    if (!loading || appUserLoading) return; // wait for AppDataContext before starting timeout
     const t = setTimeout(() => { setLoading(false); setError(true); }, 30_000);
     return () => clearTimeout(t);
-  }, [loading]);
+  }, [loading, appUserLoading]);
 
   const [refreshing,   setRefreshing]   = useState(false);
   const [filters,      setFilters]      = useState<Filters>(EMPTY_FILTERS);
@@ -330,18 +330,26 @@ export default function DiscoverScreen() {
   const excludedRef      = useRef<Set<string>>(new Set());
   const myProfileRef     = useRef<MyProfile | null>(null);
   const lastLoadRef      = useRef(0);
+  const loadingRef       = useRef(false);
+  const mountedRef       = useRef(true);
   const STALE_MS = 5 * 60_000; // 5 min cache per tab
+
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
 
   // ── Data loading ────────────────────────────────────────────────────────────
   const load = useCallback(async (isRefresh = false) => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     try {
-    setError(false);
-    if (!isRefresh) setLoading(true);
+    if (mountedRef.current) setError(false);
+    if (!isRefresh && mountedRef.current) setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     currentUserIdRef.current = user.id;
 
-    supabase.from("users").update({ last_active: new Date().toISOString() }).eq("id", user.id).then(() => {});
+    InteractionManager.runAfterInteractions(() => {
+      supabase.from("users").update({ last_active: new Date().toISOString() }).eq("id", user.id).then(() => {});
+    });
 
     // Use AppDataContext for own profile — no users table query needed
     const meData = appUser;
@@ -434,16 +442,18 @@ export default function DiscoverScreen() {
     setStatuses(initialStatuses);
     setRawOffset(PAGE_SIZE);
     setHasMore((candidates?.length ?? 0) >= PAGE_SIZE);
-    lastLoadRef.current = Date.now();
+    if (mountedRef.current) lastLoadRef.current = Date.now();
     } catch (err) {
       console.error("[Discover] load failed:", err);
+      if (!mountedRef.current) return;
       if (isRefresh) {
         Alert.alert("Error", "Could not refresh. Please try again.");
       } else {
         setError(true);
       }
     } finally {
-      setLoading(false);
+      loadingRef.current = false;
+      if (mountedRef.current) setLoading(false);
     }
   }, [appUser]);
 
@@ -532,7 +542,7 @@ export default function DiscoverScreen() {
       .select("id").single();
     if (data) {
       setLastSwipe({ userId, dbId: data.id, action: "like" });
-      const senderName = myProfile?.full_name ?? myProfile?.username ?? "Someone";
+      const senderName = appUser?.full_name ?? appUser?.username ?? "Someone";
       notifyUser(userId, {
         type: "match_request",
         title: "New Match Request 🤝",
@@ -709,6 +719,20 @@ export default function DiscoverScreen() {
         </View>
       )}
 
+      {/* ── Profile completion nudge ─────────────────────────────────────── */}
+      {myProfile && (!myProfile.sports || myProfile.sports.length === 0) && (
+        <TouchableOpacity
+          style={[s.nudgeBanner, { backgroundColor: c.brand + "18", borderColor: c.brand + "40" }]}
+          onPress={() => router.push("/(tabs)/profile")}
+          activeOpacity={0.8}
+        >
+          <Text style={[s.nudgeText, { color: c.brand }]}>
+            Add your sports to see real match scores
+          </Text>
+          <Text style={[s.nudgeAction, { color: c.brand }]}>Complete profile →</Text>
+        </TouchableOpacity>
+      )}
+
       {/* ── Swipe view — always mounted to preserve currentIndex state ─── */}
       <View style={{ flex: 1, display: viewMode === "swipe" ? "flex" : "none" }}>
         <SwipeDeck
@@ -723,6 +747,9 @@ export default function DiscoverScreen() {
           hasMore={hasMore}
           loadingMore={loadingMore}
           onDeckLow={() => { if (hasMore && !loadingMore) loadMore(); }}
+          onInvite={() => router.push("/referral" as any)}
+          onJoinCircle={() => router.push("/(tabs)/circles" as any)}
+          onCompleteProfile={() => router.push("/(tabs)/profile" as any)}
         />
       </View>
 
@@ -818,11 +845,19 @@ export default function DiscoverScreen() {
               : null
           }
           ListEmptyComponent={
-            <EmptyState
-              icon="search"
-              title="No matches found"
-              subtitle={filterCount > 0 ? "Try adjusting your filters." : "Pull down to refresh."}
-            />
+            filterCount > 0 ? (
+              <EmptyState
+                icon="search"
+                title="No matches found"
+                subtitle="Try adjusting your filters."
+              />
+            ) : (
+              <DiscoverEmptyState
+                onInvite={() => router.push("/referral" as any)}
+                onJoinCircle={() => router.push("/(tabs)/circles" as any)}
+                onCompleteProfile={() => router.push("/(tabs)/profile" as any)}
+              />
+            )
           }
         />
       )}
@@ -867,6 +902,36 @@ export default function DiscoverScreen() {
         </View>
       )}
     </SafeAreaView>
+  );
+}
+
+// ─── Discover Empty State ─────────────────────────────────────────────────────
+function DiscoverEmptyState({ onInvite, onJoinCircle, onCompleteProfile }: {
+  onInvite: () => void;
+  onJoinCircle: () => void;
+  onCompleteProfile: () => void;
+}) {
+  const { theme } = useTheme();
+  const c = theme.colors;
+  return (
+    <View style={{ alignItems: "center", paddingVertical: SPACE[48], paddingHorizontal: SPACE[24], gap: SPACE[12] }}>
+      <Text style={{ fontSize: 52 }}>🔍</Text>
+      <Text style={{ fontSize: FONT.size.xl, fontWeight: FONT.weight.black, color: c.text, textAlign: "center" }}>
+        No partners nearby yet
+      </Text>
+      <Text style={{ fontSize: FONT.size.base, color: c.textMuted, textAlign: "center" }}>
+        Grow the community or complete your profile to improve matches.
+      </Text>
+      <TouchableOpacity style={{ backgroundColor: c.brand, paddingVertical: SPACE[14], paddingHorizontal: SPACE[32], borderRadius: RADIUS.xl, marginTop: SPACE[8], width: "100%", alignItems: "center" }} onPress={onInvite} activeOpacity={0.85}>
+        <Text style={{ color: "#fff", fontSize: FONT.size.base, fontWeight: FONT.weight.bold }}>👥 Invite Friends</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={{ backgroundColor: c.bgCard, paddingVertical: SPACE[14], paddingHorizontal: SPACE[32], borderRadius: RADIUS.xl, width: "100%", alignItems: "center" }} onPress={onJoinCircle} activeOpacity={0.85}>
+        <Text style={{ color: c.text, fontSize: FONT.size.base, fontWeight: FONT.weight.bold }}>⭕ Join a Circle</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={{ backgroundColor: c.bgCard, paddingVertical: SPACE[14], paddingHorizontal: SPACE[32], borderRadius: RADIUS.xl, width: "100%", alignItems: "center" }} onPress={onCompleteProfile} activeOpacity={0.85}>
+        <Text style={{ color: c.text, fontSize: FONT.size.base, fontWeight: FONT.weight.bold }}>✏️ Complete Profile</Text>
+      </TouchableOpacity>
+    </View>
   );
 }
 
@@ -1126,6 +1191,11 @@ const s = StyleSheet.create({
   // Search bar
   searchBar:     { flexDirection: "row", alignItems: "center", gap: SPACE[8], paddingHorizontal: SPACE[16], paddingVertical: SPACE[10], borderBottomWidth: 1 },
   searchInput:   { flex: 1, fontSize: FONT.size.base, paddingVertical: 0 },
+
+  // Profile nudge banner
+  nudgeBanner:   { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginHorizontal: SPACE[16], marginTop: SPACE[8], paddingHorizontal: SPACE[12], paddingVertical: SPACE[10], borderRadius: RADIUS.md, borderWidth: 1 },
+  nudgeText:     { fontSize: FONT.size.sm, fontWeight: FONT.weight.medium, flex: 1 },
+  nudgeAction:   { fontSize: FONT.size.sm, fontWeight: FONT.weight.bold, marginLeft: SPACE[8] },
 
   atGymHeader: { flexDirection: "row", alignItems: "center", gap: SPACE[6] },
   liveDot:     { width: 8, height: 8, borderRadius: 4, backgroundColor: PALETTE.success },

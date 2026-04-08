@@ -143,11 +143,15 @@ export default function SettingsScreen() {
   async function submitReport() {
     if (!reportText.trim() || reportSaving || !userId) return;
     setReportSaving(true);
-    await supabase.from("bug_reports").insert({
+    const { data: inserted } = await supabase.from("bug_reports").insert({
       user_id: userId,
       message: reportText.trim(),
       created_at: new Date().toISOString(),
-    });
+    }).select("id").single();
+    // Notify admins (fire-and-forget — don't block on result)
+    supabase.functions.invoke("notify-admin-report", {
+      body: { reportId: inserted?.id, message: reportText.trim(), reporterEmail: userEmail },
+    }).catch(() => {});
     setReportSent(true);
     setReportSaving(false);
     setTimeout(() => { setReportModal(false); setReportText(""); setReportSent(false); }, 2000);
@@ -157,14 +161,17 @@ export default function SettingsScreen() {
     if (deleteInput !== "DELETE" || !userId || deleting) return;
     setDeleting(true);
     try {
+      // Refresh session first — important for Apple Sign In tokens
+      await supabase.auth.refreshSession().catch(() => {});
       const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error("Session expired. Please sign in again.");
       const res = await fetch(
         `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/delete-account`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${session?.access_token}`,
+            "Authorization": `Bearer ${session.access_token}`,
           },
         }
       );
@@ -430,8 +437,8 @@ export default function SettingsScreen() {
       {/* ── Delete Account Modal ── */}
       <Modal visible={deleteModal} transparent animationType="fade" onRequestClose={() => { setDeleteModal(false); setDeleteInput(""); }}>
         <BlurOverlay onPress={() => { setDeleteModal(false); setDeleteInput(""); }}>
-          <View style={s.overlayInner}>
-          <View style={[s.modalBox, { backgroundColor: c.bgCard, borderColor: PALETTE.error + "44" }]}>
+          <View style={s.overlayCenter}>
+          <View style={[s.modalBox, { backgroundColor: c.bgCard, borderColor: PALETTE.error + "44", borderRadius: RADIUS.xl, borderBottomLeftRadius: RADIUS.xl, borderBottomRightRadius: RADIUS.xl }]}>
             <Text style={[s.modalTitle, { color: c.text, textAlign: "center" }]}>⚠️ Delete Account</Text>
             <Text style={[s.modalSub, { color: c.textMuted, textAlign: "center", lineHeight: 20 }]}>
               This will permanently delete your profile, matches, goals, and all data. This cannot be undone.
@@ -440,12 +447,13 @@ export default function SettingsScreen() {
               Type <Text style={{ color: PALETTE.error, fontWeight: "700" }}>DELETE</Text> to confirm:
             </Text>
             <TextInput
-              style={[s.modalInput, { backgroundColor: c.bgInput, borderColor: PALETTE.error + "44", color: c.text }]}
+              style={[s.modalInput, { backgroundColor: c.bgCard, borderColor: PALETTE.error + "44", color: c.text }]}
               value={deleteInput}
               onChangeText={setDeleteInput}
               placeholder="DELETE"
-              placeholderTextColor={c.textMuted}
+              placeholderTextColor={c.textSecondary}
               autoCapitalize="characters"
+              selectionColor={PALETTE.error}
             />
             <View style={s.modalBtns}>
               <TouchableOpacity style={[s.modalCancel, { borderColor: c.border }]} onPress={() => { setDeleteModal(false); setDeleteInput(""); }}>
@@ -541,6 +549,7 @@ const s = StyleSheet.create({
   // Modals
   overlay:       { flex: 1, backgroundColor: "#00000099", justifyContent: "flex-end" },
   overlayInner:  { flex: 1, justifyContent: "flex-end" },
+  overlayCenter: { flex: 1, justifyContent: "center", paddingHorizontal: SPACE[20] },
   modalBox:      { borderRadius: RADIUS.xl, borderWidth: 1, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, padding: SPACE[24], gap: SPACE[12] },
   modalTitle:    { fontSize: FONT.size.lg, fontWeight: FONT.weight.black },
   modalSub:      { fontSize: FONT.size.sm, lineHeight: 18 },

@@ -79,6 +79,8 @@ export default function MatchesScreen() {
   const [myId,            setMyId]            = useState<string | null>(null);
 
   const lastLoadRef = useRef(0);
+  const loadingRef  = useRef(false);
+  const mountedRef  = useRef(true);
   const STALE_MS = 5 * 60_000; // 5 min cache per tab
 
   // Session scheduling
@@ -93,13 +95,17 @@ export default function MatchesScreen() {
   const [respondingId,    setRespondingId]    = useState<string | null>(null);
   const [sheetUser,       setSheetUser]       = useState<DiscoverUser | null>(null);
 
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   const load = useCallback(async (isRefresh = false) => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     try {
-    setError(false);
-    if (!isRefresh) setLoading(true);
+    if (mountedRef.current) setError(false);
+    if (!isRefresh && mountedRef.current) setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    setMyId(user.id);
+    if (mountedRef.current) setMyId(user.id);
 
     const [{ data: incomingRows }, { data: acceptedRows }] = await Promise.all([
       supabase.from("matches")
@@ -164,16 +170,18 @@ export default function MatchesScreen() {
       });
       setSessionCounts(counts);
     }
-    lastLoadRef.current = Date.now();
+    if (mountedRef.current) lastLoadRef.current = Date.now();
     } catch (err) {
       console.error("[Matches] load failed:", err);
+      if (!mountedRef.current) return;
       if (isRefresh) {
         Alert.alert("Error", "Could not refresh. Please try again.");
       } else {
         setError(true);
       }
     } finally {
-      setLoading(false);
+      loadingRef.current = false;
+      if (mountedRef.current) setLoading(false);
     }
   }, []);
 

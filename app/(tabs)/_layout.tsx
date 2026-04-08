@@ -1,5 +1,6 @@
 import { View, Text, StyleSheet, Platform } from "react-native";
 import { Tabs } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../../lib/theme";
 import { useNotifications } from "../../lib/notificationContext";
 import { Icon } from "../../components/Icon";
@@ -8,6 +9,7 @@ export default function TabsLayout() {
   const { theme } = useTheme();
   const c = theme.colors;
   const { unreadCount, unreadMessages } = useNotifications();
+  const insets = useSafeAreaInsets();
 
   return (
     <Tabs
@@ -23,8 +25,8 @@ export default function TabsLayout() {
           shadowOpacity:   0.08,
           shadowRadius:    16,
           elevation:       12,
-          height:          Platform.OS === "ios" ? 84 : 68,
-          paddingBottom:   Platform.OS === "ios" ? 26 : 10,
+          height:          Platform.OS === "ios" ? 84 : 58 + insets.bottom,
+          paddingBottom:   Platform.OS === "ios" ? 26 : insets.bottom + 6,
           paddingTop:      10,
         },
         tabBarActiveTintColor:   c.brand,

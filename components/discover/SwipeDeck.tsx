@@ -54,16 +54,19 @@ const LEVEL_COLOR: Record<string, string> = {
 const DECK_LOW_THRESHOLD = 5; // trigger onDeckLow when this many cards remain
 
 type Props = {
-  users:        DiscoverUser[];
-  statuses:     Record<string, RequestStatus>;
-  onLike:       (userId: string) => void;
-  onPass:       (userId: string) => void;
-  onCardPress:  (user: DiscoverUser) => void;
-  canUndo?:     boolean;
-  onUndo?:      () => void;
-  hasMore?:     boolean;
-  loadingMore?: boolean;
-  onDeckLow?:   () => void;
+  users:              DiscoverUser[];
+  statuses:           Record<string, RequestStatus>;
+  onLike:             (userId: string) => void;
+  onPass:             (userId: string) => void;
+  onCardPress:        (user: DiscoverUser) => void;
+  canUndo?:           boolean;
+  onUndo?:            () => void;
+  hasMore?:           boolean;
+  loadingMore?:       boolean;
+  onDeckLow?:         () => void;
+  onInvite?:          () => void;
+  onJoinCircle?:      () => void;
+  onCompleteProfile?: () => void;
 };
 
 export type SwipeDeckRef = { undoLast: () => void };
@@ -71,7 +74,8 @@ export type SwipeDeckRef = { undoLast: () => void };
 // ─── SwipeDeck ────────────────────────────────────────────────────────────────
 export const SwipeDeck = forwardRef<SwipeDeckRef, Props>(function SwipeDeck(
   { users, statuses, onLike, onPass, onCardPress, canUndo = false, onUndo,
-    hasMore = false, loadingMore = false, onDeckLow }, ref
+    hasMore = false, loadingMore = false, onDeckLow,
+    onInvite, onJoinCircle, onCompleteProfile }, ref
 ) {
   const { theme } = useTheme();
   const c = theme.colors;
@@ -152,6 +156,32 @@ export const SwipeDeck = forwardRef<SwipeDeckRef, Props>(function SwipeDeck(
         </View>
       );
     }
+
+    // Truly empty — no users loaded at all
+    if (users.length === 0) {
+      return (
+        <View style={[deck.empty, { backgroundColor: c.bg }]}>
+          <Text style={deck.emptyEmoji}>🔍</Text>
+          <Text style={[deck.emptyTitle, { color: c.text }]}>No partners nearby yet</Text>
+          <Text style={[deck.emptySub, { color: c.textMuted }]}>
+            Grow the community or update your profile to improve matches.
+          </Text>
+          <View style={deck.ctaRow}>
+            <TouchableOpacity style={[deck.cta, { backgroundColor: c.brand }]} onPress={onInvite} activeOpacity={0.85}>
+              <Text style={deck.ctaText}>👥 Invite Friends</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[deck.cta, { backgroundColor: c.bgCard }]} onPress={onJoinCircle} activeOpacity={0.85}>
+              <Text style={[deck.ctaText, { color: c.text }]}>⭕ Join a Circle</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[deck.cta, { backgroundColor: c.bgCard }]} onPress={onCompleteProfile} activeOpacity={0.85}>
+              <Text style={[deck.ctaText, { color: c.text }]}>✏️ Complete Profile</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      );
+    }
+
+    // Swiped through everyone
     return (
       <View style={[deck.empty, { backgroundColor: c.bg }]}>
         <Text style={deck.emptyEmoji}>🎉</Text>
@@ -159,6 +189,17 @@ export const SwipeDeck = forwardRef<SwipeDeckRef, Props>(function SwipeDeck(
         <Text style={[deck.emptySub, { color: c.textMuted }]}>
           {hasMore ? "Loading more…" : "Pull to refresh for new matches."}
         </Text>
+        <View style={deck.ctaRow}>
+          <TouchableOpacity style={[deck.cta, { backgroundColor: c.brand }]} onPress={onInvite} activeOpacity={0.85}>
+            <Text style={deck.ctaText}>👥 Invite Friends</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[deck.cta, { backgroundColor: c.bgCard }]} onPress={onJoinCircle} activeOpacity={0.85}>
+            <Text style={[deck.ctaText, { color: c.text }]}>⭕ Join a Circle</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[deck.cta, { backgroundColor: c.bgCard }]} onPress={onCompleteProfile} activeOpacity={0.85}>
+            <Text style={[deck.ctaText, { color: c.text }]}>✏️ Complete Profile</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
@@ -417,10 +458,13 @@ const deck = StyleSheet.create({
   actions:   { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: SPACE[24], paddingVertical: SPACE[20] },
   actionBtn: { alignItems: "center", justifyContent: "center", shadowColor: "#000", shadowOpacity: 0.10, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 4 },
 
-  empty:      { flex: 1, alignItems: "center", justifyContent: "center", gap: SPACE[10] },
+  empty:      { flex: 1, alignItems: "center", justifyContent: "center", gap: SPACE[10], paddingHorizontal: SPACE[24] },
   emptyEmoji: { fontSize: 52 },
-  emptyTitle: { fontSize: FONT.size.xl, fontWeight: FONT.weight.black },
-  emptySub:   { fontSize: FONT.size.base },
+  emptyTitle: { fontSize: FONT.size.xl, fontWeight: FONT.weight.black, textAlign: "center" },
+  emptySub:   { fontSize: FONT.size.base, textAlign: "center" },
+  ctaRow:     { flexDirection: "column", gap: SPACE[10], width: "100%", marginTop: SPACE[8] },
+  cta:        { paddingVertical: SPACE[14], borderRadius: RADIUS.xl, alignItems: "center" },
+  ctaText:    { fontSize: FONT.size.base, fontWeight: FONT.weight.bold, color: "#fff" },
 });
 
 const card = StyleSheet.create({

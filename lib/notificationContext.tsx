@@ -14,7 +14,7 @@ import {
   notifyMatchRequest, notifyMatchAccepted, notifyBadgeUnlocked, notifyPartnerWorkout,
   notifyNewMessage, notifyGeneric, requestNotificationPermission,
 } from "./notifications";
-import { registerAndSavePushToken, setupAndroidChannel } from "./pushTokens";
+import { registerPushToken } from "./push";
 
 type NotifContextValue = {
   unreadCount: number;
@@ -50,14 +50,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     let cancelled = false;
 
-    setupAndroidChannel();
-
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user || cancelled) return;
       setUserId(user.id);
       fetchCount(user.id);
       requestNotificationPermission();
-      registerAndSavePushToken(user.id);
+      registerPushToken();
 
       // Clean up any previous channel before creating a new one
       if (channelRef.current) {
@@ -65,14 +63,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         channelRef.current = null;
       }
 
-      console.log("[Realtime] Setting up channel for user:", user.id);
       channelRef.current = supabase
         .channel(`notif-badge-${user.id}-${Date.now()}`)
         .on(
           "postgres_changes",
           { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` },
           (payload) => {
-            console.log("[Realtime] 🔔 Notification INSERT received:", JSON.stringify(payload.new));
             fetchCount(user.id);
             const n = payload.new as { type?: string; title?: string; body?: string; message?: string };
             const body = n.body ?? n.message ?? "";
@@ -117,9 +113,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           { event: "UPDATE", schema: "public", table: "messages" },
           () => fetchCount(user.id),
         )
-        .subscribe((status, err) => {
-          console.log("[Realtime] subscription status:", status, err ?? "");
-        });
+        .subscribe();
     });
 
     return () => {

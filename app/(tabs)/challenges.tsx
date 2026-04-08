@@ -82,6 +82,8 @@ export default function ChallengesScreen() {
   const [refreshing,  setRefreshing]  = useState(false);
   const [userId,      setUserId]      = useState<string | null>(null);
   const lastLoadRef = useRef(0);
+  const loadingRef  = useRef(false);
+  const mountedRef  = useRef(true);
   const STALE_MS = 5 * 60_000; // 5 min cache per tab
 
   // Detail modal
@@ -100,15 +102,19 @@ export default function ChallengesScreen() {
   const [formEnd,    setFormEnd]    = useState("");
   const [saving,     setSaving]     = useState(false);
 
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   // ── Load ──────────────────────────────────────────────────────────────────
 
   const load = useCallback(async (isRefresh = false) => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     try {
-    setError(false);
-    if (!isRefresh) setLoading(true);
+    if (mountedRef.current) setError(false);
+    if (!isRefresh && mountedRef.current) setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    setUserId(user.id);
+    if (mountedRef.current) setUserId(user.id);
 
     const [{ data: cData }, { data: myParts }] = await Promise.all([
       supabase.from("challenges")
@@ -148,13 +154,15 @@ export default function ChallengesScreen() {
     lastLoadRef.current = Date.now();
     } catch (err) {
       console.error("[Challenges] load failed:", err);
+      if (!mountedRef.current) return;
       if (isRefresh) {
         Alert.alert("Error", "Could not refresh. Please try again.");
       } else {
         setError(true);
       }
     } finally {
-      setLoading(false);
+      loadingRef.current = false;
+      if (mountedRef.current) setLoading(false);
     }
   }, []);
 

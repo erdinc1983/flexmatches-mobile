@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, FlatList,
   ActivityIndicator, TextInput, Modal, Alert, RefreshControl,
@@ -51,13 +51,19 @@ export default function GoalsScreen() {
     deadline: "",
   });
 
+  const loadingRef = useRef(false);
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   const load = useCallback(async (isRefresh = false) => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     try {
-      setError(false);
-      if (!isRefresh) setLoading(true);
+      if (mountedRef.current) setError(false);
+      if (!isRefresh && mountedRef.current) setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      setUserId(user.id);
+      if (mountedRef.current) setUserId(user.id);
 
       const { data } = await supabase
         .from("goals")
@@ -65,16 +71,18 @@ export default function GoalsScreen() {
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
-      setGoals(data ?? []);
+      if (mountedRef.current) setGoals(data ?? []);
     } catch (err) {
       console.error("[Goals] load failed:", err);
+      if (!mountedRef.current) return;
       if (isRefresh) {
         Alert.alert("Error", "Could not refresh. Please try again.");
       } else {
         setError(true);
       }
     } finally {
-      setLoading(false);
+      loadingRef.current = false;
+      if (mountedRef.current) setLoading(false);
     }
   }, []);
 

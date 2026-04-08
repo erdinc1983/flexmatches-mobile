@@ -1,14 +1,29 @@
 import React, { useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, InteractionManager, ActivityIndicator, Linking } from "react-native";
+import { Image } from "expo-image";
 import { Stack, router } from "expo-router";
 import * as Notifications from "expo-notifications";
 import type { Session } from "@supabase/supabase-js";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "../lib/supabase";
 import { ThemeProvider, useTheme, FONT, SPACE, PALETTE } from "../lib/theme";
 import { NotificationProvider } from "../lib/notificationContext";
 import { AppDataProvider } from "../lib/appDataContext";
 import { registerPushToken } from "../lib/push";
 import { Button } from "../components/ui/Button";
+
+const ONBOARDING_DONE_KEY    = "onboarding_done_v1";
+export const PENDING_REF_KEY = "pending_referral_code";
+
+function captureRefFromUrl(url: string | null) {
+  if (!url) return;
+  try {
+    // Handle both deep links and universal links
+    const parsed = new URL(url.includes("://") ? url.replace(/^[^:]+:\/\//, "https://x.com/") : url);
+    const ref = parsed.searchParams.get("ref");
+    if (ref) AsyncStorage.setItem(PENDING_REF_KEY, ref.trim().toUpperCase());
+  } catch { /* ignore malformed URLs */ }
+}
 
 // ─── Error Boundary ──────────────────────────────────────────────────────────
 type EBProps = { children: React.ReactNode };
@@ -91,8 +106,67 @@ const ebStyles = StyleSheet.create({
   button: { marginTop: SPACE[12], alignSelf: "center" },
 });
 
+// ─── Branded Loading Screen ───────────────────────────────────────────────────
+function LoadingScreen() {
+  return (
+    <View style={ls.container}>
+      <Image
+        source={require("../assets/images/icon.png")}
+        style={ls.logoImg}
+        contentFit="contain"
+      />
+      <Text style={ls.appName}>FlexMatches</Text>
+      <ActivityIndicator color="#FF6B00" size="large" style={{ marginTop: SPACE[20] }} />
+    </View>
+  );
+}
+
+function AuthErrorScreen({ onRetry }: { onRetry: () => void }) {
+  return (
+    <View style={ls.container}>
+      <View style={[ls.logoWrap, { backgroundColor: "#2A1A0A" }]}>
+        <Text style={ls.logoEmoji}>⚠️</Text>
+      </View>
+      <Text style={[ls.appName, { marginBottom: SPACE[8] }]}>Could not connect</Text>
+      <Text style={ls.errorSub}>Please check your connection and try again.</Text>
+      <View style={ls.retryBtn}>
+        <Text style={ls.retryText} onPress={onRetry}>Retry</Text>
+      </View>
+    </View>
+  );
+}
+
+function BannedScreen() {
+  return (
+    <View style={ls.container}>
+      <View style={[ls.logoWrap, { backgroundColor: "#2A0A0A" }]}>
+        <Text style={ls.logoEmoji}>🚫</Text>
+      </View>
+      <Text style={[ls.appName, { marginBottom: SPACE[8] }]}>Account Suspended</Text>
+      <Text style={ls.errorSub}>
+        Your account has been suspended for violating our community guidelines.
+        If you believe this is a mistake, contact support@flexmatches.com
+      </Text>
+      <View style={ls.retryBtn}>
+        <Text style={ls.retryText} onPress={() => supabase.auth.signOut()}>Sign Out</Text>
+      </View>
+    </View>
+  );
+}
+
+const ls = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "#0A0A0A", alignItems: "center", justifyContent: "center" },
+  logoImg:   { width: 96, height: 96, borderRadius: 22, marginBottom: SPACE[16] },
+  logoWrap:  { width: 80, height: 80, borderRadius: 20, backgroundColor: "#FF6B00", alignItems: "center", justifyContent: "center", marginBottom: SPACE[16] },
+  logoEmoji: { fontSize: 40 },
+  appName:   { fontSize: FONT.size.xl, fontWeight: FONT.weight.black, color: "#FFFFFF", letterSpacing: -0.5 },
+  errorSub:  { fontSize: FONT.size.base, color: "#888888", textAlign: "center", paddingHorizontal: SPACE[32], marginTop: SPACE[8] },
+  retryBtn:  { marginTop: SPACE[24], backgroundColor: "#FF6B00", paddingHorizontal: SPACE[32], paddingVertical: SPACE[14], borderRadius: 30 },
+  retryText: { color: "#FFFFFF", fontSize: FONT.size.base, fontWeight: FONT.weight.bold },
+});
+
 // ─── App routing state ────────────────────────────────────────────────────────
-type AppState = "loading" | "unauthenticated" | "needs_onboarding" | "ready";
+type AppState = "loading" | "unauthenticated" | "needs_onboarding" | "ready" | "auth_error" | "banned";
 
 function extractRoute(response: Notifications.NotificationResponse): string | null {
   const data = response.notification.request.content.data ?? {};
@@ -110,19 +184,48 @@ function extractRoute(response: Notifications.NotificationResponse): string | nu
 
 async function resolveAppState(session: Session | null): Promise<AppState> {
   if (!session) return "unauthenticated";
+
+  // Always fetch from DB — check banned_at on every launch
   const { data } = await supabase
     .from("users")
-    .select("full_name")
+    .select("full_name, banned_at")
     .eq("id", session.user.id)
     .single();
-  return data?.full_name ? "ready" : "needs_onboarding";
+
+  if (data?.banned_at) return "banned";
+
+  // Cache hit: skip onboarding check
+  const cached = await AsyncStorage.getItem(ONBOARDING_DONE_KEY);
+  if (cached === "1") return "ready";
+
+  const state: AppState = data?.full_name ? "ready" : "needs_onboarding";
+  if (state === "ready") AsyncStorage.setItem(ONBOARDING_DONE_KEY, "1");
+  return state;
 }
 
 export default function RootLayout() {
   const [appState, setAppState] = useState<AppState>("loading");
   const pendingRoute = useRef<string | null>(null);
 
+  async function checkAuth() {
+    setAppState("loading");
+    const timeoutId = setTimeout(() => setAppState("auth_error"), 10_000);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      clearTimeout(timeoutId);
+      setAppState(await resolveAppState(session));
+    } catch {
+      clearTimeout(timeoutId);
+      setAppState("auth_error");
+    }
+  }
+
   useEffect(() => {
+    // Cold start: capture referral code from deep link URL
+    Linking.getInitialURL().then(captureRefFromUrl);
+    // Background: app already running when deep link is tapped
+    const linkingSub = Linking.addEventListener("url", ({ url }) => captureRefFromUrl(url));
+
     // Cold start: check if the app was opened by tapping a notification
     Notifications.getLastNotificationResponseAsync().then((response) => {
       if (response) pendingRoute.current = extractRoute(response);
@@ -140,20 +243,22 @@ export default function RootLayout() {
       }
     });
 
-    return () => sub.remove();
+    return () => { sub.remove(); linkingSub.remove(); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setAppState(await resolveAppState(session));
-    });
+    checkAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (event === "PASSWORD_RECOVERY") {
           router.replace("/(auth)/reset-password");
           return;
+        }
+        if (event === "SIGNED_OUT") {
+          // Clear onboarding cache so next login re-checks
+          AsyncStorage.removeItem(ONBOARDING_DONE_KEY);
         }
         setAppState(await resolveAppState(session));
       }
@@ -166,12 +271,23 @@ export default function RootLayout() {
     if (appState === "loading") return;
     if (appState === "unauthenticated") { router.replace("/(auth)/welcome"); return; }
     if (appState === "needs_onboarding") { router.replace("/(auth)/onboarding"); return; }
+    if (appState === "banned") return; // BannedScreen rendered directly, no navigation needed
     // ready — navigate to pending deep link if present, otherwise home
     const deepLink = pendingRoute.current;
     pendingRoute.current = null;
     router.replace(deepLink ? (deepLink as any) : "/(tabs)/home");
-    registerPushToken();
+    // Defer background work until after the navigation animation completes
+    InteractionManager.runAfterInteractions(() => {
+      registerPushToken();
+      supabase.auth.getUser().then(({ data: { user } }) => {
+        if (user) supabase.from("users").update({ last_active: new Date().toISOString() }).eq("id", user.id).then(() => {});
+      });
+    });
   }, [appState]);
+
+  if (appState === "loading") return <LoadingScreen />;
+  if (appState === "auth_error") return <AuthErrorScreen onRetry={checkAuth} />;
+  if (appState === "banned") return <BannedScreen />;
 
   return (
     <ThemeProvider>

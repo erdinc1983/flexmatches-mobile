@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
   ScrollView, ActivityIndicator, Alert, StatusBar, Dimensions,
@@ -47,6 +47,19 @@ export default function OnboardingScreen() {
   // Step 1
   const [fullName, setFullName] = useState("");
   const [bio, setBio] = useState("");
+
+  // On mount: if Apple Sign In already set full_name, skip step 1
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      supabase.from("users").select("full_name").eq("id", user.id).single().then(({ data }) => {
+        if (data?.full_name) {
+          setFullName(data.full_name);
+          setStep(2); // skip name step — already provided by Apple
+        }
+      });
+    });
+  }, []);
 
   // Step 2
   const [sports, setSports] = useState<string[]>([]);
@@ -133,7 +146,7 @@ export default function OnboardingScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={s.container}>
       <StatusBar barStyle="light-content" />
 
       {/* Progress bar */}

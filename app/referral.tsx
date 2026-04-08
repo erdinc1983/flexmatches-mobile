@@ -128,7 +128,7 @@ export default function ReferralScreen() {
       {/* Header */}
       <View style={[s.header, { borderBottomColor: c.border }]}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={8}>
-          <Icon name="chevronLeft" size={24} color={c.textMuted} />
+          <Icon name="back" size={24} color={c.textMuted} />
         </TouchableOpacity>
         <Text style={[s.headerTitle, { color: c.text }]}>Invite Friends</Text>
         <View style={{ width: 32 }} />

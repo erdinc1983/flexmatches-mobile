@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "907464734773",
+    "project_id": "flexmatches-f1850",
+    "storage_bucket": "flexmatches-f1850.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:907464734773:android:1e3c2c075307c018a8197c",
+        "android_client_info": {
+          "package_name": "com.flexmatches.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCjY6fXXYcNMl2N0Ro555SdJGW9rTYoSbY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

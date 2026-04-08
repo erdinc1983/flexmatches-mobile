@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, RefreshControl, Modal, TextInput, ScrollView, Alert,
@@ -59,14 +59,19 @@ export default function FeedScreen() {
   const [composeType, setComposeType] = useState("workout");
   const [composeContent, setComposeContent] = useState("");
   const [reactingId, setReactingId] = useState<string | null>(null);
+  const loadingRef = useRef(false);
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
 
   const load = useCallback(async (isRefresh = false) => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     try {
-    setError(false);
-    if (!isRefresh) setLoading(true);
+    if (mountedRef.current) setError(false);
+    if (!isRefresh && mountedRef.current) setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    setMe(user.id);
+    if (mountedRef.current) setMe(user.id);
 
     const { data: matchData } = await supabase
       .from("matches")
@@ -113,13 +118,15 @@ export default function FeedScreen() {
     })));
     } catch (err) {
       console.error("[Feed] load failed:", err);
+      if (!mountedRef.current) return;
       if (isRefresh) {
         Alert.alert("Error", "Could not refresh. Please try again.");
       } else {
         setError(true);
       }
     } finally {
-      setLoading(false);
+      loadingRef.current = false;
+      if (mountedRef.current) setLoading(false);
     }
   }, []);
 

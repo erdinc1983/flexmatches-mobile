@@ -64,12 +64,21 @@ export default function MessagesScreen() {
   const myIdRef           = useRef<string | null>(null);
   const conversationsRef  = useRef<Conversation[]>([]);
   const lastLoadRef       = useRef(0);
+  const loadingRef        = useRef(false); // Fix: prevent concurrent loads
+  const mountedRef        = useRef(true);  // Fix: prevent setState after unmount
   const STALE_MS          = 15_000; // refetch after 15s
 
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
   const load = useCallback(async (isRefresh = false) => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     try {
-      setError(false);
-      if (!isRefresh) setLoading(true);
+      if (mountedRef.current) setError(false);
+      if (!isRefresh && mountedRef.current) setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       setMyId(user.id);
@@ -119,18 +128,21 @@ export default function MessagesScreen() {
         return new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime();
       });
 
+      if (!mountedRef.current) return;
       setConversations(convos);
       conversationsRef.current = convos;
       lastLoadRef.current = Date.now();
     } catch (err) {
       console.error("[Messages] load failed:", err);
+      if (!mountedRef.current) return;
       if (isRefresh) {
         Alert.alert("Error", "Could not refresh. Please try again.");
       } else {
         setError(true);
       }
     } finally {
-      setLoading(false);
+      loadingRef.current = false;
+      if (mountedRef.current) setLoading(false);
     }
   }, []);
 

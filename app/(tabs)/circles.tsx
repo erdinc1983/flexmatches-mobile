@@ -31,6 +31,7 @@ import { EmptyState } from "../../components/ui/EmptyState";
 import { CirclesSkeleton } from "../../components/ui/Skeleton";
 import { MapLocationPicker } from "../../components/MapLocationPicker";
 import { scheduleEventReminder } from "../../lib/notifications";
+import { notifyUser } from "../../lib/push";
 
 const { height: SCREEN_H } = Dimensions.get("window");
 
@@ -171,6 +172,8 @@ export default function CirclesScreen() {
   const [filterCat,      setFilterCat]      = useState("");
   const [showCreate,     setShowCreate]     = useState(false);
   const lastLoadRef = useRef(0);
+  const loadingRef  = useRef(false);
+  const mountedRef  = useRef(true);
   const STALE_MS = 5 * 60_000; // 5 min cache per tab
 
   // Detail popup
@@ -203,11 +206,15 @@ export default function CirclesScreen() {
   const [showMapPicker,  setShowMapPicker]  = useState(false);
   const [createStep,     setCreateStep]     = useState<1|2|3|4>(1);
 
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   // ── Data ──────────────────────────────────────────────────────────────────
   const load = useCallback(async (isRefresh = false) => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     try {
-    setError(false);
-    if (!isRefresh) setLoading(true);
+    if (mountedRef.current) setError(false);
+    if (!isRefresh && mountedRef.current) setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     setUserId(user.id);
@@ -244,16 +251,18 @@ export default function CirclesScreen() {
       member_count: countMap[cc.id] ?? 0,
       is_member:    joinedIds.has(cc.id),
     })));
-    lastLoadRef.current = Date.now();
+    if (mountedRef.current) lastLoadRef.current = Date.now();
     } catch (err) {
       console.error("[Circles] load failed:", err);
+      if (!mountedRef.current) return;
       if (isRefresh) {
         Alert.alert("Error", "Could not refresh. Please try again.");
       } else {
         setError(true);
       }
     } finally {
-      setLoading(false);
+      loadingRef.current = false;
+      if (mountedRef.current) setLoading(false);
     }
   }, []);
 
@@ -297,19 +306,38 @@ export default function CirclesScreen() {
   async function saveCircleEdit() {
     if (!selectedCircle || !editName.trim()) return;
     setEditSaving(true);
+    const newEventDate = editDate || null;
+    const eventAdded = newEventDate && newEventDate !== selectedCircle.event_date;
     await supabase.from("communities").update({
       name:        editName.trim(),
       description: editDesc.trim() || null,
       field:       editField.trim() || null,
-      event_date:  editDate || null,
+      event_date:  newEventDate,
       event_time:  editTime.trim() || null,
     }).eq("id", selectedCircle.id);
     setCommunities((prev) => prev.map((c) =>
       c.id === selectedCircle.id
-        ? { ...c, name: editName.trim(), description: editDesc.trim() || null, field: editField.trim() || null, event_date: editDate || null, event_time: editTime.trim() || null }
+        ? { ...c, name: editName.trim(), description: editDesc.trim() || null, field: editField.trim() || null, event_date: newEventDate, event_time: editTime.trim() || null }
         : c
     ));
-    setSelectedCircle((prev) => prev ? { ...prev, name: editName.trim(), description: editDesc.trim() || null, field: editField.trim() || null, event_date: editDate || null, event_time: editTime.trim() || null } : prev);
+    setSelectedCircle((prev) => prev ? { ...prev, name: editName.trim(), description: editDesc.trim() || null, field: editField.trim() || null, event_date: newEventDate, event_time: editTime.trim() || null } : prev);
+
+    // Notify all members when a new event date is set
+    if (eventAdded && circleMembers.length > 0) {
+      const { data: { user } } = await supabase.auth.getUser();
+      const dateLabel = newEventDate.split("-").slice(1).join("/"); // "MM/DD"
+      for (const member of circleMembers) {
+        if (member.id === user?.id) continue; // skip self
+        notifyUser(member.id, {
+          type: "match_accepted", // reuse generic type for delivery
+          title: `📅 New event in ${editName.trim()}`,
+          body: `Event scheduled for ${dateLabel}${editTime.trim() ? " at " + editTime.trim() : ""}`,
+          relatedId: selectedCircle.id,
+          data: { type: "circle_event", relatedId: selectedCircle.id },
+        });
+      }
+    }
+
     setEditSaving(false);
     setPopupView("detail");
   }
@@ -501,11 +529,11 @@ export default function CirclesScreen() {
           return (
             <TouchableOpacity
               key={key}
-              style={[s.catChip, { backgroundColor: active ? c.brand : "transparent", borderColor: active ? c.brand : c.borderMedium }]}
+              style={[s.catChip, { backgroundColor: active ? c.brand : c.bgCard, borderColor: active ? c.brand : c.border }]}
               onPress={() => setFilterCat(active && key !== "" ? "" : key)}
               activeOpacity={0.8}
             >
-              <Text style={[s.catChipText, { color: active ? "#fff" : c.textSecondary }]}>
+              <Text style={[s.catChipText, { color: active ? "#fff" : c.text }]}>
                 {label}
               </Text>
             </TouchableOpacity>

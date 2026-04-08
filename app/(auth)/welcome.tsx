@@ -1,4 +1,5 @@
 import { View, Text, StyleSheet, TouchableOpacity, StatusBar, Linking } from "react-native";
+import { Image } from "expo-image";
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -14,15 +15,17 @@ const FEATURES = [
 export default function WelcomeScreen() {
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0A0A0A" />
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       <View style={styles.hero}>
-        {/* Glow */}
+        {/* Soft orange glow */}
         <View style={styles.glow} />
 
-        <View style={styles.logoWrap}>
-          <Text style={styles.logoEmoji}>💪</Text>
-        </View>
+        <Image
+          source={require("../../assets/images/icon.png")}
+          style={styles.logoImg}
+          contentFit="contain"
+        />
 
         <Text style={styles.title}>FlexMatches</Text>
         <Text style={styles.subtitle}>
@@ -71,7 +74,7 @@ export default function WelcomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0A0A0A",
+    backgroundColor: "#FFFFFF",
     justifyContent: "space-between",
     paddingHorizontal: 24,
     paddingBottom: 32,
@@ -79,38 +82,33 @@ const styles = StyleSheet.create({
   hero: { flex: 1, justifyContent: "center", alignItems: "center", gap: 0 },
   glow: {
     position: "absolute",
-    width: 300,
-    height: 300,
-    borderRadius: 150,
-    backgroundColor: "#FF4500",
-    opacity: 0.08,
-    top: "15%",
+    width: 280,
+    height: 280,
+    borderRadius: 140,
+    backgroundColor: "#FF6B00",
+    opacity: 0.07,
+    top: "10%",
   },
-  logoWrap: {
-    width: 96,
-    height: 96,
-    borderRadius: 28,
-    backgroundColor: "#FF4500",
-    alignItems: "center",
-    justifyContent: "center",
+  logoImg: {
+    width: 104,
+    height: 104,
+    borderRadius: 26,
     marginBottom: 24,
-    shadowColor: "#FF4500",
-    shadowOpacity: 0.5,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 12,
+    shadowColor: "#FF6B00",
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 6 },
   },
-  logoEmoji: { fontSize: 48 },
   title: {
     fontSize: 44,
     fontWeight: "900",
-    color: "#FFFFFF",
+    color: "#111111",
     letterSpacing: -1.5,
     marginBottom: 12,
   },
   subtitle: {
     fontSize: 17,
-    color: "#666",
+    color: "#888",
     textAlign: "center",
     lineHeight: 26,
     marginBottom: 40,
@@ -120,37 +118,37 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    backgroundColor: "#141414",
+    backgroundColor: "#F7F7F7",
     borderRadius: 14,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 13,
     borderWidth: 1,
-    borderColor: "#222",
+    borderColor: "#EFEFEF",
   },
   featureEmoji: { fontSize: 20 },
-  featureText: { fontSize: 14, color: "#999", fontWeight: "600" },
+  featureText: { fontSize: 14, color: "#555", fontWeight: "600" },
   buttons: { gap: 12 },
   primaryButton: {
-    backgroundColor: "#FF4500",
-    borderRadius: 18,
+    backgroundColor: "#FF6B00",
+    borderRadius: 16,
     paddingVertical: 18,
     alignItems: "center",
-    shadowColor: "#FF4500",
-    shadowOpacity: 0.4,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 10,
+    shadowColor: "#FF6B00",
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 8,
   },
-  primaryButtonText: { color: "#FFF", fontSize: 17, fontWeight: "800", letterSpacing: -0.3 },
+  primaryButtonText: { color: "#FFF", fontSize: 17, fontWeight: "800", letterSpacing: -0.2 },
   secondaryButton: {
-    borderRadius: 18,
-    paddingVertical: 18,
+    borderRadius: 16,
+    paddingVertical: 17,
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#222",
-    backgroundColor: "#111",
+    borderWidth: 1.5,
+    borderColor: "#EFEFEF",
+    backgroundColor: "#FAFAFA",
   },
-  secondaryButtonText: { color: "#888", fontSize: 15, fontWeight: "600" },
-  legal:     { textAlign: "center", fontSize: 11, color: "#333", marginTop: 4 },
-  legalLink: { color: "#FF4500", textDecorationLine: "underline" },
+  secondaryButtonText: { color: "#555", fontSize: 15, fontWeight: "600" },
+  legal:     { textAlign: "center", fontSize: 11, color: "#CCC", marginTop: 4 },
+  legalLink: { color: "#FF6B00", textDecorationLine: "underline" },
 });

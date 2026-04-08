@@ -20,6 +20,7 @@ import { router } from "expo-router";
 import {
   ScrollView, ActivityIndicator, Alert, RefreshControl,
   StyleSheet, View, Text, TouchableOpacity, Pressable, Modal, TextInput, KeyboardAvoidingView, Platform,
+  InteractionManager,
 } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
@@ -53,7 +54,6 @@ import {
 const NUDGE_KEY              = "profile_nudge_dismissed_at";
 const NUDGE_TTL              = 7 * 24 * 60 * 60 * 1000; // 7 days
 const DISMISSED_CIRCLES_KEY  = "dismissed_circle_ids";      // new circles (not yet joined)
-const DISMISSED_MY_CIRCLES_KEY = "dismissed_my_circle_ids"; // joined circles dismissed from home
 
 type ActivePartner = {
   id:         string;
@@ -107,10 +107,16 @@ export default function HomeScreen() {
   const [error,             setError]             = useState(false);
 
   useEffect(() => {
-    if (!loading) return;
+    if (!loading || appUserLoading) return; // wait for AppDataContext before starting timeout
     const t = setTimeout(() => { setLoading(false); setError(true); }, 30_000);
     return () => clearTimeout(t);
-  }, [loading]);
+  }, [loading, appUserLoading]);
+
+  // Fix 2: mark unmounted so async load() won't setState after component gone
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const [refreshing,        setRefreshing]        = useState(false);
   const [gymToggling,       setGymToggling]       = useState(false);
@@ -126,8 +132,10 @@ export default function HomeScreen() {
   const [selectedSession,   setSelectedSession]   = useState<SessionInfo | null>(null);
 
   const today    = localToday();
-  const lastLoadRef = useRef(0);
-  const STALE_MS = 5 * 60_000; // 5 min cache per tab
+  const lastLoadRef    = useRef(0);
+  const loadingRef     = useRef(false);  // Fix 1: prevent double-fire
+  const mountedRef     = useRef(true);   // Fix 2: prevent setState after unmount
+  const STALE_MS = 30_000; // 30s cache — keep PrimaryActionCard fresh
   const dismissedCircleIdsRef   = useRef<Set<string>>(new Set());
   const dismissedMyCircleIdsRef = useRef<Set<string>>(new Set());
 
@@ -139,20 +147,20 @@ export default function HomeScreen() {
         if (Date.now() - dismissed < NUDGE_TTL) setNudgeDismissed(true);
       }
     });
-    // Load permanently dismissed circle IDs (new circles + my circles)
+    // Load permanently dismissed new-circle IDs (undiscovered circles only)
     AsyncStorage.getItem(DISMISSED_CIRCLES_KEY).then((val) => {
       if (val) { try { dismissedCircleIdsRef.current = new Set(JSON.parse(val)); } catch {} }
     });
-    AsyncStorage.getItem(DISMISSED_MY_CIRCLES_KEY).then((val) => {
-      if (val) { try { dismissedMyCircleIdsRef.current = new Set(JSON.parse(val)); } catch {} }
-    });
+    // My circles dismiss is session-only (not persisted) — new events re-surface circles
   }, []);
 
   // ── Load ─────────────────────────────────────────────────────────────────────
   const load = useCallback(async (isRefresh = false) => {
+    if (loadingRef.current) return; // Fix 1: block concurrent calls
+    loadingRef.current = true;
     try {
-    setError(false);
-    if (!isRefresh) setLoading(true);
+    if (mountedRef.current) setError(false);
+    if (!isRefresh && mountedRef.current) setLoading(true);
     let { data: { user } } = await supabase.auth.getUser();
     // After a crash the session JWT may be stale — refresh once and retry
     if (!user) {
@@ -164,76 +172,28 @@ export default function HomeScreen() {
 
     // Use global AppDataContext for own profile — wait if still loading
     const profileData = appUser;
-    if (!profileData) return; // AppDataContext not ready yet — don't error
-
-    const monthAgo    = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
-
-    // Phase 1 — parallel queries (no FK joins — RLS-safe)
-    const [
-      { count: matchCount },
-      { count: workoutMonth },
-      { data: pendingMatchRows },
-      { data: likedData },
-      { data: sessionData },
-      { data: myCircleData },
-      { data: acceptedMatches },
-      { data: blockData },
-    ] = await Promise.all([
-      supabase.from("matches").select("*", { count: "exact", head: true })
-        .eq("status", "accepted").or(`sender_id.eq.${uid},receiver_id.eq.${uid}`),
-      supabase.from("workouts").select("id", { count: "exact", head: true })
-        .eq("user_id", uid).gte("logged_at", monthAgo),
-      supabase.from("matches")
-        .select("id, sender_id")
-        .eq("receiver_id", uid).eq("status", "pending").limit(5),
-      supabase.from("matches").select("receiver_id").eq("sender_id", uid),
-      supabase.from("buddy_sessions")
-        .select("id, match_id, sport, session_date, session_time, location, status, proposer_id, receiver_id")
-        .or(`proposer_id.eq.${uid},receiver_id.eq.${uid}`)
-        .eq("session_date", today)
-        .in("status", ["accepted", "pending"]),
-      supabase.from("community_members")
-        .select("community:communities(id, name, avatar_emoji, sport, city, field, description, event_date, event_time, creator_id)")
-        .eq("user_id", uid)
-        .limit(3),
-      supabase.from("matches")
-        .select("id, sender_id, receiver_id")
-        .eq("status", "accepted")
-        .or(`sender_id.eq.${uid},receiver_id.eq.${uid}`),
-      // blocks table may not exist yet — fail gracefully
-      supabase.from("blocks").select("blocked_id").eq("blocker_id", uid).then((r) => ({ data: r.data ?? [], error: null })),
-    ]);
-
-    // Fetch sender profiles for pending matches separately (FK join unreliable with RLS)
-    const pendingSenderIds = (pendingMatchRows ?? []).map((m: any) => m.sender_id);
-    let senderMap = new Map<string, any>();
-    if (pendingSenderIds.length > 0) {
-      const { data: senderRows } = await supabase
-        .from("users")
-        .select("id, username, full_name, avatar_url, city, fitness_level, banned_at")
-        .in("id", pendingSenderIds)
-        .is("banned_at", null);
-      senderMap = new Map((senderRows ?? []).map((u: any) => [u.id, u]));
-    }
-    const pendingData = (pendingMatchRows ?? [])
-      .filter((m: any) => senderMap.has(m.sender_id))
-      .map((m: any) => ({ ...m, sender: senderMap.get(m.sender_id) }));
-
-    // Fetch partner names for today's sessions separately
-    const sessionPartnerIds = (sessionData ?? []).map((s: any) =>
-      s.proposer_id === uid ? s.receiver_id : s.proposer_id
-    ).filter(Boolean);
-    let sessionPartnerMap = new Map<string, any>();
-    if (sessionPartnerIds.length > 0) {
-      const { data: partnerRows } = await supabase
-        .from("users")
-        .select("id, full_name, username")
-        .in("id", sessionPartnerIds);
-      sessionPartnerMap = new Map((partnerRows ?? []).map((u: any) => [u.id, u]));
+    if (!profileData) {
+      // AppDataContext not ready yet — wait up to 10s then retry
+      await new Promise<void>((resolve) => {
+        const interval = setInterval(() => {
+          if (appUser || !mountedRef.current) { clearInterval(interval); resolve(); }
+        }, 300);
+        setTimeout(() => { clearInterval(interval); resolve(); }, 10_000);
+      });
+      if (!appUser) return; // still not ready — let timeout handle it
     }
 
-    // Unread count comes from useNotifications() context (realtime)
+    // Update last_active after render — deferred so it doesn't block the RPC
+    InteractionManager.runAfterInteractions(() => {
+      supabase.from("users").update({ last_active: new Date().toISOString() }).eq("id", uid).then(() => {});
+    });
+
+    // ── Fix 6: Single RPC replaces ~13 sequential/parallel queries ────────────
+    const { data: homeData, error: rpcError } = await supabase
+      .rpc("get_home_data", { p_user_id: uid });
+    if (rpcError) throw rpcError;
+
+    const hd = homeData as any;
 
     // Auto-expire gym status after 3 hours
     let atGym = profileData.is_at_gym ?? false;
@@ -246,6 +206,8 @@ export default function HomeScreen() {
       }
     }
 
+    if (!mountedRef.current) return; // Fix 2: component may have unmounted during await
+
     setProfile({
       id:                  uid,
       username:            profileData.username ?? "",
@@ -253,8 +215,8 @@ export default function HomeScreen() {
       avatar_url:          profileData.avatar_url ?? null,
       current_streak:      profileData.current_streak ?? 0,
       last_checkin_date:   profileData.last_checkin_date ?? null,
-      match_count:         matchCount ?? 0,
-      workout_count_month: workoutMonth ?? 0,
+      match_count:         hd.match_count ?? 0,
+      workout_count_month: hd.workout_count_month ?? 0,
       is_at_gym:           atGym,
       gym_checkin_at:      profileData.gym_checkin_at ?? null,
       gym_name:            profileData.gym_name ?? null,
@@ -267,113 +229,58 @@ export default function HomeScreen() {
     if (!profileData?.city)           missing.push("city");
     setProfileMissing(missing);
 
-    // pendingData already filtered by banned_at (senderMap only has non-banned)
-    const activePending = pendingData;
-    const activePendingSenderIds = activePending.map((m: any) => m.sender_id);
-    setPendingRequests(activePending.map((m: any) => ({
+    // Pending match requests
+    setPendingRequests((hd.pending_requests ?? []).map((m: any) => ({
       id:            m.id,
       sender_id:     m.sender_id,
-      username:      m.sender.username,
-      full_name:     m.sender.full_name,
-      avatar_url:    m.sender.avatar_url ?? null,
-      city:          m.sender.city,
-      fitness_level: m.sender.fitness_level,
+      username:      m.username,
+      full_name:     m.full_name,
+      avatar_url:    m.avatar_url ?? null,
+      city:          m.city,
+      fitness_level: m.fitness_level,
     })));
 
-    // Parse today's sessions
-    const allSessions: SessionInfo[] = (sessionData ?? []).map((s: any) => {
-      const partnerId = s.proposer_id === uid ? s.receiver_id : s.proposer_id;
-      const partner = sessionPartnerMap.get(partnerId);
-      return {
-        id:           s.id,
-        match_id:     s.match_id,
-        sport:        s.sport ?? "Session",
-        session_date: s.session_date ?? today,
-        session_time: s.session_time ?? null,
-        location:     s.location ?? null,
-        status:       s.status,
-        partner_name: partner?.full_name ?? partner?.username ?? "Partner",
-      };
-    });
-    // "confirmed" = accepted (DB uses "accepted" for confirmed sessions)
-    setConfirmedSessions(allSessions.filter((s) => s.status === "accepted"));
-    setPendingSessions(allSessions.filter((s) => s.status === "pending" && (sessionData as any[])?.find((r: any) => r.id === s.id)?.receiver_id === uid));
-
-    // Upcoming sessions — today + next 14 days (separate partner query — RLS-safe)
-    const fourteenDays = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
-    const fourteenDaysStr = `${fourteenDays.getFullYear()}-${String(fourteenDays.getMonth()+1).padStart(2,"0")}-${String(fourteenDays.getDate()).padStart(2,"0")}`;
-    const { data: upcomingData } = await supabase
-      .from("buddy_sessions")
-      .select("id, match_id, sport, session_date, session_time, location, status, proposer_id, receiver_id")
-      .or(`proposer_id.eq.${uid},receiver_id.eq.${uid}`)
-      .gte("session_date", today)
-      .lte("session_date", fourteenDaysStr)
-      .in("status", ["pending", "accepted"])
-      .order("session_date", { ascending: true });
-
-    // Fetch partner names separately (FK join unreliable with RLS)
-    const upcomingPartnerIds = (upcomingData ?? []).map((s: any) =>
-      s.proposer_id === uid ? s.receiver_id : s.proposer_id
-    ).filter(Boolean);
-    let upcomingPartnerMap = new Map<string, any>();
-    if (upcomingPartnerIds.length > 0) {
-      const { data: upcomingPartners } = await supabase
-        .from("users")
-        .select("id, full_name, username")
-        .in("id", upcomingPartnerIds);
-      upcomingPartnerMap = new Map((upcomingPartners ?? []).map((u: any) => [u.id, u]));
-    }
-
-    setUpcomingSessions((upcomingData ?? []).map((s: any) => {
-      const partnerId = s.proposer_id === uid ? s.receiver_id : s.proposer_id;
-      const partner   = upcomingPartnerMap.get(partnerId);
-      return {
-        id:           s.id,
-        match_id:     s.match_id,
-        sport:        s.sport ?? "Session",
-        session_date: s.session_date,
-        session_time: s.session_time ?? null,
-        location:     s.location ?? null,
-        status:       s.status,
-        partner_name: partner?.full_name ?? partner?.username ?? "Partner",
-      };
+    // Today's sessions
+    const allSessions: SessionInfo[] = (hd.sessions_today ?? []).map((s: any) => ({
+      id:           s.id,
+      match_id:     s.match_id,
+      sport:        s.sport ?? "Session",
+      session_date: s.session_date ?? today,
+      session_time: s.session_time ?? null,
+      location:     s.location ?? null,
+      status:       s.status,
+      partner_name: s.partner_name ?? "Partner",
     }));
+    setConfirmedSessions(allSessions.filter((s) => s.status === "accepted"));
+    setPendingSessions(allSessions.filter((s) =>
+      s.status === "pending" &&
+      (hd.sessions_today ?? []).find((r: any) => r.id === s.id)?.receiver_id === uid
+    ));
 
+    // Upcoming sessions
+    setUpcomingSessions((hd.upcoming_sessions ?? []).map((s: any) => ({
+      id:           s.id,
+      match_id:     s.match_id,
+      sport:        s.sport ?? "Session",
+      session_date: s.session_date,
+      session_time: s.session_time ?? null,
+      location:     s.location ?? null,
+      status:       s.status,
+      partner_name: s.partner_name ?? "Partner",
+    })));
 
-    // Circles — user's own, mapped with correct field name
-    const myCircleList = (myCircleData ?? [])
-      .map((row: any) => row.community)
-      .filter(Boolean);
-
-    // Batch member count for local circles (avoid N+1)
-    const myCircleListIds = myCircleList.map((cc: any) => cc.id);
-    let myCircleCountMap: Record<string, number> = {};
-    if (myCircleListIds.length > 0) {
-      const { data: myCounts } = await supabase
-        .from("community_members")
-        .select("community_id")
-        .in("community_id", myCircleListIds);
-      for (const row of myCounts ?? []) {
-        myCircleCountMap[(row as any).community_id] = (myCircleCountMap[(row as any).community_id] ?? 0) + 1;
-      }
-    }
-
-    // Build myCircleIds from already-fetched data (no extra query needed)
-    const myCircleIds = new Set(myCircleListIds as string[]);
-
-    const todayStr = today; // "YYYY-MM-DD"
-    setCircles(myCircleList
+    // My circles (active only, not dismissed)
+    const todayStr = today;
+    setCircles((hd.my_circles ?? [])
       .filter((cc: any) =>
-        // Only active circles on home (past events stay on Circles tab)
         (!cc.event_date || cc.event_date >= todayStr) &&
-        // Dismissed from home by user
         !dismissedMyCircleIdsRef.current.has(cc.id)
       )
       .map((cc: any) => ({
         id:           cc.id,
         name:         cc.name,
         icon:         cc.avatar_emoji ?? "🏋️",
-        member_count: myCircleCountMap[cc.id] ?? 0,
+        member_count: cc.member_count ?? 0,
         sport:        cc.sport ?? null,
         city:         cc.city ?? null,
         field:        cc.field ?? null,
@@ -383,54 +290,25 @@ export default function HomeScreen() {
         creator_id:   cc.creator_id ?? null,
       })));
 
-    // Build partnerId → matchId map for deep-link navigation
-    const partnerMatchMap = new Map<string, string>();
-    for (const m of acceptedMatches ?? []) {
-      const partnerId = m.sender_id === uid ? m.receiver_id : m.sender_id;
-      partnerMatchMap.set(partnerId, m.id);
-    }
+    // Active partners (within 2 hours) from accepted_matches
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    const activeP = (hd.accepted_matches ?? []).filter((m: any) =>
+      m.last_active && m.last_active >= twoHoursAgo
+    );
+    setActivePartners(activeP.map((m: any) => ({
+      id:         m.partner_id,
+      username:   m.username,
+      full_name:  m.full_name ?? null,
+      avatar_url: m.avatar_url ?? null,
+      is_at_gym:  m.is_at_gym ?? false,
+      match_id:   m.match_id,
+    })));
 
-    // Active partners — filter by last_active within 2 hours
-    const partnerIds = [...partnerMatchMap.keys()];
-    if (partnerIds.length > 0) {
-      const { data: partnerData } = await supabase
-        .from("users")
-        .select("id, username, full_name, avatar_url, is_at_gym, last_active")
-        .in("id", partnerIds)
-        .is("banned_at", null)
-        .gte("last_active", twoHoursAgo)
-        .limit(8);
-      setActivePartners((partnerData ?? []).map((u: any) => ({
-        id:         u.id,
-        username:   u.username,
-        full_name:  u.full_name ?? null,
-        avatar_url: u.avatar_url ?? null,
-        is_at_gym:  u.is_at_gym ?? false,
-        match_id:   partnerMatchMap.get(u.id) ?? "",
-      })));
-    } else {
-      setActivePartners([]);
-    }
-
-    // Phase 2 — suggested users
-    // Exclude: self, already-sent requests, received pending requests (avoid double-show)
-    const excludeIds = new Set([
-      uid,
-      ...(likedData  ?? []).map((r: any) => r.receiver_id),
-      ...(blockData  ?? []).map((b: any) => b.blocked_id),
-      ...pendingSenderIds,
-    ]);
+    // Suggested users — score client-side (data already filtered by RPC)
     const mySports = profileData?.sports ?? [];
     const myCity   = profileData?.city ?? "";
     const myLevel  = profileData?.fitness_level ?? "";
-
-    const { data: candidates } = await supabase
-      .from("users")
-      .select("id, username, full_name, avatar_url, city, sports, fitness_level, availability")
-      .neq("id", uid).is("banned_at", null).limit(40);
-
-    const scored = (candidates ?? [])
-      .filter((u: any) => !excludeIds.has(u.id))
+    const scored = (hd.candidates ?? [])
       .map((u: any) => {
         const shared  = (mySports as string[]).filter((s: string) => (u.sports ?? []).includes(s));
         let score     = shared.length * 30;
@@ -451,38 +329,19 @@ export default function HomeScreen() {
         shared_sports: u.shared_sports,
         reasons:       u.reasons,
       }));
-
     setSuggested(scored);
 
-    // New circles matching user's interests (created in last 7 days, not yet joined)
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    // New circles (RPC already filtered: last 7 days, not joined, max 20)
+    const myCircleIds = new Set((hd.my_circles ?? []).map((c: any) => c.id as string));
     const userSports: string[] = profileData?.sports ?? [];
-    const { data: newCircleData } = await supabase
-      .from("communities")
-      .select("id, name, avatar_emoji, sport, city, field, description, max_members, event_date, event_time, created_at, creator_id")
-      .gte("created_at", sevenDaysAgo)
-      .order("created_at", { ascending: false });
-
-    // myCircleIds already built above from myCircleData — no extra query needed
-    const matchingNew = (newCircleData ?? []).filter((cc: any) =>
+    const matchingNew = (hd.new_circles ?? []).filter((cc: any) =>
       !myCircleIds.has(cc.id) &&
       !dismissedCircleIdsRef.current.has(cc.id) &&
-      userSports.some((sp) => cc.sport?.toLowerCase().includes(sp.toLowerCase()) || sp.toLowerCase().includes(cc.sport?.toLowerCase() ?? ""))
+      userSports.some((sp) =>
+        cc.sport?.toLowerCase().includes(sp.toLowerCase()) ||
+        sp.toLowerCase().includes(cc.sport?.toLowerCase() ?? "")
+      )
     );
-
-    // Batch member count for new circles
-    const newCircleIds = matchingNew.map((cc: any) => cc.id);
-    let newCircleCountMap: Record<string, number> = {};
-    if (newCircleIds.length > 0) {
-      const { data: newCounts } = await supabase
-        .from("community_members")
-        .select("community_id")
-        .in("community_id", newCircleIds);
-      for (const row of newCounts ?? []) {
-        newCircleCountMap[(row as any).community_id] = (newCircleCountMap[(row as any).community_id] ?? 0) + 1;
-      }
-    }
-
     setNewCircles(matchingNew.map((cc: any) => ({
       id:           cc.id,
       name:         cc.name,
@@ -494,20 +353,22 @@ export default function HomeScreen() {
       max_members:  cc.max_members ?? null,
       event_date:   cc.event_date ?? null,
       event_time:   cc.event_time ?? null,
-      member_count: newCircleCountMap[cc.id] ?? 0,
+      member_count: cc.member_count ?? 0,
       creator_id:   cc.creator_id ?? null,
     })));
 
     lastLoadRef.current = Date.now();
     } catch (err) {
       console.error("[Home] load failed:", err);
+      if (!mountedRef.current) return;
       if (isRefresh) {
         Alert.alert("Error", "Could not refresh. Please try again.");
       } else {
         setError(true);
       }
     } finally {
-      setLoading(false);
+      loadingRef.current = false; // Fix 1: release lock
+      if (mountedRef.current) setLoading(false);
     }
   }, [today, appUser, updateAppUser]);
 
@@ -652,6 +513,31 @@ export default function HomeScreen() {
       match?.status === "accepted" ? "accepted" :
       match?.status === "pending"  ? "pending"  : "none";
 
+    // Compute matchScore using same logic as Discover (sports overlap + level + city)
+    const mySports   = appUser?.sports ?? [];
+    const myLevel    = appUser?.fitness_level ?? "";
+    const myCity     = appUser?.city ?? "";
+    const myAvail    = appUser?.availability ?? {};
+    const theirSports = data.sports ?? [];
+    const shared     = mySports.filter((s: string) => theirSports.includes(s));
+    let computedScore = shared.length > 0 && theirSports.length > 0
+      ? Math.round((shared.length / Math.min(mySports.length, theirSports.length)) * 30) : 0;
+    if (myLevel && data.fitness_level === myLevel) computedScore += 20;
+    const mySlots    = Object.entries(myAvail as Record<string, boolean>).filter(([, v]) => v).map(([k]) => k);
+    const theirSlots = Object.entries((data.availability ?? {}) as Record<string, boolean>).filter(([, v]) => v).map(([k]) => k);
+    if (mySlots.length > 0 && theirSlots.length > 0) {
+      const avOverlap = mySlots.filter((s) => theirSlots.includes(s)).length;
+      computedScore += Math.round((avOverlap / Math.max(mySlots.length, theirSlots.length)) * 15);
+    }
+    if (data.last_active) {
+      const hrs = (Date.now() - new Date(data.last_active).getTime()) / 3600000;
+      if (hrs <= 24) computedScore += 20; else if (hrs <= 72) computedScore += 12; else if (hrs <= 168) computedScore += 5;
+    }
+    if (data.is_at_gym) computedScore += 10;
+    if (!appUser?.training_intent || !data.training_intent) computedScore += 5; // neutral intent
+    if (myCity && data.city?.toLowerCase() === myCity.toLowerCase()) computedScore += 15;
+    computedScore = Math.min(computedScore, 100);
+
     setSheetStatus(status);
     setSheetUser({
       id:              data.id,
@@ -671,7 +557,7 @@ export default function HomeScreen() {
       training_intent: data.training_intent ?? null,
       lat:             data.lat ?? null,
       lng:             data.lng ?? null,
-      matchScore:          0,
+      matchScore:          computedScore,
       reasons:             suggested.reasons,
       isNew:               false,
       sessions_completed:  0,
@@ -760,7 +646,10 @@ export default function HomeScreen() {
   const showGymStrip = primaryAction.kind !== "at_gym_log";
 
   // ── Render ───────────────────────────────────────────────────────────────────
-  if (loading) {
+  // Fix 7: Progressive loading — header/strip render instantly from appUser cache.
+  // Only the dynamic sections skeleton while the RPC loads.
+  // Full-screen skeleton only shown on very first load (no appUser yet).
+  if (loading && !appUser) {
     return (
       <SafeAreaView style={[s.root, { backgroundColor: c.bg }]}>
         <HomeSkeleton />
@@ -768,7 +657,7 @@ export default function HomeScreen() {
     );
   }
 
-  if (error) {
+  if (error && !profile) {
     return (
       <SafeAreaView style={[s.root, { backgroundColor: c.bg }]}>
         <ErrorState onRetry={load} message="Could not load your home feed." />
@@ -783,21 +672,24 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.brand} />}
       >
-        {/* ── Header + stats always visible above the fold ── */}
+        {/* ── Header + stats: always instant — sourced from appUser context cache ── */}
         <HomeHeader
           name={name}
-          avatarUrl={profile?.avatar_url}
+          avatarUrl={appUser?.avatar_url ?? profile?.avatar_url}
           unreadCount={notifUnread}
         />
 
         <MomentumStrip
-          streak={profile?.current_streak ?? 0}
+          streak={appUser?.current_streak ?? profile?.current_streak ?? 0}
           matchCount={profile?.match_count ?? 0}
           weekSessions={upcomingSessions.length}
         />
 
-        {/* ── Primary action ── */}
-        <PrimaryActionCard action={primaryAction} onLogWorkout={logWorkout} checkingIn={checkingIn} />
+        {/* ── Primary action: skeleton while loading, real card after RPC returns ── */}
+        {loading && !profile
+          ? <HomeSkeleton sectionsOnly />
+          : <PrimaryActionCard action={primaryAction} onLogWorkout={logWorkout} checkingIn={checkingIn} />
+        }
 
         {/* Gym strip only when primary card isn't already showing the gym prompt */}
         {showGymStrip && (
@@ -854,8 +746,7 @@ export default function HomeScreen() {
           onPress={openMyCircle}
           onDismiss={(id) => {
             setCircles((prev) => prev.filter((cc) => cc.id !== id));
-            dismissedMyCircleIdsRef.current.add(id);
-            AsyncStorage.setItem(DISMISSED_MY_CIRCLES_KEY, JSON.stringify([...dismissedMyCircleIdsRef.current]));
+            dismissedMyCircleIdsRef.current.add(id); // session-only hide
           }}
         />
 

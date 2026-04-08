@@ -49,12 +49,18 @@ export default function ActivityScreen() {
   const [gymToggling, setGymToggling] = useState(false);
 
   const lastLoadRef = useRef(0);
+  const loadingRef  = useRef(false);
+  const mountedRef  = useRef(true);
   const STALE_MS = 5 * 60_000; // 5 min cache per tab
 
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   const load = useCallback(async (isRefresh = false) => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     try {
-    setError(false);
-    if (!isRefresh) setLoading(true);
+    if (mountedRef.current) setError(false);
+    if (!isRefresh && mountedRef.current) setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     setUserId(user.id);
@@ -81,16 +87,18 @@ export default function ActivityScreen() {
       }
     }
     setIsAtGym(atGym);
-    lastLoadRef.current = Date.now();
+    if (mountedRef.current) lastLoadRef.current = Date.now();
     } catch (err) {
       console.error("[Activity] load failed:", err);
+      if (!mountedRef.current) return;
       if (isRefresh) {
         Alert.alert("Error", "Could not refresh. Please try again.");
       } else {
         setError(true);
       }
     } finally {
-      setLoading(false);
+      loadingRef.current = false;
+      if (mountedRef.current) setLoading(false);
     }
   }, []);
 

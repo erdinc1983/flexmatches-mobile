@@ -27,7 +27,7 @@ import { Avatar } from "../../components/Avatar";
 import { ProfileSkeleton } from "../../components/ui/Skeleton";
 import { TIERS, BADGES, BADGE_MAP, calcTier, calcUserPoints, type BadgeKey, type Tier } from "../../lib/badges";
 import { useNotifications } from "../../lib/notificationContext";
-import { unregisterPushToken } from "../../lib/pushTokens";
+import { unregisterPushToken } from "../../lib/push";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const FITNESS_LEVELS = ["beginner", "intermediate", "advanced"] as const;
@@ -153,7 +153,7 @@ export default function ProfileScreen() {
   const { theme } = useTheme();
   const c = theme.colors;
   const { unreadCount } = useNotifications();
-  const { appUser, refreshAppUser, updateAppUser } = useAppData();
+  const { appUser, appUserLoading, refreshAppUser, updateAppUser } = useAppData();
 
   const [profile,           setProfile]           = useState<Profile | null>(null);
   const [loading,           setLoading]           = useState(true);
@@ -250,10 +250,10 @@ export default function ProfileScreen() {
   }, [fetchProfile, profile]));
 
   useEffect(() => {
-    if (!loading) return;
+    if (!loading || appUserLoading) return; // wait for AppDataContext before starting timeout
     const t = setTimeout(() => { setLoading(false); setError(true); }, 30_000);
     return () => clearTimeout(t);
-  }, [loading]);
+  }, [loading, appUserLoading]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -398,7 +398,7 @@ export default function ProfileScreen() {
       { text: "Cancel", style: "cancel" },
       {
         text: "Sign Out", style: "destructive", onPress: async () => {
-          if (profile?.id) await unregisterPushToken(profile.id);
+          await unregisterPushToken();
           await supabase.auth.signOut();
         },
       },
@@ -490,9 +490,9 @@ export default function ProfileScreen() {
 
         {/* ── Stats ───────────────────────────────────────────────────────── */}
         <View style={s.statsRow}>
-          <StatPill icon="streakActive" value={profile?.current_streak ?? 0} label="streak"   color={c.brand} bg={c.bgCard} border={c.border} textColor={c.text} mutedColor={c.textMuted} />
-          <StatPill icon="workout"      value={profile?.total_workouts ?? 0}  label="workouts" color={c.brand} bg={c.bgCard} border={c.border} textColor={c.text} mutedColor={c.textMuted} />
-          <StatPill icon="matchActive"  value={profile?.match_count ?? 0}     label="matches"  color={c.brand} bg={c.bgCard} border={c.border} textColor={c.text} mutedColor={c.textMuted} />
+          <StatPill value={`${profile?.current_streak ?? 0}d`} label="Day Streak" c={c} />
+          <StatPill value={`${profile?.total_workouts ?? 0}`}  label="Workouts"   c={c} />
+          <StatPill value={`${profile?.match_count ?? 0}`}     label="Matches"    c={c} />
         </View>
 
         {/* ── Edit or View ────────────────────────────────────────────────── */}
@@ -1193,15 +1193,14 @@ function EditForm({ form, setForm, saving, onSave, onCancel, toggleSport, toggle
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
-function StatPill({ icon, value, label, color, bg, border, textColor, mutedColor }: {
-  icon: any; value: number; label: string;
-  color: string; bg: string; border: string; textColor: string; mutedColor: string;
+function StatPill({ value, label, c }: {
+  value: string; label: string;
+  c: ReturnType<typeof useTheme>["theme"]["colors"];
 }) {
   return (
-    <View style={[s.statPill, { backgroundColor: bg, borderColor: border }]}>
-      <Text style={[s.statValue, { color: textColor }]}>{value}</Text>
-      <Icon name={icon} size={16} color={color} />
-      <Text style={[s.statLabel, { color: mutedColor }]}>{label}</Text>
+    <View style={[s.statPill, { backgroundColor: c.bgCard, borderColor: c.border }]}>
+      <Text style={[s.statValue, { color: c.text }]}>{value}</Text>
+      <Text style={[s.statLabel, { color: c.textMuted }]}>{label}</Text>
     </View>
   );
 }
@@ -1252,10 +1251,10 @@ const s = StyleSheet.create({
   shareBtnText:  { fontSize: FONT.size.sm, fontWeight: FONT.weight.semibold },
 
   // Stats
-  statsRow:  { flexDirection: "row", gap: SPACE[10] },
-  statPill:  { flex: 1, borderRadius: RADIUS.lg, padding: SPACE[14], alignItems: "center", gap: SPACE[2], borderWidth: 1 },
-  statValue: { fontSize: FONT.size.xxl, fontWeight: FONT.weight.black },
-  statLabel: { fontSize: FONT.size.xs, fontWeight: FONT.weight.semibold },
+  statsRow:  { flexDirection: "row", gap: SPACE[8] },
+  statPill:  { flex: 1, alignItems: "center", paddingVertical: SPACE[8], paddingHorizontal: SPACE[6], borderRadius: RADIUS.lg, borderWidth: 1, gap: 2, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4, elevation: 2 },
+  statValue: { fontSize: FONT.size.md, fontWeight: FONT.weight.black, letterSpacing: -0.3 },
+  statLabel: { fontSize: 10, fontWeight: FONT.weight.medium, letterSpacing: 0.1, textAlign: "center" },
 
   // Completeness
   completeCard:   { borderRadius: RADIUS.xl, padding: SPACE[16], borderWidth: 1, gap: SPACE[10] },
