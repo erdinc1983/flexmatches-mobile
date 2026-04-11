@@ -209,11 +209,12 @@ export default function RootLayout() {
 
   async function checkAuth() {
     setAppState("loading");
-    const timeoutId = setTimeout(() => setAppState("auth_error"), 10_000);
+    const timeoutId = setTimeout(() => setAppState("auth_error"), 20_000);
     try {
       const { data: { session } } = await supabase.auth.getSession();
+      const newState = await resolveAppState(session); // wait for DB query too
       clearTimeout(timeoutId);
-      setAppState(await resolveAppState(session));
+      setAppState(newState);
     } catch {
       clearTimeout(timeoutId);
       setAppState("auth_error");
@@ -252,6 +253,8 @@ export default function RootLayout() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        // Let checkAuth() handle the initial load — skip the duplicate
+        if (event === "INITIAL_SESSION") return;
         if (event === "PASSWORD_RECOVERY") {
           router.replace("/(auth)/reset-password");
           return;
@@ -260,7 +263,11 @@ export default function RootLayout() {
           // Clear onboarding cache so next login re-checks
           AsyncStorage.removeItem(ONBOARDING_DONE_KEY);
         }
-        setAppState(await resolveAppState(session));
+        try {
+          setAppState(await resolveAppState(session));
+        } catch {
+          setAppState("auth_error");
+        }
       }
     );
 
