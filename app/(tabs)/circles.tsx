@@ -171,9 +171,10 @@ export default function CirclesScreen() {
   const [search,         setSearch]         = useState("");
   const [filterCat,      setFilterCat]      = useState("");
   const [showCreate,     setShowCreate]     = useState(false);
-  const lastLoadRef = useRef(0);
-  const loadingRef  = useRef(false);
-  const mountedRef  = useRef(true);
+  const lastLoadRef  = useRef(0);
+  const loadingRef   = useRef(false);
+  const mountedRef   = useRef(true);
+  const chipScrollRef = useRef<ScrollView>(null);
   const STALE_MS = 5 * 60_000; // 5 min cache per tab
 
   // Detail popup
@@ -524,6 +525,7 @@ export default function CirclesScreen() {
 
       {/* Category filters */}
       <ScrollView
+        ref={chipScrollRef}
         horizontal
         showsHorizontalScrollIndicator={false}
         style={s.catScroll}
@@ -535,7 +537,12 @@ export default function CirclesScreen() {
             <TouchableOpacity
               key={key}
               style={[s.catChip, { backgroundColor: active ? c.brand : c.bgCard, borderColor: active ? c.brand : c.border }]}
-              onPress={() => setFilterCat(active && key !== "" ? "" : key)}
+              onPress={() => {
+                const next = active && key !== "" ? "" : key;
+                setFilterCat(next);
+                // Scroll back to start when All is selected so all chips are visible
+                if (next === "") chipScrollRef.current?.scrollTo({ x: 0, animated: true });
+              }}
               activeOpacity={0.8}
             >
               <Text style={[s.catChipText, { color: active ? "#fff" : c.text }]}>
