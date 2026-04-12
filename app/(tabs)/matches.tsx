@@ -61,7 +61,7 @@ type BuddySession = {
 export default function MatchesScreen() {
   const { theme } = useTheme();
   const c = theme.colors;
-  const { appUser } = useAppData();
+  const { appUser, appUserLoading } = useAppData();
 
   const [pending,         setPending]         = useState<Match[]>([]);
   const [accepted,        setAccepted]        = useState<Match[]>([]);
@@ -70,10 +70,10 @@ export default function MatchesScreen() {
   const [error,           setError]           = useState(false);
 
   useEffect(() => {
-    if (!loading) return;
+    if (!loading || appUserLoading) return;
     const t = setTimeout(() => { setLoading(false); setError(true); }, 30_000);
     return () => clearTimeout(t);
-  }, [loading]);
+  }, [loading, appUserLoading]);
 
   const [refreshing,      setRefreshing]      = useState(false);
   const [myId,            setMyId]            = useState<string | null>(null);

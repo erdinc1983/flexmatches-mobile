@@ -29,7 +29,7 @@ const SPORT_EMOJI: Record<string, string> = {
 export default function ActivityScreen() {
   const { theme } = useTheme();
   const c = theme.colors;
-  const { appUser, updateAppUser } = useAppData();
+  const { appUser, appUserLoading, updateAppUser } = useAppData();
 
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [loading, setLoading] = useState(true);
@@ -108,10 +108,10 @@ export default function ActivityScreen() {
   }, [load, workouts.length]));
 
   useEffect(() => {
-    if (!loading) return;
+    if (!loading || appUserLoading) return;
     const t = setTimeout(() => { setLoading(false); setError(true); }, 30_000);
     return () => clearTimeout(t);
-  }, [loading]);
+  }, [loading, appUserLoading]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
