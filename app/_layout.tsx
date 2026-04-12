@@ -13,6 +13,7 @@ import { registerPushToken } from "../lib/push";
 import { Button } from "../components/ui/Button";
 
 const ONBOARDING_DONE_KEY    = "onboarding_done_v1";
+const READY_CACHE_KEY        = "auth_ready_uid_v1"; // stores userId when user is confirmed ready
 export const PENDING_REF_KEY = "pending_referral_code";
 
 function captureRefFromUrl(url: string | null) {
@@ -185,7 +186,26 @@ function extractRoute(response: Notifications.NotificationResponse): string | nu
 async function resolveAppState(session: Session | null): Promise<AppState> {
   if (!session) return "unauthenticated";
 
-  // Always fetch from DB — check banned_at on every launch
+  // Fast path: if this user was confirmed ready before, open immediately.
+  // Banned check still runs in background — ban takes effect on next launch.
+  const cachedUid = await AsyncStorage.getItem(READY_CACHE_KEY);
+  if (cachedUid === session.user.id) {
+    // Background: refresh banned_at without blocking launch
+    supabase
+      .from("users")
+      .select("banned_at")
+      .eq("id", session.user.id)
+      .single()
+      .then(({ data }) => {
+        if (data?.banned_at) {
+          AsyncStorage.removeItem(READY_CACHE_KEY);
+          AsyncStorage.removeItem(ONBOARDING_DONE_KEY);
+        }
+      });
+    return "ready";
+  }
+
+  // Slow path: first launch or cache miss — hit DB to check onboarding + banned
   const { data } = await supabase
     .from("users")
     .select("full_name, banned_at")
@@ -194,12 +214,11 @@ async function resolveAppState(session: Session | null): Promise<AppState> {
 
   if (data?.banned_at) return "banned";
 
-  // Cache hit: skip onboarding check
-  const cached = await AsyncStorage.getItem(ONBOARDING_DONE_KEY);
-  if (cached === "1") return "ready";
-
   const state: AppState = data?.full_name ? "ready" : "needs_onboarding";
-  if (state === "ready") AsyncStorage.setItem(ONBOARDING_DONE_KEY, "1");
+  if (state === "ready") {
+    AsyncStorage.setItem(READY_CACHE_KEY, session.user.id);
+    AsyncStorage.setItem(ONBOARDING_DONE_KEY, "1");
+  }
   return state;
 }
 
@@ -260,8 +279,8 @@ export default function RootLayout() {
           return;
         }
         if (event === "SIGNED_OUT") {
-          // Clear onboarding cache so next login re-checks
           AsyncStorage.removeItem(ONBOARDING_DONE_KEY);
+          AsyncStorage.removeItem(READY_CACHE_KEY);
         }
         try {
           setAppState(await resolveAppState(session));
