@@ -1045,6 +1045,9 @@ function ActiveNowStrip({ partners }: { partners: ActivePartner[] }) {
               <Text style={[an.name, { color: c.textSecondary }]} numberOfLines={1}>
                 {p.full_name?.split(" ")[0] ?? p.username}
               </Text>
+              <Text style={an.statusLabel}>
+                {p.is_at_gym ? "🟡 At gym" : "🟢 Active"}
+              </Text>
             </Pressable>
           ))}
         </ScrollView>
@@ -1196,7 +1199,8 @@ const an = StyleSheet.create({
   avatarWrap:{ width: 52, height: 52, position: "relative" },
   activeDot: { position: "absolute", bottom: 0, right: 0, width: 13, height: 13, borderRadius: 6.5, backgroundColor: PALETTE.success, borderWidth: 2 },
   gymBadge:  { position: "absolute", top: 0, right: 0, width: 15, height: 15, borderRadius: 7.5, backgroundColor: "#F59E0B", borderWidth: 2 },
-  name:      { fontSize: FONT.size.xs, fontWeight: FONT.weight.semibold, textAlign: "center", maxWidth: 62 },
+  name:        { fontSize: FONT.size.xs, fontWeight: FONT.weight.semibold, textAlign: "center", maxWidth: 62 },
+  statusLabel: { fontSize: 9, textAlign: "center", color: "#888", marginTop: -2 },
 });
 
 const pn = StyleSheet.create({
