@@ -13,6 +13,7 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, TextInput, Modal, ScrollView,
   RefreshControl, Alert, KeyboardAvoidingView, Platform, Dimensions,
+  useWindowDimensions,
 } from "react-native";
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -162,6 +163,9 @@ function TimePickerInline({ hour, minute, onHourChange, onMinuteChange, colors }
 export default function CirclesScreen() {
   const { theme } = useTheme();
   const c = theme.colors;
+  const { width: screenW } = useWindowDimensions();
+  // 5 chips: All + 4 categories. Subtract horizontal padding (16×2) and gaps (8×4)
+  const chipW = Math.floor((screenW - SPACE[16] * 2 - SPACE[8] * 4) / 5);
 
   const [communities,    setCommunities]    = useState<Community[]>([]);
   const [loading,        setLoading]        = useState(true);
@@ -174,7 +178,7 @@ export default function CirclesScreen() {
   const lastLoadRef  = useRef(0);
   const loadingRef   = useRef(false);
   const mountedRef   = useRef(true);
-  const chipScrollRef = useRef<ScrollView>(null);
+
   const STALE_MS = 5 * 60_000; // 5 min cache per tab
 
   // Detail popup
@@ -523,35 +527,27 @@ export default function CirclesScreen() {
         </View>
       </View>
 
-      {/* Category filters */}
-      <ScrollView
-        ref={chipScrollRef}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={s.catScroll}
-        contentContainerStyle={[s.catRow, { paddingLeft: SPACE[16], paddingRight: SPACE[32] }]}
-      >
+      {/* Category filters — all 5 chips always fully visible */}
+      <View style={[s.catRow, { paddingHorizontal: SPACE[16], marginBottom: SPACE[8] }]}>
         {[{ key: "", label: "All" }, ...ACTIVITY_CATEGORIES.map((cat) => ({ key: cat.key, label: cat.label }))].map(({ key, label }) => {
           const active = filterCat === key;
           return (
             <TouchableOpacity
               key={key}
-              style={[s.catChip, { backgroundColor: active ? c.brand : c.bgCard, borderColor: active ? c.brand : c.border }]}
+              style={[s.catChip, { width: chipW, backgroundColor: active ? c.brand : c.bgCard, borderColor: active ? c.brand : c.border }]}
               onPress={() => {
                 const next = active && key !== "" ? "" : key;
                 setFilterCat(next);
-                // Scroll back to start when All is selected so all chips are visible
-                if (next === "") chipScrollRef.current?.scrollTo({ x: 0, animated: true });
               }}
               activeOpacity={0.8}
             >
-              <Text style={[s.catChipText, { color: active ? "#fff" : c.text }]}>
+              <Text style={[s.catChipText, { color: active ? "#fff" : c.text }]} numberOfLines={1}>
                 {label}
               </Text>
             </TouchableOpacity>
           );
         })}
-      </ScrollView>
+      </View>
 
       {/* List */}
       <FlatList
@@ -1141,9 +1137,8 @@ const s = StyleSheet.create({
   searchBar:       { flexDirection: "row", alignItems: "center", gap: SPACE[8],
                      borderRadius: RADIUS.lg, paddingHorizontal: SPACE[14], paddingVertical: SPACE[12], borderWidth: 1 },
   searchInput:     { flex: 1, fontSize: FONT.size.md, padding: 0 },
-  catScroll:       { flexGrow: 0, marginBottom: SPACE[8] },
   catRow:          { flexDirection: "row", gap: SPACE[8] },
-  catChip:         { borderRadius: RADIUS.pill, paddingHorizontal: SPACE[14], paddingVertical: SPACE[6], borderWidth: 1 },
+  catChip:         { borderRadius: RADIUS.pill, paddingVertical: SPACE[6], borderWidth: 1, alignItems: "center" },
   catChipText:     { fontSize: FONT.size.sm, fontWeight: FONT.weight.semibold },
   list:            { paddingHorizontal: SPACE[16], paddingBottom: SPACE[40] },
   sectionLabel:    { fontSize: FONT.size.xs, fontWeight: FONT.weight.bold, textTransform: "uppercase",
