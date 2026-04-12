@@ -293,14 +293,19 @@ export default function CirclesScreen() {
     setEditDate(circle.event_date ?? "");
     setEditTime(circle.event_time ?? "");
     setLoadingMembers(true);
-    const { data } = await supabase
-      .from("community_members")
-      .select("user:users(id, username, full_name, avatar_url)")
-      .eq("community_id", circle.id);
-    setCircleMembers(
-      (data ?? []).map((row: any) => row.user).filter(Boolean) as CircleMember[]
-    );
-    setLoadingMembers(false);
+    try {
+      const { data } = await supabase
+        .from("community_members")
+        .select("user:users(id, username, full_name, avatar_url)")
+        .eq("community_id", circle.id);
+      setCircleMembers(
+        (data ?? []).map((row: any) => row.user).filter(Boolean) as CircleMember[]
+      );
+    } catch (err) {
+      console.error("[Circles] loadMembers failed:", err);
+    } finally {
+      setLoadingMembers(false);
+    }
   }
 
   async function saveCircleEdit() {

@@ -72,6 +72,9 @@ export default function RegisterScreen() {
 
   useEffect(() => {
     isAppleAuthAvailable().then(setAppleAvailable);
+    return () => {
+      if (usernameTimer.current) clearTimeout(usernameTimer.current);
+    };
   }, []);
 
   async function handleRegister() {

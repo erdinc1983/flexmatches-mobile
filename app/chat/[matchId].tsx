@@ -13,11 +13,11 @@
  *   Step 3 — Time (optional) + Location → Propose
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
   FlatList, KeyboardAvoidingView, Platform, ActivityIndicator,
-  Modal, ScrollView, Dimensions, Vibration, Alert,
+  Modal, ScrollView, Dimensions, Vibration, Alert, useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -71,6 +71,7 @@ const MONTHS = ["January","February","March","April","May","June",
   "July","August","September","October","November","December"];
 const DAY_LABELS = ["Su","Mo","Tu","We","Th","Fr","Sa"];
 
+// SCREEN_H/W used only as fallback — components use useWindowDimensions() for iPad support
 const { height: SCREEN_H, width: SCREEN_W } = Dimensions.get("window");
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────

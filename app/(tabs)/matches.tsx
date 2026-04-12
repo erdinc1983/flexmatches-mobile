@@ -209,22 +209,26 @@ export default function MatchesScreen() {
   async function respondToMatch(matchId: string, status: "accepted" | "declined") {
     if (respondingId) return;
     setRespondingId(matchId);
-    const match = pending.find((p) => p.id === matchId);
-    await supabase.from("matches").update({ status }).eq("id", matchId);
-    if (status === "accepted" && match) {
-      const partnerName = match.other_user.full_name ?? match.other_user.username;
-      notifyMatchAccepted(partnerName, matchId);
-      // Push to the sender who sent the request
-      notifyUser(match.sender_id, {
-        type: "match_accepted",
-        title: "Match Accepted! 🎉",
-        body: `${appUser?.full_name ?? appUser?.username ?? "Someone"} accepted your request. Start chatting!`,
-        relatedId: matchId,
-        data: { type: "match_accepted", matchId },
-      });
+    try {
+      const match = pending.find((p) => p.id === matchId);
+      await supabase.from("matches").update({ status }).eq("id", matchId);
+      if (status === "accepted" && match) {
+        const partnerName = match.other_user.full_name ?? match.other_user.username;
+        notifyMatchAccepted(partnerName, matchId);
+        notifyUser(match.sender_id, {
+          type: "match_accepted",
+          title: "Match Accepted! 🎉",
+          body: `${appUser?.full_name ?? appUser?.username ?? "Someone"} accepted your request. Start chatting!`,
+          relatedId: matchId,
+          data: { type: "match_accepted", matchId },
+        });
+      }
+      await load();
+    } catch (err) {
+      console.error("[Matches] respondToMatch failed:", err);
+    } finally {
+      setRespondingId(null);
     }
-    await load();
-    setRespondingId(null);
   }
 
   async function proposeSession() {
