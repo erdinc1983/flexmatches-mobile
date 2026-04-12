@@ -337,6 +337,7 @@ export default function HomeScreen() {
     const matchingNew = (hd.new_circles ?? []).filter((cc: any) =>
       !myCircleIds.has(cc.id) &&
       !dismissedCircleIdsRef.current.has(cc.id) &&
+      (!cc.event_date || cc.event_date >= todayStr) &&
       userSports.some((sp) =>
         cc.sport?.toLowerCase().includes(sp.toLowerCase()) ||
         sp.toLowerCase().includes(cc.sport?.toLowerCase() ?? "")
