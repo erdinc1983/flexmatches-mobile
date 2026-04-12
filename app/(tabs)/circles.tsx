@@ -527,7 +527,7 @@ export default function CirclesScreen() {
         horizontal
         showsHorizontalScrollIndicator={false}
         style={s.catScroll}
-        contentContainerStyle={[s.catRow, { paddingHorizontal: SPACE[16] }]}
+        contentContainerStyle={[s.catRow, { paddingLeft: SPACE[16], paddingRight: SPACE[32] }]}
       >
         {[{ key: "", label: "All" }, ...ACTIVITY_CATEGORIES.map((cat) => ({ key: cat.key, label: cat.label }))].map(({ key, label }) => {
           const active = filterCat === key;

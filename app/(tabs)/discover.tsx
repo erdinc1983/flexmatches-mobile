@@ -499,9 +499,9 @@ export default function DiscoverScreen() {
     if (appUser && users.length === 0) load();
   }, [appUser]);
 
-  // Reload on focus if stale or empty; always reset filters
+  // Reload on focus if stale or empty; reset filters but keep user's gender preference
   useFocusEffect(useCallback(() => {
-    setFilters(EMPTY_FILTERS);
+    setFilters({ ...EMPTY_FILTERS, showMe: appUser?.show_me ?? null });
     setSearchQuery("");
     if (!appUser) return;
     const elapsed = Date.now() - lastLoadRef.current;
