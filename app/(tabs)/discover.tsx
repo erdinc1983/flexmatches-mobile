@@ -916,21 +916,24 @@ function DiscoverEmptyState({ onInvite, onJoinCircle, onCompleteProfile }: {
   const c = theme.colors;
   return (
     <View style={{ alignItems: "center", paddingVertical: SPACE[48], paddingHorizontal: SPACE[24], gap: SPACE[12] }}>
-      <Text style={{ fontSize: 52 }}>🔍</Text>
+      <Icon name="search" size={52} color={c.textMuted} />
       <Text style={{ fontSize: FONT.size.xl, fontWeight: FONT.weight.black, color: c.text, textAlign: "center" }}>
         No partners nearby yet
       </Text>
       <Text style={{ fontSize: FONT.size.base, color: c.textMuted, textAlign: "center" }}>
         Grow the community or complete your profile to improve matches.
       </Text>
-      <TouchableOpacity style={{ backgroundColor: c.brand, paddingVertical: SPACE[14], paddingHorizontal: SPACE[32], borderRadius: RADIUS.xl, marginTop: SPACE[8], width: "100%", alignItems: "center" }} onPress={onInvite} activeOpacity={0.85}>
-        <Text style={{ color: "#fff", fontSize: FONT.size.base, fontWeight: FONT.weight.bold }}>👥 Invite Friends</Text>
+      <TouchableOpacity style={{ backgroundColor: c.brand, paddingVertical: SPACE[14], paddingHorizontal: SPACE[32], borderRadius: RADIUS.xl, marginTop: SPACE[8], width: "100%", alignItems: "center", flexDirection: "row", justifyContent: "center", gap: SPACE[8] }} onPress={onInvite} activeOpacity={0.85}>
+        <Icon name="matchActive" size={16} color="#fff" />
+        <Text style={{ color: "#fff", fontSize: FONT.size.base, fontWeight: FONT.weight.bold }}>Invite Friends</Text>
       </TouchableOpacity>
-      <TouchableOpacity style={{ backgroundColor: c.bgCard, paddingVertical: SPACE[14], paddingHorizontal: SPACE[32], borderRadius: RADIUS.xl, width: "100%", alignItems: "center" }} onPress={onJoinCircle} activeOpacity={0.85}>
-        <Text style={{ color: c.text, fontSize: FONT.size.base, fontWeight: FONT.weight.bold }}>⭕ Join a Circle</Text>
+      <TouchableOpacity style={{ backgroundColor: c.bgCard, paddingVertical: SPACE[14], paddingHorizontal: SPACE[32], borderRadius: RADIUS.xl, width: "100%", alignItems: "center", flexDirection: "row", justifyContent: "center", gap: SPACE[8] }} onPress={onJoinCircle} activeOpacity={0.85}>
+        <Icon name="circlesActive" size={16} color={c.text} />
+        <Text style={{ color: c.text, fontSize: FONT.size.base, fontWeight: FONT.weight.bold }}>Join a Circle</Text>
       </TouchableOpacity>
-      <TouchableOpacity style={{ backgroundColor: c.bgCard, paddingVertical: SPACE[14], paddingHorizontal: SPACE[32], borderRadius: RADIUS.xl, width: "100%", alignItems: "center" }} onPress={onCompleteProfile} activeOpacity={0.85}>
-        <Text style={{ color: c.text, fontSize: FONT.size.base, fontWeight: FONT.weight.bold }}>✏️ Complete Profile</Text>
+      <TouchableOpacity style={{ backgroundColor: c.bgCard, paddingVertical: SPACE[14], paddingHorizontal: SPACE[32], borderRadius: RADIUS.xl, width: "100%", alignItems: "center", flexDirection: "row", justifyContent: "center", gap: SPACE[8] }} onPress={onCompleteProfile} activeOpacity={0.85}>
+        <Icon name="edit" size={16} color={c.text} />
+        <Text style={{ color: c.text, fontSize: FONT.size.base, fontWeight: FONT.weight.bold }}>Complete Profile</Text>
       </TouchableOpacity>
     </View>
   );

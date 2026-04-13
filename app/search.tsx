@@ -8,6 +8,7 @@ import { router } from "expo-router";
 import { supabase } from "../lib/supabase";
 import { useTheme } from "../lib/theme";
 import { Avatar } from "../components/Avatar";
+import { Icon } from "../components/Icon";
 
 type MatchStatus = "none" | "pending" | "accepted" | "sending";
 
@@ -130,7 +131,7 @@ export default function SearchScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: c.bg }]}>
       <View style={[styles.header, { borderBottomColor: c.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Text style={[styles.backText, { color: c.textMuted }]}>←</Text>
+          <Icon name="back" size={24} color={c.textMuted} />
         </TouchableOpacity>
         <TextInput
           style={[styles.input, { backgroundColor: c.bgCard, color: c.text, borderColor: c.border }]}
@@ -144,12 +145,12 @@ export default function SearchScreen() {
       </View>
 
       {loading && (
-        <ActivityIndicator color="#FF4500" style={{ marginTop: 40 }} />
+        <ActivityIndicator color={c.brand} style={{ marginTop: 40 }} />
       )}
 
       {!loading && query.length > 0 && results.length === 0 && (
         <View style={styles.empty}>
-          <Text style={styles.emptyEmoji}>🔍</Text>
+          <Icon name="search" size={44} color={c.textMuted} />
           <Text style={[styles.emptyText, { color: c.textMuted }]}>No users found for "{query}"</Text>
         </View>
       )}
@@ -192,12 +193,12 @@ export default function SearchScreen() {
                 </View>
               </View>
               {(statuses[item.id] === "none" || !statuses[item.id]) && (
-                <TouchableOpacity style={styles.connectBtn} onPress={() => sendRequest(item.id)} activeOpacity={0.8}>
+                <TouchableOpacity style={[styles.connectBtn, { backgroundColor: c.brand }]} onPress={() => sendRequest(item.id)} activeOpacity={0.8}>
                   <Text style={styles.connectText}>Connect</Text>
                 </TouchableOpacity>
               )}
               {statuses[item.id] === "sending" && (
-                <View style={styles.connectBtn}>
+                <View style={[styles.connectBtn, { backgroundColor: c.brand }]}>
                   <ActivityIndicator color="#fff" size="small" />
                 </View>
               )}
@@ -227,7 +228,6 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 10, gap: 12, borderBottomWidth: 1 },
   backBtn: { padding: 4 },
-  backText: { fontSize: 24 },
   input: { flex: 1, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 11, fontSize: 15, borderWidth: 1 },
   row: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, gap: 12, borderBottomWidth: 1 },
   info: { flex: 1, gap: 3 },
@@ -236,14 +236,13 @@ const styles = StyleSheet.create({
   chips: { flexDirection: "row", gap: 6, marginTop: 4, flexWrap: "wrap" },
   chip: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1 },
   chipText: { fontSize: 11, fontWeight: "600" },
-  connectBtn:    { backgroundColor: "#FF4500", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8, minWidth: 80, alignItems: "center" },
+  connectBtn:    { borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8, minWidth: 80, alignItems: "center" },
   connectText:   { color: "#fff", fontWeight: "700", fontSize: 13 },
   pendingBtn:    { backgroundColor: "transparent", borderWidth: 1 },
   pendingText:   { fontWeight: "600", fontSize: 13 },
   connectedBtn:  { backgroundColor: "#16A34A" },
   connectedText: { color: "#fff", fontWeight: "700", fontSize: 13 },
   empty: { alignItems: "center", paddingTop: 60, gap: 10 },
-  emptyEmoji: { fontSize: 40 },
   emptyText: { fontSize: 14 },
   hint: { flex: 1, alignItems: "center", justifyContent: "center" },
   hintText: { fontSize: 14, textAlign: "center", paddingHorizontal: 40 },

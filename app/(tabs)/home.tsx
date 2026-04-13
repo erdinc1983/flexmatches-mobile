@@ -20,7 +20,7 @@ import { router } from "expo-router";
 import {
   ScrollView, ActivityIndicator, Alert, RefreshControl,
   StyleSheet, View, Text, TouchableOpacity, Pressable, Modal, TextInput, KeyboardAvoidingView, Platform,
-  InteractionManager,
+  InteractionManager, ImageBackground,
 } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
@@ -678,13 +678,24 @@ export default function HomeScreen() {
           name={name}
           avatarUrl={appUser?.avatar_url ?? profile?.avatar_url}
           unreadCount={notifUnread}
+          streak={appUser?.current_streak ?? profile?.current_streak ?? 0}
+          isAtGym={profile?.is_at_gym ?? false}
         />
 
         <MomentumStrip
           streak={appUser?.current_streak ?? profile?.current_streak ?? 0}
           matchCount={profile?.match_count ?? 0}
           weekSessions={upcomingSessions.length}
+          circlesCount={circles.length}
         />
+
+        {/* ── Active partners — real people, surfaces immediately ── */}
+        {activePartners.length > 0 && <ActiveNowStrip partners={activePartners} />}
+
+        {/* ── Partner spotlight — community moment card ── */}
+        {activePartners.length > 0 && (
+          <PartnerSpotlight partner={activePartners[0]} />
+        )}
 
         {/* ── Primary action: skeleton while loading, real card after RPC returns ── */}
         {loading && !profile
@@ -702,15 +713,7 @@ export default function HomeScreen() {
           />
         )}
 
-        {/* ── Onboarding nudges — mutually exclusive ── */}
-        {isNewUser
-          ? <NewUserCard />
-          : (!nudgeDismissed && profileMissing.length > 0) && (
-              <ProfileNudge missing={profileMissing} onDismiss={dismissNudge} />
-            )
-        }
-
-        {/* ── Upcoming sessions ── */}
+        {/* ── Your Sessions ── */}
         {upcomingSessions.length > 0 && (
           <UpcomingSessionsSection
             sessions={upcomingSessions}
@@ -718,8 +721,13 @@ export default function HomeScreen() {
           />
         )}
 
-        {/* ── Social feed ── */}
-        {activePartners.length > 0 && <ActiveNowStrip partners={activePartners} />}
+        {/* ── Onboarding nudges — mutually exclusive ── */}
+        {isNewUser
+          ? <NewUserCard />
+          : (!nudgeDismissed && profileMissing.length > 0) && (
+              <ProfileNudge missing={profileMissing} onDismiss={dismissNudge} />
+            )
+        }
 
         <PendingRequestsSection
           requests={sectionRequests}
@@ -757,8 +765,8 @@ export default function HomeScreen() {
           onPress={() => router.push("/(tabs)/challenges" as any)}
           activeOpacity={0.8}
         >
-          <View style={cs.iconWrap}>
-            <Text style={cs.bannerEmoji}>🏆</Text>
+          <View style={[cs.iconWrap, { backgroundColor: "#F59E0B18" }]}>
+            <Icon name="leaderboard" size={22} color="#F59E0B" />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={[cs.bannerTitle, { color: c.text }]}>Community Challenges</Text>
@@ -850,7 +858,7 @@ function UpcomingSessionsSection({ sessions, onSelect }: {
   return (
     <View style={{ gap: SPACE[10] }}>
       <SectionHeader
-        title="Upcoming Sessions"
+        title="Your Sessions"
         count={sessions.length}
         action={{ label: "See all", onPress: () => router.push("/(tabs)/messages") }}
       />
@@ -896,7 +904,7 @@ function UpcomingSessionsSection({ sessions, onSelect }: {
                 {/* Location */}
                 {sess.location && (
                   <View style={us.locRow}>
-                    <Text style={{ fontSize: 11 }}>📍</Text>
+                    <Icon name="location" size={11} color={c.textMuted} />
                     <Text style={[us.meta, { color: c.textMuted }]} numberOfLines={1}>{sess.location}</Text>
                   </View>
                 )}
@@ -918,19 +926,6 @@ function sportIcon(sport: string): import("../../components/Icon").IconName {
   return "workout";
 }
 
-function sportEmoji(sport: string): string {
-  const lower = sport.toLowerCase();
-  if (lower.includes("yoga") || lower.includes("pilates")) return "🧘";
-  if (lower.includes("run") || lower.includes("cardio"))   return "🏃";
-  if (lower.includes("cycl") || lower.includes("bike"))    return "🚴";
-  if (lower.includes("swim"))                              return "🏊";
-  if (lower.includes("box"))                               return "🥊";
-  if (lower.includes("tennis"))                            return "🎾";
-  if (lower.includes("basket"))                            return "🏀";
-  if (lower.includes("soccer") || lower.includes("football")) return "⚽";
-  if (lower.includes("hik") || lower.includes("climb"))    return "🧗";
-  return "🏋️";
-}
 
 const us = StyleSheet.create({
   card:         { borderRadius: RADIUS.xl, borderWidth: 1, overflow: "hidden" },
@@ -968,7 +963,7 @@ function GymStrip({ isAtGym, toggling, onToggle, gymName }: {
     >
       {/* Top section — icon + title + subtitle */}
       <View style={gs.topRow}>
-        <View style={[gs.pinWrap, { backgroundColor: isAtGym ? "#22C55E18" : "#FF450014" }]}>
+        <View style={[gs.pinWrap, { backgroundColor: isAtGym ? "#22C55E18" : c.brandSubtle }]}>
           {toggling
             ? <ActivityIndicator size="small" color={pinColor} />
             : <Icon name="location" size={24} color={pinColor} />
@@ -989,7 +984,7 @@ function GymStrip({ isAtGym, toggling, onToggle, gymName }: {
 
       {/* Bottom section — gym name */}
       <View style={gs.bottomRow}>
-        <Text style={{ fontSize: 13 }}>📍</Text>
+        <Icon name="location" size={13} color={c.textMuted} />
         <Text style={[gs.gymNameText, { color: c.textMuted }]}>
           {gymName ?? "Your gym"}
         </Text>
@@ -1008,41 +1003,116 @@ function GymStrip({ isAtGym, toggling, onToggle, gymName }: {
 function ActiveNowStrip({ partners }: { partners: ActivePartner[] }) {
   const { theme } = useTheme();
   const c = theme.colors;
+  const atGymCount = partners.filter((p) => p.is_at_gym).length;
 
   return (
-    <View style={[an.card, { backgroundColor: c.bgCard, borderColor: c.border }]}>
-      <View style={an.header}>
+    <View style={{ gap: SPACE[12] }}>
+      {/* Section label */}
+      <View style={an.headerRow}>
         <View style={an.liveRow}>
           <View style={an.dot} />
           <Text style={[an.title, { color: c.text }]}>Active Now</Text>
         </View>
         <Text style={[an.sub, { color: c.textMuted }]}>
-          {partners.length} {partners.length === 1 ? "buddy" : "buddies"} · tap to chat
+          {atGymCount > 0 ? `${atGymCount} at gym · ` : ""}{partners.length} partner{partners.length > 1 ? "s" : ""}
         </Text>
       </View>
+
+      {/* Horizontal scroll of partner cards */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={an.row}>
         {partners.map((p) => (
           <Pressable
             key={p.id}
-            style={an.item}
+            style={[an.card, { backgroundColor: c.bgCard, borderColor: p.is_at_gym ? PALETTE.success + "60" : c.border }, SHADOW.sm]}
             onPress={() => router.push(`/chat/${p.match_id}` as any)}
           >
             <View style={an.avatarWrap}>
-              <Avatar url={p.avatar_url} name={p.full_name ?? p.username} size={52} />
+              <Avatar url={p.avatar_url} name={p.full_name ?? p.username} size={64} />
               <View style={[an.activeDot, { borderColor: c.bgCard, backgroundColor: p.is_at_gym ? "#F59E0B" : PALETTE.success }]} />
             </View>
-            <Text style={[an.name, { color: c.textSecondary }]} numberOfLines={1}>
+            <Text style={[an.name, { color: c.text }]} numberOfLines={1}>
               {p.full_name?.split(" ")[0] ?? p.username}
             </Text>
-            <Text style={[an.statusLabel, { color: c.textMuted }]}>
-              {p.is_at_gym ? "At gym" : "Active"}
-            </Text>
+            <View style={[an.statusPill, { backgroundColor: p.is_at_gym ? "#F59E0B18" : PALETTE.success + "18" }]}>
+              <Text style={[an.statusText, { color: p.is_at_gym ? "#F59E0B" : PALETTE.success }]}>
+                {p.is_at_gym ? "At gym" : "Active"}
+              </Text>
+            </View>
           </Pressable>
         ))}
       </ScrollView>
     </View>
   );
 }
+
+// ─── Partner Spotlight ────────────────────────────────────────────────────────
+const GYM_PHOTO_URL = "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=900&q=80";
+
+function PartnerSpotlight({ partner }: { partner: ActivePartner }) {
+  const firstName = partner.full_name?.split(" ")[0] ?? partner.username;
+  const isAtGym   = partner.is_at_gym;
+
+  return (
+    <ImageBackground
+      source={{ uri: GYM_PHOTO_URL }}
+      style={ps.card}
+      imageStyle={{ borderRadius: RADIUS.xxl }}
+      resizeMode="cover"
+    >
+      <LinearGradient
+        colors={isAtGym
+          ? ["rgba(0,0,0,0.05)", "rgba(5,30,15,0.88)"]
+          : ["rgba(0,0,0,0.05)", "rgba(0,0,0,0.80)"]}
+        style={[StyleSheet.absoluteFill, { borderRadius: RADIUS.xxl }]}
+      />
+
+      <View style={ps.content}>
+        {/* Live pill */}
+        <View style={[ps.livePill, { backgroundColor: isAtGym ? PALETTE.success + "CC" : "rgba(255,255,255,0.20)" }]}>
+          <View style={[ps.liveDot, { backgroundColor: isAtGym ? "#fff" : PALETTE.success }]} />
+          <Text style={ps.liveText}>{isAtGym ? "Live at gym" : "Active"}</Text>
+        </View>
+
+        {/* Avatar + name */}
+        <View style={ps.row}>
+          <Avatar url={partner.avatar_url} name={partner.full_name ?? partner.username} size={56} />
+          <View style={{ flex: 1 }}>
+            <Text style={ps.name}>{firstName}</Text>
+            <Text style={ps.sub}>
+              {isAtGym ? "Training right now — send a message" : "Recently active · tap to say hello"}
+            </Text>
+          </View>
+        </View>
+
+        {/* CTA */}
+        <TouchableOpacity
+          style={ps.cta}
+          onPress={() => router.push(`/chat/${partner.match_id}` as any)}
+          activeOpacity={0.85}
+        >
+          <Icon name="chatActive" size={16} color="#fff" />
+          <Text style={ps.ctaText}>Message {firstName}</Text>
+        </TouchableOpacity>
+      </View>
+    </ImageBackground>
+  );
+}
+
+const ps = StyleSheet.create({
+  card:     { height: 190, borderRadius: RADIUS.xxl, overflow: "hidden", justifyContent: "flex-end" },
+  content:  { padding: SPACE[16], gap: SPACE[12] },
+  livePill: { flexDirection: "row", alignItems: "center", gap: SPACE[4], alignSelf: "flex-start",
+              paddingHorizontal: SPACE[10], paddingVertical: 4, borderRadius: RADIUS.pill },
+  liveDot:  { width: 6, height: 6, borderRadius: 3 },
+  liveText: { fontSize: 11, fontWeight: FONT.weight.extrabold, color: "#fff", letterSpacing: 0.3 },
+  row:      { flexDirection: "row", alignItems: "center", gap: SPACE[12] },
+  name:     { fontSize: FONT.size.lg, fontWeight: FONT.weight.black, color: "#fff", letterSpacing: -0.3 },
+  sub:      { fontSize: FONT.size.xs, color: "rgba(255,255,255,0.75)", marginTop: 2 },
+  cta:      { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: SPACE[8],
+              backgroundColor: "rgba(255,255,255,0.18)", borderRadius: RADIUS.pill,
+              paddingVertical: SPACE[12], borderWidth: 1, borderColor: "rgba(255,255,255,0.30)" },
+  ctaText:  { fontSize: FONT.size.sm, fontWeight: FONT.weight.bold, color: "#fff" },
+});
 
 // ─── Profile Nudge ────────────────────────────────────────────────────────────
 function ProfileNudge({ missing, onDismiss }: { missing: string[]; onDismiss: () => void }) {
@@ -1087,7 +1157,9 @@ function NewUserCard() {
       onPress={() => router.push("/(tabs)/discover")}
       activeOpacity={0.8}
     >
-      <Text style={nu.emoji}>👋</Text>
+      <View style={[nu.iconWrap, { backgroundColor: c.brand + "20" }]}>
+        <Icon name="discoverActive" size={20} color={c.brand} />
+      </View>
       <View style={{ flex: 1 }}>
         <Text style={[nu.title, { color: c.text }]}>Find your first training buddy</Text>
         <Text style={[nu.sub, { color: c.textMuted }]}>Browse people near you → tap Discover</Text>
@@ -1170,18 +1242,19 @@ const gs = StyleSheet.create({
 });
 
 const an = StyleSheet.create({
-  card:        { borderRadius: RADIUS.xl, borderWidth: 1, paddingVertical: SPACE[14], paddingHorizontal: SPACE[14] },
-  header:      { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: SPACE[14] },
-  liveRow:     { flexDirection: "row", alignItems: "center", gap: SPACE[6] },
-  dot:         { width: 8, height: 8, borderRadius: 4, backgroundColor: PALETTE.success },
-  title:       { fontSize: FONT.size.base, fontWeight: FONT.weight.bold },
-  sub:         { fontSize: FONT.size.xs },
-  row:         { gap: SPACE[16], paddingRight: SPACE[4] },
-  item:        { alignItems: "center", gap: SPACE[4], width: 62 },
-  avatarWrap:  { width: 52, height: 52, position: "relative" },
-  activeDot:   { position: "absolute", bottom: 1, right: 1, width: 12, height: 12, borderRadius: 6, borderWidth: 2 },
-  name:        { fontSize: FONT.size.xs, fontWeight: FONT.weight.semibold, textAlign: "center", maxWidth: 62 },
-  statusLabel: { fontSize: 9, textAlign: "center", marginTop: -2 },
+  headerRow:  { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  liveRow:    { flexDirection: "row", alignItems: "center", gap: SPACE[6] },
+  dot:        { width: 8, height: 8, borderRadius: 4, backgroundColor: PALETTE.success },
+  title:      { fontSize: FONT.size.base, fontWeight: FONT.weight.bold },
+  sub:        { fontSize: FONT.size.xs },
+  row:        { gap: SPACE[10], paddingRight: SPACE[4] },
+  card:       { alignItems: "center", gap: SPACE[8], padding: SPACE[14],
+                borderRadius: RADIUS.xl, borderWidth: 1, width: 100 },
+  avatarWrap: { width: 64, height: 64, position: "relative" },
+  activeDot:  { position: "absolute", bottom: 1, right: 1, width: 14, height: 14, borderRadius: 7, borderWidth: 2 },
+  name:       { fontSize: FONT.size.sm, fontWeight: FONT.weight.bold, textAlign: "center" },
+  statusPill: { paddingHorizontal: SPACE[8], paddingVertical: 3, borderRadius: RADIUS.pill },
+  statusText: { fontSize: 10, fontWeight: FONT.weight.bold },
 });
 
 const pn = StyleSheet.create({
@@ -1194,10 +1267,10 @@ const pn = StyleSheet.create({
 });
 
 const nu = StyleSheet.create({
-  card:  { flexDirection: "row", alignItems: "center", gap: SPACE[12], borderRadius: RADIUS.xl, borderWidth: 1, padding: SPACE[16] },
-  emoji: { fontSize: 24 },
-  title: { fontSize: FONT.size.sm, fontWeight: FONT.weight.bold },
-  sub:   { fontSize: FONT.size.xs, marginTop: 2 },
+  card:     { flexDirection: "row", alignItems: "center", gap: SPACE[12], borderRadius: RADIUS.xl, borderWidth: 1, padding: SPACE[16] },
+  iconWrap: { width: 36, height: 36, borderRadius: RADIUS.md, alignItems: "center", justifyContent: "center" },
+  title:    { fontSize: FONT.size.sm, fontWeight: FONT.weight.bold },
+  sub:      { fontSize: FONT.size.xs, marginTop: 2 },
 });
 
 // ─── New Circles row styles ───────────────────────────────────────────────────
@@ -1302,7 +1375,7 @@ function NewCircleModal({ circle, members, loadingMembers, currentUserId, onJoin
             <View style={nc.metaRow}>
               {circle.event_date && (
                 <View style={[nc.metaChip, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}>
-                  <Text style={nc.metaEmoji}>📅</Text>
+                  <Icon name="calendar" size={12} color={c.textMuted} />
                   <Text style={[nc.metaText, { color: c.textSecondary }]}>
                     {formatNewCircleDate(circle.event_date)}{circle.event_time ? `  ·  ${circle.event_time}` : ""}
                   </Text>
@@ -1310,7 +1383,7 @@ function NewCircleModal({ circle, members, loadingMembers, currentUserId, onJoin
               )}
               {circle.field && (
                 <View style={[nc.metaChip, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}>
-                  <Text style={nc.metaEmoji}>📍</Text>
+                  <Icon name="location" size={12} color={c.textMuted} />
                   <Text style={[nc.metaText, { color: c.textSecondary }]} numberOfLines={1}>{circle.field}</Text>
                 </View>
               )}
@@ -1471,7 +1544,7 @@ function MyCircleModal({ circle, members, loadingMembers, currentUserId, onCance
               <View style={nc.metaRow}>
                 {circle.event_date && (
                   <View style={[nc.metaChip, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}>
-                    <Text style={nc.metaEmoji}>📅</Text>
+                    <Icon name="calendar" size={12} color={c.textMuted} />
                     <Text style={[nc.metaText, { color: c.textSecondary }]}>
                       {formatNewCircleDate(circle.event_date)}{circle.event_time ? `  ·  ${circle.event_time}` : ""}
                     </Text>
@@ -1479,7 +1552,7 @@ function MyCircleModal({ circle, members, loadingMembers, currentUserId, onCance
                 )}
                 {circle.field && (
                   <View style={[nc.metaChip, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}>
-                    <Text style={nc.metaEmoji}>📍</Text>
+                    <Icon name="location" size={12} color={c.textMuted} />
                     <Text style={[nc.metaText, { color: c.textSecondary }]} numberOfLines={1}>{circle.field}</Text>
                   </View>
                 )}
@@ -1653,7 +1726,6 @@ const nc = StyleSheet.create({
   body:           { paddingHorizontal: SPACE[20], paddingTop: SPACE[16], paddingBottom: SPACE[24], gap: SPACE[14] },
   metaRow:        { gap: SPACE[8] },
   metaChip:       { flexDirection: "row", alignItems: "center", gap: SPACE[6], paddingHorizontal: SPACE[12], paddingVertical: SPACE[8], borderRadius: RADIUS.md, borderWidth: 1 },
-  metaEmoji:      { fontSize: 13 },
   metaText:       { fontSize: FONT.size.sm, flex: 1 },
   desc:           { fontSize: FONT.size.sm, lineHeight: FONT.size.sm * 1.55 },
   // Members
@@ -1809,7 +1881,7 @@ function SessionDetailModal({ session, onClose, onCancel, onReschedule }: {
           {/* Header */}
           <View style={sd.header}>
             <View style={[sd.emojiWrap, { backgroundColor: statusColor + "18" }]}>
-              <Text style={{ fontSize: 22 }}>{sportEmoji(session.sport)}</Text>
+              <Icon name={sportIcon(session.sport)} size={22} color={statusColor} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[sd.sportName, { color: c.text }]}>{session.sport}</Text>
@@ -1830,14 +1902,14 @@ function SessionDetailModal({ session, onClose, onCancel, onReschedule }: {
               {/* Details */}
               <View style={sd.detailRows}>
                 <View style={sd.detailRow}>
-                  <Text style={sd.detailIcon}>📅</Text>
+                  <Icon name="calendar" size={16} color={c.textMuted} />
                   <Text style={[sd.detailText, { color: c.text }]}>
                     {formatDetailDate(session.session_date, session.session_time)}
                   </Text>
                 </View>
                 {session.location && (
                   <View style={sd.detailRow}>
-                    <Text style={sd.detailIcon}>📍</Text>
+                    <Icon name="location" size={16} color={c.textMuted} />
                     <Text style={[sd.detailText, { color: c.text }]}>{session.location}</Text>
                   </View>
                 )}
@@ -1962,7 +2034,6 @@ const sd = StyleSheet.create({
   divider:            { height: 1 },
   detailRows:         { padding: SPACE[16], gap: SPACE[10] },
   detailRow:          { flexDirection: "row", alignItems: "flex-start", gap: SPACE[10] },
-  detailIcon:         { fontSize: 15, lineHeight: 22 },
   detailText:         { fontSize: FONT.size.sm, flex: 1, lineHeight: 22 },
   actions:            { flexDirection: "row", gap: SPACE[10], padding: SPACE[16] },
   cancelBtn:          { flex: 1, paddingVertical: SPACE[12], borderRadius: RADIUS.md, borderWidth: 1, alignItems: "center" },
@@ -1988,8 +2059,7 @@ const s = StyleSheet.create({
 
 const cs = StyleSheet.create({
   banner:      { flexDirection: "row", alignItems: "center", gap: SPACE[14], borderRadius: RADIUS.xl, padding: SPACE[14], borderWidth: 1 },
-  iconWrap:    { width: 48, height: 48, borderRadius: RADIUS.lg, backgroundColor: "#FFF3E0", alignItems: "center", justifyContent: "center" },
-  bannerEmoji: { fontSize: 24 },
+  iconWrap:    { width: 48, height: 48, borderRadius: RADIUS.lg, alignItems: "center", justifyContent: "center" },
   bannerTitle: { fontSize: FONT.size.base, fontWeight: FONT.weight.bold },
   bannerSub:   { fontSize: FONT.size.sm, marginTop: 2 },
   pill:        { paddingHorizontal: SPACE[14], paddingVertical: SPACE[8], borderRadius: RADIUS.pill },

@@ -145,7 +145,7 @@ function CalendarPicker({
             return (
               <TouchableOpacity
                 key={ci}
-                style={[cal.cell, sel && { backgroundColor: "#FF4500", borderRadius: 20 }]}
+                style={[cal.cell, sel && { backgroundColor: colors.brand, borderRadius: 20 }]}
                 onPress={() => !past && onChange(dayStr(day))}
                 disabled={past}
                 hitSlop={2}
@@ -792,14 +792,14 @@ export default function ChatScreen() {
             onPress={() => { setShowActionMenu(false); openWizard(todayStr()); }}
             activeOpacity={0.75}
           >
-            <View style={[am.iconBox, { backgroundColor: "#FF4500" + "18" }]}>
-              <Text style={am.rowEmoji}>📅</Text>
+            <View style={[am.iconBox, { backgroundColor: c.brandSubtle }]}>
+              <Icon name="calendar" size={20} color={c.brand} />
             </View>
             <View style={am.rowText}>
               <Text style={[am.rowLabel, { color: c.text }]}>Today</Text>
               <Text style={[am.rowSub, { color: c.textMuted }]}>Plan a session for today</Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={c.textFaint} />
+            <Icon name="forward" size={18} color={c.textFaint} />
           </TouchableOpacity>
 
           {/* Tomorrow */}
@@ -808,14 +808,14 @@ export default function ChatScreen() {
             onPress={() => { setShowActionMenu(false); openWizard(tomorrowStr()); }}
             activeOpacity={0.75}
           >
-            <View style={[am.iconBox, { backgroundColor: "#007AFF18" }]}>
-              <Text style={am.rowEmoji}>🗓</Text>
+            <View style={[am.iconBox, { backgroundColor: "rgba(0,122,255,0.10)" }]}>
+              <Icon name="calendar" size={20} color="#007AFF" />
             </View>
             <View style={am.rowText}>
               <Text style={[am.rowLabel, { color: c.text }]}>Tomorrow</Text>
               <Text style={[am.rowSub, { color: c.textMuted }]}>Plan a session for tomorrow</Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={c.textFaint} />
+            <Icon name="forward" size={18} color={c.textFaint} />
           </TouchableOpacity>
 
           {/* Propose a session */}
@@ -825,13 +825,13 @@ export default function ChatScreen() {
             activeOpacity={0.75}
           >
             <View style={[am.iconBox, { backgroundColor: "#22C55E18" }]}>
-              <Text style={am.rowEmoji}>📆</Text>
+              <Icon name="streak" size={20} color="#22C55E" />
             </View>
             <View style={am.rowText}>
               <Text style={[am.rowLabel, { color: c.text }]}>Propose a session</Text>
               <Text style={[am.rowSub, { color: c.textMuted }]}>Pick sport, date and time</Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={c.textFaint} />
+            <Icon name="forward" size={18} color={c.textFaint} />
           </TouchableOpacity>
 
           {/* Completed sessions */}
@@ -845,13 +845,13 @@ export default function ChatScreen() {
             activeOpacity={0.75}
           >
             <View style={[am.iconBox, { backgroundColor: "#8B5CF618" }]}>
-              <Ionicons name="checkmark-circle-outline" size={20} color="#8B5CF6" />
+              <Icon name="checkActive" size={20} color="#8B5CF6" />
             </View>
             <View style={am.rowText}>
               <Text style={[am.rowLabel, { color: c.text }]}>Completed sessions</Text>
               <Text style={[am.rowSub, { color: c.textMuted }]}>Sessions you did together</Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={c.textFaint} />
+            <Icon name="forward" size={18} color={c.textFaint} />
           </TouchableOpacity>
 
           {/* Separator + Unmatch */}
@@ -871,7 +871,7 @@ export default function ChatScreen() {
             activeOpacity={0.75}
           >
             <View style={[am.iconBox, { backgroundColor: "#FF3B3018" }]}>
-              <Ionicons name="person-remove-outline" size={18} color="#FF3B30" />
+              <Icon name="decline" size={18} color="#FF3B30" />
             </View>
             <View style={am.rowText}>
               <Text style={[am.rowLabel, { color: "#FF3B30" }]}>Unmatch</Text>
@@ -1076,7 +1076,7 @@ export default function ChatScreen() {
                       onPress={() => setShowMapPicker(true)}
                       hitSlop={8}
                     >
-                      <Text style={{ fontSize: 18 }}>🗺️</Text>
+                      <Icon name="map" size={18} color={c.textSecondary} />
                     </TouchableOpacity>
                   </View>
 
@@ -1134,7 +1134,7 @@ export default function ChatScreen() {
 
           {completedSessions.length === 0 ? (
             <View style={cs.empty}>
-              <Text style={[cs.emptyEmoji]}>🏋️</Text>
+              <Icon name="gymActive" size={48} color={c.textMuted} />
               <Text style={[cs.emptyText, { color: c.textMuted }]}>No completed sessions yet</Text>
               <Text style={[cs.emptySub, { color: c.textFaint }]}>When you confirm a session happened it will appear here</Text>
             </View>
@@ -1220,7 +1220,6 @@ const am = StyleSheet.create({
   sheetTitle: { fontSize: 15, fontWeight: "700", textAlign: "center", marginBottom: SPACE[16] },
   row:        { flexDirection: "row", alignItems: "center", paddingVertical: SPACE[14], gap: SPACE[14], borderBottomWidth: StyleSheet.hairlineWidth },
   iconBox:    { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  rowEmoji:   { fontSize: 18 },
   rowText:    { flex: 1 },
   rowLabel:   { fontSize: 16, fontWeight: "600" },
   rowSub:     { fontSize: 13, marginTop: 1 },
@@ -1278,7 +1277,6 @@ const wz = StyleSheet.create({
 // ─── Completed sessions styles ───────────────────────────────────────────────
 const cs = StyleSheet.create({
   empty:     { alignItems: "center", paddingVertical: SPACE[24], gap: SPACE[8] },
-  emptyEmoji:{ fontSize: 32 },
   emptyText: { fontSize: 15, fontWeight: "600" },
   emptySub:  { fontSize: 13, textAlign: "center", paddingHorizontal: SPACE[16] },
   row:       { flexDirection: "row", alignItems: "center", paddingVertical: SPACE[12], gap: SPACE[12] },

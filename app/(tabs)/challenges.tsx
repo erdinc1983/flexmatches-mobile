@@ -17,9 +17,10 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "expo-router";
 import { supabase } from "../../lib/supabase";
-import { useTheme, SPACE, FONT, RADIUS } from "../../lib/theme";
+import { useTheme, SPACE, FONT, RADIUS, PALETTE } from "../../lib/theme";
 import { Avatar } from "../../components/Avatar";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { Icon } from "../../components/Icon";
 import { CalendarPicker } from "../../components/CalendarPicker";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -269,7 +270,7 @@ export default function ChallengesScreen() {
 
     return (
       <TouchableOpacity
-        style={[s.card, { backgroundColor: c.bgCard, borderColor: ch.joined ? "#FF450033" : c.border }]}
+        style={[s.card, { backgroundColor: c.bgCard, borderColor: ch.joined ? c.brandBorder : c.border }]}
         onPress={() => openDetail(ch)}
         activeOpacity={0.8}
       >
@@ -283,12 +284,12 @@ export default function ChallengesScreen() {
           </View>
           <View style={s.cardRight}>
             {ch.joined && (
-              <View style={[s.joinedBadge, { backgroundColor: "#FF450020" }]}>
-                <Text style={[s.joinedBadgeText, { color: "#FF4500" }]}>Joined</Text>
+              <View style={[s.joinedBadge, { backgroundColor: c.brandSubtle }]}>
+                <Text style={[s.joinedBadgeText, { color: c.brand }]}>Joined</Text>
               </View>
             )}
             {days !== null && (
-              <Text style={[s.daysLeft, { color: days === 0 ? "#ef4444" : c.textMuted }]}>
+              <Text style={[s.daysLeft, { color: days === 0 ? PALETTE.error : c.textMuted }]}>
                 {days === 0 ? "Ended" : `${days}d left`}
               </Text>
             )}
@@ -299,7 +300,7 @@ export default function ChallengesScreen() {
         {ch.joined && ch.target_value != null && pct !== null && (
           <View style={s.progressWrap}>
             <View style={[s.progressTrack, { backgroundColor: c.border }]}>
-              <View style={[s.progressFill, { width: `${pct}%` as any, backgroundColor: "#FF4500" }]} />
+              <View style={[s.progressFill, { width: `${pct}%` as any, backgroundColor: c.brand }]} />
             </View>
             <Text style={[s.progressLabel, { color: c.textMuted }]}>
               {ch.my_value ?? 0} / {ch.target_value} {ch.unit}
@@ -330,9 +331,9 @@ export default function ChallengesScreen() {
     <SafeAreaView style={[s.container, { backgroundColor: c.bg }]}>
       {/* Header */}
       <View style={[s.header, { borderBottomColor: c.border }]}>
-        <Text style={[s.headerTitle, { color: c.text }]}>Challenges 🏆</Text>
+        <Text style={[s.headerTitle, { color: c.text }]}>Challenges</Text>
         <TouchableOpacity
-          style={[s.createBtn, { backgroundColor: "#FF4500" }]}
+          style={[s.createBtn, { backgroundColor: c.brand }]}
           onPress={() => setShowCreate(true)}
           activeOpacity={0.85}
         >
@@ -350,12 +351,12 @@ export default function ChallengesScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={() => { setRefreshing(true); load(true); }}
-            tintColor="#FF4500"
+            tintColor={c.brand}
           />
         }
         ListEmptyComponent={
           <EmptyState
-            emoji="🏆"
+            icon="leaderboard"
             title="No challenges yet"
             subtitle="Create the first challenge and invite your training partners!"
           />
@@ -368,7 +369,7 @@ export default function ChallengesScreen() {
           <SafeAreaView style={[s.modal, { backgroundColor: c.bg }]}>
             <View style={[s.modalHeader, { borderBottomColor: c.border }]}>
               <TouchableOpacity onPress={() => setSelected(null)} style={s.closeBtn}>
-                <Text style={[s.closeBtnText, { color: c.textMuted }]}>✕</Text>
+                <Icon name="close" size={18} color={c.textMuted} />
               </TouchableOpacity>
               <Text style={[s.modalTitle, { color: c.text }]} numberOfLines={1}>{selected.title}</Text>
               <View style={{ width: 32 }} />
@@ -414,7 +415,7 @@ export default function ChallengesScreen() {
                 if (!selected.joined) {
                   return (
                     <TouchableOpacity
-                      style={[s.joinBtn, { backgroundColor: "#FF4500" }]}
+                      style={[s.joinBtn, { backgroundColor: c.brand }]}
                       onPress={() => joinChallenge(selected.id)}
                       activeOpacity={0.85}
                     >
@@ -436,7 +437,7 @@ export default function ChallengesScreen() {
                       />
                       <Text style={[s.progressUnit, { color: c.textMuted }]}>{selected.unit}</Text>
                       <TouchableOpacity
-                        style={[s.saveBtn, { backgroundColor: "#FF4500" }]}
+                        style={[s.saveBtn, { backgroundColor: c.brand }]}
                         onPress={updateProgress}
                         disabled={savingProg}
                         activeOpacity={0.85}
@@ -451,7 +452,7 @@ export default function ChallengesScreen() {
                       <View style={[s.progressTrack, { backgroundColor: c.border, marginTop: SPACE[12] }]}>
                         <View style={[
                           s.progressFill,
-                          { width: `${Math.min(((selected.my_value ?? 0) / selected.target_value) * 100, 100)}%` as any, backgroundColor: "#FF4500" },
+                          { width: `${Math.min(((selected.my_value ?? 0) / selected.target_value) * 100, 100)}%` as any, backgroundColor: c.brand },
                         ]} />
                       </View>
                     )}
@@ -463,7 +464,7 @@ export default function ChallengesScreen() {
               <Text style={[s.lbTitle, { color: c.text }]}>Leaderboard</Text>
               {leaderboard.map((entry, i) => (
                 <View key={entry.user_id} style={[s.lbRow, { borderColor: c.border }]}>
-                  <Text style={[s.lbRank, { color: i < 3 ? "#FF4500" : c.textMuted }]}>
+                  <Text style={[s.lbRank, { color: i < 3 ? c.brand : c.textMuted }]}>
                     {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`}
                   </Text>
                   <Avatar url={entry.avatar_url} name={entry.username} size={32} />
@@ -486,7 +487,7 @@ export default function ChallengesScreen() {
         <SafeAreaView style={[s.modal, { backgroundColor: c.bg }]}>
           <View style={[s.modalHeader, { borderBottomColor: c.border }]}>
             <TouchableOpacity onPress={resetCreate} style={s.closeBtn}>
-              <Text style={[s.closeBtnText, { color: c.textMuted }]}>✕</Text>
+              <Icon name="close" size={18} color={c.textMuted} />
             </TouchableOpacity>
             <Text style={[s.modalTitle, { color: c.text }]}>New Challenge</Text>
             <View style={{ width: 32 }} />
@@ -512,14 +513,14 @@ export default function ChallengesScreen() {
                   <TouchableOpacity
                     key={gt.key}
                     style={[s.typeChip, {
-                      backgroundColor: formType === gt.key ? "#FF450020" : c.bgCard,
-                      borderColor:     formType === gt.key ? "#FF4500"   : c.border,
+                      backgroundColor: formType === gt.key ? c.brandSubtle : c.bgCard,
+                      borderColor:     formType === gt.key ? c.brand      : c.border,
                     }]}
                     onPress={() => { setFormType(gt.key); setFormUnit(gt.unit); }}
                     activeOpacity={0.8}
                   >
                     <Text style={s.typeEmoji}>{gt.emoji}</Text>
-                    <Text style={[s.typeLabel, { color: formType === gt.key ? "#FF4500" : c.textSecondary }]}>
+                    <Text style={[s.typeLabel, { color: formType === gt.key ? c.brand : c.textSecondary }]}>
                       {gt.label}
                     </Text>
                   </TouchableOpacity>
@@ -567,14 +568,14 @@ export default function ChallengesScreen() {
               />
 
               <TouchableOpacity
-                style={[s.createSubmitBtn, { backgroundColor: "#FF4500", opacity: formTitle.trim() ? 1 : 0.4 }]}
+                style={[s.createSubmitBtn, { backgroundColor: c.brand, opacity: formTitle.trim() ? 1 : 0.4 }]}
                 onPress={createChallenge}
                 disabled={!formTitle.trim() || saving}
                 activeOpacity={0.85}
               >
                 {saving
                   ? <ActivityIndicator color="#fff" size="small" />
-                  : <Text style={s.createSubmitText}>Create Challenge 🏆</Text>
+                  : <Text style={s.createSubmitText}>Create Challenge</Text>
                 }
               </TouchableOpacity>
             </ScrollView>
@@ -616,7 +617,6 @@ const s = StyleSheet.create({
   modalHeader:      { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: SPACE[20], paddingVertical: SPACE[14], borderBottomWidth: 1 },
   modalTitle:       { fontSize: FONT.size.lg, fontWeight: FONT.weight.bold, flex: 1, textAlign: "center" },
   closeBtn:         { width: 32, height: 32, alignItems: "center", justifyContent: "center" },
-  closeBtnText:     { fontSize: 18 },
   modalScroll:      { padding: SPACE[20], gap: SPACE[16], paddingBottom: 60 },
 
   // Detail

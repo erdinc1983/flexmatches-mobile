@@ -13,8 +13,9 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, TextInput, Modal, ScrollView,
   RefreshControl, Alert, KeyboardAvoidingView, Platform, Dimensions,
-  useWindowDimensions,
+  useWindowDimensions, Pressable,
 } from "react-native";
+import { BlurView } from "expo-blur";
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const DAY_LABELS = ["Su","Mo","Tu","We","Th","Fr","Sa"];
@@ -161,7 +162,7 @@ function TimePickerInline({ hour, minute, onHourChange, onMinuteChange, colors }
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 export default function CirclesScreen() {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const c = theme.colors;
   const { width: screenW } = useWindowDimensions();
   // 5 chips: All + 4 categories. Subtract horizontal padding (16×2) and gaps (8×4)
@@ -605,8 +606,8 @@ export default function CirclesScreen() {
                   <View style={{ flex: 1 }}>
                     <View style={pe.nameRow}>
                       <Text style={[s.cardName, { color: c.textSecondary, flex: 1 }]} numberOfLines={1}>{item.name}</Text>
-                      <View style={pe.endedBadge}>
-                        <Text style={pe.endedText}>Ended</Text>
+                      <View style={[pe.endedBadge, { backgroundColor: c.bgCardAlt }]}>
+                        <Text style={[pe.endedText, { color: c.textMuted }]}>Ended</Text>
                       </View>
                     </View>
                     <Text style={{ fontSize: FONT.size.xs, color: c.textFaint, marginTop: 2 }}>
@@ -626,24 +627,28 @@ export default function CirclesScreen() {
 
       {/* ── Circle detail popup ───────────────────────────────────────────────── */}
       {selectedCircle && (
-        <TouchableOpacity
+        <Pressable
           style={s.popupBackdrop}
-          activeOpacity={1}
           onPress={() => { setSelectedCircle(null); setPopupView("detail"); }}
         >
-          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ width: "100%" }}>
-          <TouchableOpacity
+          <BlurView
+            intensity={isDark ? 40 : 50}
+            tint={isDark ? "dark" : "light"}
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={s.popupDimLayer} />
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ width: "100%", paddingHorizontal: SPACE[20] }}>
+          <Pressable
             style={[s.popupCard, { backgroundColor: c.bgCard }]}
-            activeOpacity={1}
             onPress={(e) => e.stopPropagation()}
           >
-            {/* Close */}
+            {/* Close — matches AppModal style */}
             <TouchableOpacity
-              style={s.popupClose}
+              style={[s.popupClose, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}
               onPress={() => popupView === "edit" ? setPopupView("detail") : setSelectedCircle(null)}
               hitSlop={10}
             >
-              <Icon name="close" size={20} color={c.textMuted} />
+              <Icon name="close" size={14} color={c.textMuted} />
             </TouchableOpacity>
 
             {/* ── Detail view ── */}
@@ -797,14 +802,16 @@ export default function CirclesScreen() {
               </ScrollView>
             )}
 
-          </TouchableOpacity>
+          </Pressable>
           </KeyboardAvoidingView>
-        </TouchableOpacity>
+        </Pressable>
       )}
 
       {/* ── Create Circle Wizard ─────────────────────────────────────────────── */}
-      <Modal visible={showCreate && !showMapPicker} transparent animationType="fade" onRequestClose={resetCreate}>
+      <Modal visible={showCreate && !showMapPicker} transparent animationType="fade" statusBarTranslucent onRequestClose={resetCreate}>
         <KeyboardAvoidingView style={wiz.backdrop} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+          <BlurView intensity={isDark ? 40 : 50} tint={isDark ? "dark" : "light"} style={StyleSheet.absoluteFill} />
+          <View style={[s.popupDimLayer, { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }]} />
           <View style={[wiz.card, { backgroundColor: c.bg }]}>
             {/* Header */}
             <View style={[wiz.header, { borderBottomColor: c.border }]}>
@@ -963,7 +970,7 @@ export default function CirclesScreen() {
                       <Icon name="calendar" size={14} color={c.brand} />
                       <Text style={[s.selectedDateText, { color: c.brand }]}>{formatCircleDate(formEventDate)}</Text>
                       <TouchableOpacity onPress={() => setFormEventDate("")} hitSlop={10}>
-                        <Text style={{ color: c.textMuted, fontSize: 14 }}>✕</Text>
+                        <Icon name="close" size={14} color={c.textMuted} />
                       </TouchableOpacity>
                     </View>
                   ) : (
@@ -1160,19 +1167,23 @@ const s = StyleSheet.create({
 
   // Detail popup
   popupBackdrop:   { position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
-                     backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "center",
-                     alignItems: "center", padding: SPACE[20], zIndex: 100 },
+                     justifyContent: "center", alignItems: "center", zIndex: 100 },
+  popupDimLayer:   { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.30)" },
   popupCard:       { width: "100%", borderRadius: RADIUS.xxl, padding: SPACE[20],
-                     maxHeight: SCREEN_H * 0.78 },
-  popupClose:      { alignSelf: "flex-end", marginBottom: SPACE[4] },
-  popupTop:        { alignItems: "center", gap: SPACE[8] },
+                     maxHeight: SCREEN_H * 0.78,
+                     shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 20,
+                     shadowOffset: { width: 0, height: 8 }, elevation: 10 },
+  popupClose:      { position: "absolute", top: SPACE[14], right: SPACE[14], zIndex: 10,
+                     width: 32, height: 32, borderRadius: 16, borderWidth: 1,
+                     alignItems: "center", justifyContent: "center" },
+  popupTop:        { alignItems: "center", gap: SPACE[8], paddingTop: SPACE[20] },
   popupEmoji:      { width: 72, height: 72, borderRadius: RADIUS.xl, alignItems: "center", justifyContent: "center" },
   popupName:       { fontSize: FONT.size.xl, fontWeight: FONT.weight.black, textAlign: "center" },
   popupChips:      { flexDirection: "row", gap: SPACE[6], flexWrap: "wrap", justifyContent: "center" },
   popupField:      { flexDirection: "row", alignItems: "flex-start", gap: SPACE[6],
                      paddingHorizontal: SPACE[12], paddingVertical: SPACE[8],
                      borderRadius: RADIUS.md, borderWidth: 1, marginTop: SPACE[4] },
-  popupFieldText:  { flex: 1, fontSize: FONT.size.sm, color: "#8E8E93" },
+  popupFieldText:  { flex: 1, fontSize: FONT.size.sm },
   popupDesc:       { fontSize: FONT.size.sm, textAlign: "center", lineHeight: FONT.size.sm * 1.5 },
   popupDivider:    { height: 1, marginVertical: SPACE[14] },
   popupMemberHeader:{ fontSize: FONT.size.xs, fontWeight: FONT.weight.bold, textTransform: "uppercase", letterSpacing: 1, marginBottom: SPACE[8] },
@@ -1273,7 +1284,7 @@ const tp = StyleSheet.create({
 const pe = StyleSheet.create({
   card:        { opacity: 0.8 },
   nameRow:     { flexDirection: "row", alignItems: "center", gap: SPACE[8], flex: 1 },
-  endedBadge:  { backgroundColor: "#F3F4F6", borderRadius: RADIUS.pill, paddingHorizontal: SPACE[8], paddingVertical: 2 },
-  endedText:   { fontSize: 11, fontWeight: FONT.weight.bold, color: "#6B7280", textTransform: "uppercase", letterSpacing: 0.5 },
+  endedBadge:  { borderRadius: RADIUS.pill, paddingHorizontal: SPACE[8], paddingVertical: 2 },
+  endedText:   { fontSize: 11, fontWeight: FONT.weight.bold, textTransform: "uppercase", letterSpacing: 0.5 },
   memberCount: { fontSize: FONT.size.xs, marginTop: 2 },
 });
