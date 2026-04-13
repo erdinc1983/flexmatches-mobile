@@ -1290,7 +1290,7 @@ function NewCircleModal({ circle, members, loadingMembers, currentUserId, onJoin
   const { theme } = useTheme();
   const c = theme.colors;
   const isCreator = circle.creator_id !== null && circle.creator_id === currentUserId;
-  const photoUrl  = getSportPhoto(circle.sport);
+  const photoUrl  = getSportPhoto(circle.sport, circle.name);
 
   return (
     <Pressable style={nc.backdrop} onPress={onClose}>
@@ -1333,7 +1333,12 @@ function NewCircleModal({ circle, members, loadingMembers, currentUserId, onJoin
         </View>
 
         {/* ── Details body ── */}
-        <View style={[nc.body, { backgroundColor: c.bgCard }]}>
+        <ScrollView
+          style={{ backgroundColor: c.bgCard }}
+          contentContainerStyle={nc.body}
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+        >
           {/* Date & Location */}
           {(circle.event_date || circle.field) && (
             <View style={nc.metaRow}>
@@ -1356,7 +1361,7 @@ function NewCircleModal({ circle, members, loadingMembers, currentUserId, onJoin
 
           {/* Description */}
           {circle.description && (
-            <Text style={[nc.desc, { color: c.textMuted }]} numberOfLines={3}>{circle.description}</Text>
+            <Text style={[nc.desc, { color: c.textMuted }]}>{circle.description}</Text>
           )}
 
           {/* Members */}
@@ -1406,7 +1411,7 @@ function NewCircleModal({ circle, members, loadingMembers, currentUserId, onJoin
               <Text style={[nc.dismissText, { color: c.textMuted }]}>Not interested</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </ScrollView>
 
       </Pressable>
     </Pressable>
@@ -1425,7 +1430,7 @@ function MyCircleModal({ circle, members, loadingMembers, currentUserId, onCance
   const { theme } = useTheme();
   const c = theme.colors;
   const isCreator = circle.creator_id !== null && circle.creator_id === currentUserId;
-  const photoUrl  = getSportPhoto(circle.sport);
+  const photoUrl  = getSportPhoto(circle.sport, circle.name);
 
   // ── Edit state ────────────────────────────────────────────────────────────
   const [view,        setView]        = useState<"detail" | "edit">("detail");
@@ -1503,7 +1508,12 @@ function MyCircleModal({ circle, members, loadingMembers, currentUserId, onCance
 
         {/* ── Detail view ── */}
         {view === "detail" && (
-          <View style={[nc.body, { backgroundColor: c.bgCard }]}>
+          <ScrollView
+            style={{ backgroundColor: c.bgCard }}
+            contentContainerStyle={nc.body}
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+          >
             {(circle.event_date || circle.field) && (
               <View style={nc.metaRow}>
                 {circle.event_date && (
@@ -1524,7 +1534,7 @@ function MyCircleModal({ circle, members, loadingMembers, currentUserId, onCance
             )}
 
             {circle.description && (
-              <Text style={[nc.desc, { color: c.textMuted }]} numberOfLines={3}>{circle.description}</Text>
+              <Text style={[nc.desc, { color: c.textMuted }]}>{circle.description}</Text>
             )}
 
             <View style={nc.membersSection}>
@@ -1577,7 +1587,7 @@ function MyCircleModal({ circle, members, loadingMembers, currentUserId, onCance
                 </View>
               )}
             </View>
-          </View>
+          </ScrollView>
         )}
 
         {/* ── Edit view ── */}

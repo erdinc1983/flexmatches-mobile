@@ -657,7 +657,7 @@ export default function CirclesScreen() {
               <View style={s.popupTop}>
                 <View style={s.popupPhotoWrap}>
                   <ImageBackground
-                    source={{ uri: getSportPhoto(selectedCircle.sport ?? selectedCircle.name) }}
+                    source={{ uri: getSportPhoto(selectedCircle.sport, selectedCircle.name) }}
                     style={s.popupPhoto}
                     resizeMode="cover"
                     imageStyle={{ borderRadius: RADIUS.xl }}
@@ -1073,7 +1073,7 @@ export default function CirclesScreen() {
 function CircleCard({ item, onPress, onJoin, joining = false }: { item: Community; onPress: () => void; onJoin: () => void; joining?: boolean }) {
   const { theme } = useTheme();
   const c = theme.colors;
-  const photoUri = getSportPhoto(item.sport ?? item.name);
+  const photoUri = getSportPhoto(item.sport, item.name);
 
   return (
     <TouchableOpacity

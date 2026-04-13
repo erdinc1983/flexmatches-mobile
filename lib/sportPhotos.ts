@@ -48,21 +48,24 @@ export const SPORT_PHOTOS: Record<string, string> = {
 };
 
 /**
- * Look up a sport photo by activity name (case-insensitive).
- * Tries exact match first, then keyword substring.
+ * Look up a sport photo. Tries `sport` first (exact match, then substring),
+ * then falls back to `name` (e.g. circle name "Sunday Soccer" → soccer photo).
  * Guaranteed to return a non-empty string.
  */
-export function getSportPhoto(sport?: string | null): string {
-  if (!sport) return SPORT_PHOTOS.default;
-  const lower = sport.toLowerCase().trim();
+export function getSportPhoto(sport?: string | null, name?: string | null): string {
+  const candidates = [sport, name].filter(Boolean) as string[];
 
-  // 1. Exact match (handles "Soccer" → "soccer", "CrossFit" → "crossfit", etc.)
-  if (SPORT_PHOTOS[lower]) return SPORT_PHOTOS[lower];
+  for (const candidate of candidates) {
+    const lower = candidate.toLowerCase().trim();
 
-  // 2. Key is contained in the sport string (e.g. "Trail Running" → running)
-  for (const key of Object.keys(SPORT_PHOTOS)) {
-    if (key === "default") continue;
-    if (lower.includes(key)) return SPORT_PHOTOS[key];
+    // 1. Exact match ("Soccer" → "soccer", "CrossFit" → "crossfit", etc.)
+    if (SPORT_PHOTOS[lower]) return SPORT_PHOTOS[lower];
+
+    // 2. Substring match ("Sunday Soccer" → "soccer", "Trail Running" → "running")
+    for (const key of Object.keys(SPORT_PHOTOS)) {
+      if (key === "default") continue;
+      if (lower.includes(key)) return SPORT_PHOTOS[key];
+    }
   }
 
   return SPORT_PHOTOS.default;

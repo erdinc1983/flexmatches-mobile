@@ -50,7 +50,7 @@ function CircleCard({ circle, onPress, onDismiss }: {
   const { theme } = useTheme();
   const c = theme.colors;
 
-  const photoUri = getSportPhoto(circle.sport ?? circle.name);
+  const photoUri = getSportPhoto(circle.sport, circle.name);
 
   const hasDate = !!circle.event_date;
   const dateLabel = hasDate ? formatCardDate(circle.event_date!) : null;
