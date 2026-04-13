@@ -183,7 +183,7 @@ export default function ProfileScreen() {
     setUserId(user.id);
 
     // Use AppDataContext for own profile — no users table query needed
-    const data = appUser;
+    const data = appUser; // appUser is in deps so this is always fresh
     if (!data) return;
     setIsAdmin(data.is_admin ?? false);
 
@@ -242,7 +242,12 @@ export default function ProfileScreen() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [appUser]); // appUser in deps — closure always sees the latest value
+
+  // Trigger load once appUser becomes available (resolves race with AppDataContext)
+  useEffect(() => {
+    if (appUser && !profile && !appUserLoading) fetchProfile();
+  }, [appUser, appUserLoading]);
 
   useFocusEffect(useCallback(() => {
     const elapsed = Date.now() - lastLoadRef.current;
