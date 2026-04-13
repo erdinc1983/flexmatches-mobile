@@ -966,13 +966,6 @@ function GymStrip({ isAtGym, toggling, onToggle, gymName }: {
       activeOpacity={0.75}
       disabled={toggling}
     >
-      {/* Decorative wave arcs — right side */}
-      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-        <View style={[gs.wave1, { borderColor: isDark ? "#ffffff08" : "#00000008" }]} />
-        <View style={[gs.wave2, { borderColor: isDark ? "#ffffff06" : "#00000006" }]} />
-        <View style={[gs.wave3, { borderColor: isDark ? "#ffffff04" : "#00000005" }]} />
-      </View>
-
       {/* Top section — icon + title + subtitle */}
       <View style={gs.topRow}>
         <View style={[gs.pinWrap, { backgroundColor: isAtGym ? "#22C55E18" : "#FF450014" }]}>
@@ -1018,40 +1011,35 @@ function ActiveNowStrip({ partners }: { partners: ActivePartner[] }) {
 
   return (
     <View style={[an.card, { backgroundColor: c.bgCard, borderColor: c.border }]}>
-      {/* Subtle green top accent */}
-      <View style={[an.topAccent, { backgroundColor: PALETTE.success }]} />
-      <View style={an.inner}>
-        <View style={an.header}>
-          <View style={an.liveRow}>
-            <View style={an.dot} />
-            <Text style={[an.title, { color: c.text }]}>Active Now</Text>
-          </View>
-          <Text style={[an.sub, { color: c.textMuted }]}>
-            {partners.length} {partners.length === 1 ? "buddy" : "buddies"} · tap to chat
-          </Text>
+      <View style={an.header}>
+        <View style={an.liveRow}>
+          <View style={an.dot} />
+          <Text style={[an.title, { color: c.text }]}>Active Now</Text>
         </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={an.row}>
-          {partners.map((p) => (
-            <Pressable
-              key={p.id}
-              style={an.item}
-              onPress={() => router.push(`/chat/${p.match_id}` as any)}
-            >
-              <View style={an.avatarWrap}>
-                <Avatar url={p.avatar_url} name={p.full_name ?? p.username} size={52} />
-                {p.is_at_gym && <View style={[an.gymBadge, { borderColor: c.bgCard }]} />}
-                <View style={[an.activeDot, { borderColor: c.bgCard }]} />
-              </View>
-              <Text style={[an.name, { color: c.textSecondary }]} numberOfLines={1}>
-                {p.full_name?.split(" ")[0] ?? p.username}
-              </Text>
-              <Text style={an.statusLabel}>
-                {p.is_at_gym ? "🟡 At gym" : "🟢 Active"}
-              </Text>
-            </Pressable>
-          ))}
-        </ScrollView>
+        <Text style={[an.sub, { color: c.textMuted }]}>
+          {partners.length} {partners.length === 1 ? "buddy" : "buddies"} · tap to chat
+        </Text>
       </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={an.row}>
+        {partners.map((p) => (
+          <Pressable
+            key={p.id}
+            style={an.item}
+            onPress={() => router.push(`/chat/${p.match_id}` as any)}
+          >
+            <View style={an.avatarWrap}>
+              <Avatar url={p.avatar_url} name={p.full_name ?? p.username} size={52} />
+              <View style={[an.activeDot, { borderColor: c.bgCard, backgroundColor: p.is_at_gym ? "#F59E0B" : PALETTE.success }]} />
+            </View>
+            <Text style={[an.name, { color: c.textSecondary }]} numberOfLines={1}>
+              {p.full_name?.split(" ")[0] ?? p.username}
+            </Text>
+            <Text style={[an.statusLabel, { color: c.textMuted }]}>
+              {p.is_at_gym ? "At gym" : "Active"}
+            </Text>
+          </Pressable>
+        ))}
+      </ScrollView>
     </View>
   );
 }
@@ -1179,28 +1167,21 @@ const gs = StyleSheet.create({
   gymNameText: { fontSize: FONT.size.sm, fontWeight: FONT.weight.medium, flex: 1 },
   activeDot:   { width: 6, height: 6, borderRadius: 3, backgroundColor: "#22C55E" },
   activeText:  { fontSize: 12, fontWeight: FONT.weight.bold, color: "#22C55E" },
-  // Smooth wave arcs — large ellipses clipped at card edge
-  wave1:       { position: "absolute", width: 260, height: 260, borderRadius: 130, borderWidth: 18, top: -80, right: -100 },
-  wave2:       { position: "absolute", width: 200, height: 200, borderRadius: 100, borderWidth: 18, top: -40, right: -60 },
-  wave3:       { position: "absolute", width: 140, height: 140, borderRadius: 70,  borderWidth: 18, top:  10, right: -20 },
 });
 
 const an = StyleSheet.create({
-  card:      { borderRadius: RADIUS.xl, borderWidth: 1, overflow: "hidden" },
-  topAccent: { height: 3, opacity: 0.7 },
-  inner:     { paddingVertical: SPACE[14], paddingHorizontal: SPACE[14] },
-  header:    { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: SPACE[14] },
-  liveRow:   { flexDirection: "row", alignItems: "center", gap: SPACE[6] },
-  dot:       { width: 8, height: 8, borderRadius: 4, backgroundColor: PALETTE.success },
-  title:     { fontSize: FONT.size.base, fontWeight: FONT.weight.bold },
-  sub:       { fontSize: FONT.size.xs },
-  row:       { gap: SPACE[16], paddingRight: SPACE[4] },
-  item:      { alignItems: "center", gap: SPACE[4], width: 62 },
-  avatarWrap:{ width: 52, height: 52, position: "relative" },
-  activeDot: { position: "absolute", bottom: 0, right: 0, width: 13, height: 13, borderRadius: 6.5, backgroundColor: PALETTE.success, borderWidth: 2 },
-  gymBadge:  { position: "absolute", top: 0, right: 0, width: 15, height: 15, borderRadius: 7.5, backgroundColor: "#F59E0B", borderWidth: 2 },
+  card:        { borderRadius: RADIUS.xl, borderWidth: 1, paddingVertical: SPACE[14], paddingHorizontal: SPACE[14] },
+  header:      { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: SPACE[14] },
+  liveRow:     { flexDirection: "row", alignItems: "center", gap: SPACE[6] },
+  dot:         { width: 8, height: 8, borderRadius: 4, backgroundColor: PALETTE.success },
+  title:       { fontSize: FONT.size.base, fontWeight: FONT.weight.bold },
+  sub:         { fontSize: FONT.size.xs },
+  row:         { gap: SPACE[16], paddingRight: SPACE[4] },
+  item:        { alignItems: "center", gap: SPACE[4], width: 62 },
+  avatarWrap:  { width: 52, height: 52, position: "relative" },
+  activeDot:   { position: "absolute", bottom: 1, right: 1, width: 12, height: 12, borderRadius: 6, borderWidth: 2 },
   name:        { fontSize: FONT.size.xs, fontWeight: FONT.weight.semibold, textAlign: "center", maxWidth: 62 },
-  statusLabel: { fontSize: 9, textAlign: "center", color: "#888", marginTop: -2 },
+  statusLabel: { fontSize: 9, textAlign: "center", marginTop: -2 },
 });
 
 const pn = StyleSheet.create({

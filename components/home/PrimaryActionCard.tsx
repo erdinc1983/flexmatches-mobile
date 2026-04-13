@@ -69,11 +69,9 @@ export function PrimaryActionCard({ action, onLogWorkout, checkingIn }: Props) {
       >
         {/* Dark gradient overlay — bottom-heavy so text readable */}
         <LinearGradient
-          colors={["rgba(0,0,0,0.0)", "rgba(0,0,0,0.55)"]}
+          colors={["rgba(0,0,0,0.0)", "rgba(0,0,0,0.60)"]}
           style={[StyleSheet.absoluteFill, { borderRadius: RADIUS.xl }]}
         />
-        {/* Orange border */}
-        <View style={s.doneBorder} pointerEvents="none" />
 
         {/* Bottom content */}
         <View style={s.doneContent}>
@@ -275,7 +273,6 @@ const s = StyleSheet.create({
 
   // "done" gym photo variant
   doneCard:      { height: 220, borderRadius: RADIUS.xl, overflow: "hidden", justifyContent: "flex-end" },
-  doneBorder:    { ...StyleSheet.absoluteFillObject, borderRadius: RADIUS.xl, borderWidth: 1.5, borderColor: BRAND.primary },
   doneContent:   { padding: SPACE[16], gap: SPACE[4] },
   doneBadge:     { flexDirection: "row", alignItems: "center", gap: SPACE[6], alignSelf: "flex-start", backgroundColor: "rgba(0,0,0,0.40)", paddingHorizontal: SPACE[10], paddingVertical: SPACE[4], borderRadius: RADIUS.pill, marginBottom: SPACE[4] },
   doneBadgeText: { color: "#22C55E", fontSize: 12, fontWeight: FONT.weight.bold },

@@ -14,26 +14,43 @@ export function MomentumStrip({ streak, matchCount, weekSessions }: Props) {
   const c = theme.colors;
 
   return (
-    <View style={s.row}>
-      <Chip value={`${streak}d`}      label="Day Streak" c={c} onPress={() => router.push("/(tabs)/activity" as any)} />
-      <Chip value={`${matchCount}`}   label="Matches"    c={c} onPress={() => router.push("/(tabs)/matches"  as any)} />
-      <Chip value={`${weekSessions}`} label="Sessions"   c={c} onPress={() => router.push("/(tabs)/messages"       )} />
+    <View style={[s.card, { backgroundColor: c.bgCard, borderColor: c.border }, SHADOW.sm]}>
+      <Metric
+        value={streak > 0 ? `${streak}d` : "—"}
+        label="Day Streak"
+        emoji="🔥"
+        c={c}
+        onPress={() => router.push("/(tabs)/activity" as any)}
+      />
+      <View style={[s.divider, { backgroundColor: c.border }]} />
+      <Metric
+        value={`${matchCount}`}
+        label="Matches"
+        emoji="🤝"
+        c={c}
+        onPress={() => router.push("/(tabs)/matches" as any)}
+      />
+      <View style={[s.divider, { backgroundColor: c.border }]} />
+      <Metric
+        value={`${weekSessions}`}
+        label="Sessions"
+        emoji="📅"
+        c={c}
+        onPress={() => router.push("/(tabs)/messages")}
+      />
     </View>
   );
 }
 
-function Chip({ value, label, c, onPress }: {
+function Metric({ value, label, emoji, c, onPress }: {
   value:   string;
   label:   string;
+  emoji:   string;
   c:       ReturnType<typeof useTheme>["theme"]["colors"];
   onPress: () => void;
 }) {
   return (
-    <TouchableOpacity
-      style={[s.chip, { backgroundColor: c.bgCard, borderColor: c.border }, SHADOW.sm]}
-      onPress={onPress}
-      activeOpacity={0.75}
-    >
+    <TouchableOpacity style={s.metric} onPress={onPress} activeOpacity={0.65}>
       <Text style={[s.value, { color: c.text }]}>{value}</Text>
       <Text style={[s.label, { color: c.textMuted }]}>{label}</Text>
     </TouchableOpacity>
@@ -41,16 +58,30 @@ function Chip({ value, label, c, onPress }: {
 }
 
 const s = StyleSheet.create({
-  row:   { flexDirection: "row", gap: SPACE[8] },
-  chip:  {
-    flex: 1,
-    alignItems: "center",
-    paddingVertical: SPACE[8],
-    paddingHorizontal: SPACE[6],
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
-    gap: 2,
+  card: {
+    flexDirection:  "row",
+    borderRadius:   RADIUS.xl,
+    borderWidth:    1,
+    overflow:       "hidden",
   },
-  value: { fontSize: FONT.size.md, fontWeight: FONT.weight.black, letterSpacing: -0.3 },
-  label: { fontSize: 10, fontWeight: FONT.weight.medium, letterSpacing: 0.1, textAlign: "center" },
+  metric: {
+    flex:            1,
+    alignItems:      "center",
+    paddingVertical: SPACE[14],
+    gap:             3,
+  },
+  divider: {
+    width:          StyleSheet.hairlineWidth,
+    marginVertical: SPACE[10],
+  },
+  value: {
+    fontSize:    FONT.size.xl,
+    fontWeight:  FONT.weight.black,
+    letterSpacing: -0.5,
+  },
+  label: {
+    fontSize:   10,
+    fontWeight: FONT.weight.semibold,
+    letterSpacing: 0.1,
+  },
 });
