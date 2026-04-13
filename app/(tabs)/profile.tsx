@@ -28,6 +28,7 @@ import { ProfileSkeleton } from "../../components/ui/Skeleton";
 import { TIERS, BADGES, BADGE_MAP, calcTier, calcUserPoints, type BadgeKey, type Tier } from "../../lib/badges";
 import { useNotifications } from "../../lib/notificationContext";
 import { unregisterPushToken } from "../../lib/push";
+import { AppModal } from "../../components/ui/AppModal";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const FITNESS_LEVELS = ["beginner", "intermediate", "advanced"] as const;
@@ -172,6 +173,14 @@ export default function ProfileScreen() {
 
   const lastLoadRef = useRef(0);
   const STALE_MS = 5 * 60_000; // 5 min cache per tab
+
+  // Phone verification modal
+  const [phoneModal,  setPhoneModal]  = useState(false);
+  const [phoneStep,   setPhoneStep]   = useState<"number" | "otp">("number");
+  const [phoneInput,  setPhoneInput]  = useState("");
+  const [otpInput,    setOtpInput]    = useState("");
+  const [phoneSaving, setPhoneSaving] = useState(false);
+  const [phoneMsg,    setPhoneMsg]    = useState("");
 
   // ── Data ────────────────────────────────────────────────────────────────────
   const fetchProfile = useCallback(async (isRefresh = false) => {
@@ -427,6 +436,36 @@ export default function ProfileScreen() {
     );
   }
 
+  // ── Phone verification ────────────────────────────────────────────────────────
+  function openPhoneVerify() {
+    setPhoneStep("number"); setPhoneInput(""); setOtpInput(""); setPhoneMsg("");
+    setPhoneModal(true);
+  }
+
+  async function sendPhoneOtp() {
+    const phone = phoneInput.trim();
+    if (!phone || phoneSaving) return;
+    if (!/^\+\d{7,15}$/.test(phone)) { setPhoneMsg("Enter number with country code, e.g. +14155551234"); return; }
+    setPhoneSaving(true); setPhoneMsg("");
+    const { error } = await supabase.auth.updateUser({ phone });
+    if (error) { setPhoneMsg(`Error: ${error.message}`); }
+    else { setPhoneStep("otp"); setPhoneMsg("Code sent to your number."); }
+    setPhoneSaving(false);
+  }
+
+  async function verifyPhoneOtp() {
+    const phone = phoneInput.trim();
+    const token = otpInput.trim();
+    if (!token || phoneSaving || !userId) return;
+    setPhoneSaving(true); setPhoneMsg("");
+    const { error } = await supabase.auth.verifyOtp({ phone, token, type: "phone_change" });
+    if (error) { setPhoneMsg("Incorrect code. Try again."); setPhoneSaving(false); return; }
+    await supabase.from("users").update({ phone_verified: true, phone }).eq("id", userId);
+    updateAppUser({ phone_verified: true });
+    setPhoneSaving(false); setPhoneModal(false);
+    Alert.alert("Verified!", "Your phone is verified. Your profile now shows a trusted badge.");
+  }
+
   const levelColor = profile?.fitness_level ? LEVEL_COLOR[profile.fitness_level] : c.textMuted;
 
   return (
@@ -523,6 +562,8 @@ export default function ProfileScreen() {
             userTier={userTier}
             userPoints={userPoints}
             onEdit={() => setEditing(true)}
+            phoneVerified={appUser?.phone_verified ?? false}
+            onVerifyPress={openPhoneVerify}
           />
         )}
 
@@ -593,6 +634,70 @@ export default function ProfileScreen() {
           <Text style={[s.logoutText, { color: c.textMuted }]}>Sign Out</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* ── Phone Verification Modal ── */}
+      <AppModal
+        visible={phoneModal}
+        onClose={() => setPhoneModal(false)}
+        title={phoneStep === "number" ? "Verify Your Phone" : "Enter the Code"}
+      >
+        {phoneStep === "number" ? (
+          <>
+            <Text style={{ fontSize: 14, color: c.textMuted, lineHeight: 20 }}>
+              Enter your number with country code. We'll send a one-time SMS code. Your number is never shown to others.
+            </Text>
+            <TextInput
+              style={{ borderRadius: RADIUS.lg, borderWidth: 1.5, borderColor: c.border, backgroundColor: c.bgInput, color: c.text, paddingHorizontal: SPACE[14], paddingVertical: SPACE[12], fontSize: 16 }}
+              value={phoneInput}
+              onChangeText={setPhoneInput}
+              placeholder="+14155551234"
+              placeholderTextColor={c.textMuted}
+              keyboardType="phone-pad"
+              autoCapitalize="none"
+            />
+            {!!phoneMsg && <Text style={{ fontSize: 13, color: phoneMsg.startsWith("Error") ? PALETTE.error : PALETTE.success }}>{phoneMsg}</Text>}
+            <TouchableOpacity
+              style={{ borderRadius: RADIUS.pill, paddingVertical: SPACE[14], alignItems: "center", backgroundColor: phoneInput.trim() ? c.brand : c.bgCardAlt, opacity: phoneSaving ? 0.6 : 1 }}
+              onPress={sendPhoneOtp}
+              disabled={!phoneInput.trim() || phoneSaving}
+            >
+              {phoneSaving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={{ color: "#fff", fontWeight: "800", fontSize: 15 }}>Send Code</Text>}
+            </TouchableOpacity>
+          </>
+        ) : (
+          <>
+            <Text style={{ fontSize: 14, color: c.textMuted, lineHeight: 20 }}>
+              A 6-digit code was sent to {phoneInput}.
+            </Text>
+            <TextInput
+              style={{ borderRadius: RADIUS.lg, borderWidth: 1.5, borderColor: c.border, backgroundColor: c.bgInput, color: c.text, paddingHorizontal: SPACE[14], paddingVertical: SPACE[12], fontSize: 26, letterSpacing: 10, textAlign: "center" }}
+              value={otpInput}
+              onChangeText={setOtpInput}
+              placeholder="------"
+              placeholderTextColor={c.textMuted}
+              keyboardType="number-pad"
+              maxLength={6}
+              autoFocus
+            />
+            {!!phoneMsg && <Text style={{ fontSize: 13, color: phoneMsg.startsWith("Incorrect") ? PALETTE.error : PALETTE.success }}>{phoneMsg}</Text>}
+            <TouchableOpacity
+              style={{ borderRadius: RADIUS.pill, paddingVertical: SPACE[14], alignItems: "center", backgroundColor: otpInput.length === 6 ? c.brand : c.bgCardAlt, opacity: phoneSaving ? 0.6 : 1 }}
+              onPress={verifyPhoneOtp}
+              disabled={otpInput.length !== 6 || phoneSaving}
+            >
+              {phoneSaving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={{ color: "#fff", fontWeight: "800", fontSize: 15 }}>Verify</Text>}
+            </TouchableOpacity>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+              <TouchableOpacity onPress={() => setPhoneStep("number")}>
+                <Text style={{ fontSize: 13, color: c.textMuted, fontWeight: "600" }}>← Back</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={sendPhoneOtp}>
+                <Text style={{ fontSize: 13, color: c.brand, fontWeight: "600" }}>Resend code</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
+      </AppModal>
     </SafeAreaView>
   );
 }
@@ -615,7 +720,7 @@ function AccordionSection({ title, emoji, defaultOpen, colors, children }: {
 }
 
 // ─── View Mode ────────────────────────────────────────────────────────────────
-function ViewMode({ profile, workoutsThisMonth, levelColor, earnedBadges, userTier, userPoints, onEdit }: {
+function ViewMode({ profile, workoutsThisMonth, levelColor, earnedBadges, userTier, userPoints, onEdit, phoneVerified, onVerifyPress }: {
   profile: Profile;
   workoutsThisMonth: number;
   levelColor: string;
@@ -623,6 +728,8 @@ function ViewMode({ profile, workoutsThisMonth, levelColor, earnedBadges, userTi
   userTier: Tier;
   userPoints: number;
   onEdit: () => void;
+  phoneVerified: boolean;
+  onVerifyPress: () => void;
 }) {
   const { theme } = useTheme();
   const c = theme.colors;
@@ -658,6 +765,30 @@ function ViewMode({ profile, workoutsThisMonth, levelColor, earnedBadges, userTi
             <Text style={[s.completeMissing, { color: c.textMuted }]}>Next: {missing[0]}</Text>
           )}
         </View>
+      )}
+
+      {/* Verification banner */}
+      {phoneVerified ? (
+        <View style={[s.verifiedBanner, { backgroundColor: "rgba(34,197,94,0.08)", borderColor: "rgba(34,197,94,0.30)" }]}>
+          <Text style={s.verifiedIcon}>✓</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={[s.verifiedTitle, { color: "#22C55E" }]}>Phone Verified</Text>
+            <Text style={[s.verifiedSub, { color: c.textMuted }]}>Your profile shows a trusted badge to others</Text>
+          </View>
+        </View>
+      ) : (
+        <TouchableOpacity
+          style={[s.verifiedBanner, { backgroundColor: c.bgCard, borderColor: c.border }]}
+          onPress={onVerifyPress}
+          activeOpacity={0.8}
+        >
+          <Text style={s.verifiedIcon}>📱</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={[s.verifiedTitle, { color: c.text }]}>Get your Verified badge</Text>
+            <Text style={[s.verifiedSub, { color: c.textMuted }]}>Verify your phone — show others you're a real person</Text>
+          </View>
+          <Text style={{ fontSize: 13, color: c.brand, fontWeight: "700" }}>Verify →</Text>
+        </TouchableOpacity>
       )}
 
       {/* Bio */}
@@ -1269,6 +1400,12 @@ const s = StyleSheet.create({
   completeTrack:  { height: 8, borderRadius: 4, overflow: "hidden" },
   completeFill:   { height: 8, borderRadius: 4 },
   completeMissing:{ fontSize: FONT.size.sm },
+
+  // Verification banner
+  verifiedBanner: { flexDirection: "row", alignItems: "center", gap: SPACE[12], borderRadius: RADIUS.xl, borderWidth: 1, padding: SPACE[16] },
+  verifiedIcon:   { fontSize: 22 },
+  verifiedTitle:  { fontSize: FONT.size.base, fontWeight: FONT.weight.bold },
+  verifiedSub:    { fontSize: FONT.size.xs, marginTop: 2, lineHeight: 16 },
 
   // View mode
   bio:              { fontSize: FONT.size.md, textAlign: "center", lineHeight: 22 },

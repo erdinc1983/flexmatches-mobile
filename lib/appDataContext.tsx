@@ -37,6 +37,7 @@ export type AppUser = {
   age:              number | null;
   is_pro:           boolean;
   is_admin:         boolean;
+  phone_verified:   boolean;
 };
 
 type AppDataContextValue = {
@@ -58,7 +59,7 @@ const SELECT = [
   "fitness_level", "sports", "current_streak", "last_checkin_date",
   "is_at_gym", "gym_checkin_at", "gym_name", "availability",
   "lat", "lng", "training_intent", "show_me", "gender", "age",
-  "is_pro", "is_admin",
+  "is_pro", "is_admin", "phone_verified",
 ].join(", ");
 
 export function AppDataProvider({ children }: { children: React.ReactNode }) {
@@ -104,6 +105,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       age:              d.age ?? null,
       is_pro:           d.is_pro ?? false,
       is_admin:         d.is_admin ?? false,
+      phone_verified:   d.phone_verified ?? false,
     });
   }, []);
 
