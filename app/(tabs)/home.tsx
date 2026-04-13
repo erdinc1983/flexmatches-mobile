@@ -20,7 +20,7 @@ import { router } from "expo-router";
 import {
   ScrollView, ActivityIndicator, Alert, RefreshControl,
   StyleSheet, View, Text, TouchableOpacity, Pressable, Modal, TextInput, KeyboardAvoidingView, Platform,
-  InteractionManager, ImageBackground,
+  InteractionManager, ImageBackground, Dimensions,
 } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
@@ -86,6 +86,9 @@ type NewCircleMember = {
   full_name:  string | null;
   avatar_url: string | null;
 };
+
+const SCREEN_H  = Dimensions.get("window").height;
+const NC_HERO_H = 200; // hero image height in circle popup
 
 export default function HomeScreen() {
   const { theme } = useTheme();
@@ -458,11 +461,13 @@ export default function HomeScreen() {
     if (!profile) return;
     setGymToggling(true);
     const next = !profile.is_at_gym;
+    const checkinAt = next ? new Date().toISOString() : null;
     await supabase.from("users").update({
       is_at_gym:      next,
-      gym_checkin_at: next ? new Date().toISOString() : null,
+      gym_checkin_at: checkinAt,
     }).eq("id", profile.id);
-    setProfile((p) => p ? { ...p, is_at_gym: next, gym_checkin_at: next ? new Date().toISOString() : null } : p);
+    setProfile((p) => p ? { ...p, is_at_gym: next, gym_checkin_at: checkinAt } : p);
+    updateAppUser({ is_at_gym: next, gym_checkin_at: checkinAt });
     setGymToggling(false);
   }
 
@@ -1334,7 +1339,7 @@ function NewCircleModal({ circle, members, loadingMembers, currentUserId, onJoin
 
         {/* ── Details body ── */}
         <ScrollView
-          style={{ backgroundColor: c.bgCard }}
+          style={{ backgroundColor: c.bgCard, maxHeight: NC_BODY_MAX_H }}
           contentContainerStyle={nc.body}
           showsVerticalScrollIndicator={false}
           bounces={false}
@@ -1478,8 +1483,8 @@ function MyCircleModal({ circle, members, loadingMembers, currentUserId, onCance
 
   return (
     <Pressable style={nc.backdrop} onPress={onClose}>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ width: "100%" }}>
-      <Pressable style={nc.sheet} onPress={(e) => e.stopPropagation()}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ width: "100%", alignItems: "center", paddingHorizontal: SPACE[16] }}>
+      <Pressable style={[nc.sheet, { width: "100%" }]} onPress={(e) => e.stopPropagation()}>
 
         {/* Hero image */}
         <View style={nc.heroWrap}>
@@ -1681,9 +1686,11 @@ const mc = StyleSheet.create({
 });
 
 // ─── New Circle popup styles ──────────────────────────────────────────────────
+const NC_BODY_MAX_H = SCREEN_H * 0.72 - NC_HERO_H; // scrollable body height
+
 const nc = StyleSheet.create({
-  backdrop:       { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end", zIndex: 100 },
-  sheet:          { borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: "hidden", maxHeight: "88%" },
+  backdrop:       { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", alignItems: "center", paddingHorizontal: SPACE[16], zIndex: 100 },
+  sheet:          { width: "100%", borderRadius: 28, overflow: "hidden" },
   // Hero image
   heroWrap:       { height: 200, position: "relative" },
   heroImg:        { width: "100%", height: "100%" },
