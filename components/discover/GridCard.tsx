@@ -125,11 +125,16 @@ export function GridCard({ user, status, onPress, onConnect, matchId }: Props) {
       {/* Info section */}
       <View style={[s.info, { backgroundColor: c.bgCard }]}>
 
-        {/* Level + city */}
+        {/* Level + city + verified */}
         <View style={s.metaRow}>
           {user.fitness_level && (
             <View style={[s.levelChip, { backgroundColor: levelColor + "20", borderColor: levelColor + "50" }]}>
               <Text style={[s.levelText, { color: levelColor }]}>{user.fitness_level}</Text>
+            </View>
+          )}
+          {user.phone_verified && (
+            <View style={s.verifiedBadge}>
+              <Text style={s.verifiedText}>✓ ID</Text>
             </View>
           )}
           {user.city && (
@@ -221,8 +226,10 @@ const s = StyleSheet.create({
 
   metaRow:     { flexDirection: "row", alignItems: "center", gap: SPACE[6], flexWrap: "wrap" },
   levelChip:   { paddingHorizontal: SPACE[6], paddingVertical: 2, borderRadius: RADIUS.pill, borderWidth: 1 },
-  levelText:   { fontSize: 10, fontWeight: FONT.weight.extrabold, textTransform: "capitalize" },
-  city:        { fontSize: 10, flex: 1 },
+  levelText:     { fontSize: 10, fontWeight: FONT.weight.extrabold, textTransform: "capitalize" },
+  verifiedBadge: { paddingHorizontal: SPACE[6], paddingVertical: 2, borderRadius: RADIUS.pill, backgroundColor: "rgba(34,197,94,0.18)", borderWidth: 1, borderColor: "rgba(34,197,94,0.50)" },
+  verifiedText:  { fontSize: 9, fontWeight: FONT.weight.extrabold, color: "#22C55E" },
+  city:          { fontSize: 10, flex: 1 },
 
   sportsRow:   { flexDirection: "row", gap: SPACE[4], flexWrap: "wrap" },
   sportChip:   { paddingHorizontal: SPACE[6], paddingVertical: 2, borderRadius: RADIUS.sm, borderWidth: 1 },

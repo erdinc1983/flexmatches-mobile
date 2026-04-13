@@ -50,6 +50,7 @@ export type DiscoverUser = {
   lng:                number | null;
   sessions_completed: number;
   reliability_score:  number;
+  phone_verified:     boolean;
   matchScore:         number;
   reasons:            string[];
   isNew:              boolean;
@@ -185,6 +186,11 @@ export function PersonCard({ user, status, onConnect, onCancelRequest, onPress, 
                 <Text style={[s.levelText, { color: levelColor }]}>{user.fitness_level}</Text>
               </View>
             )}
+            {user.phone_verified && (
+              <View style={s.verifiedBadge}>
+                <Text style={s.verifiedText}>✓ Verified</Text>
+              </View>
+            )}
             {activeStr !== "" && (
               <Text style={[s.activeTime, { color: isActiveNow ? "#4ADE80" : "rgba(255,255,255,0.70)" }]}>
                 {isActiveNow ? "● Active now" : activeStr}
@@ -303,8 +309,10 @@ const s = StyleSheet.create({
   metaRow:     { flexDirection: "row", alignItems: "center", gap: SPACE[8], flexWrap: "wrap" },
   levelBadge:  { paddingHorizontal: SPACE[8], paddingVertical: 2, borderRadius: RADIUS.pill, borderWidth: 1 },
   levelText:   { fontSize: FONT.size.xs, fontWeight: FONT.weight.extrabold, textTransform: "capitalize" },
-  activeTime:  { fontSize: FONT.size.xs, fontWeight: FONT.weight.semibold },
-  cityText:    { fontSize: FONT.size.xs, color: "rgba(255,255,255,0.65)" },
+  activeTime:    { fontSize: FONT.size.xs, fontWeight: FONT.weight.semibold },
+  cityText:      { fontSize: FONT.size.xs, color: "rgba(255,255,255,0.65)" },
+  verifiedBadge: { paddingHorizontal: SPACE[6], paddingVertical: 2, borderRadius: RADIUS.pill, backgroundColor: "rgba(34,197,94,0.25)", borderWidth: 1, borderColor: "rgba(34,197,94,0.60)" },
+  verifiedText:  { fontSize: 9, fontWeight: FONT.weight.extrabold, color: "#4ADE80", letterSpacing: 0.3 },
 
   // Info section
   info:        { padding: SPACE[14], gap: SPACE[10] },

@@ -90,6 +90,15 @@ export default function SettingsScreen() {
   const [deleteInput,  setDeleteInput]  = useState("");
   const [deleting,     setDeleting]     = useState(false);
 
+  // Phone verification
+  const [phoneVerified, setPhoneVerified] = useState(false);
+  const [phoneModal,    setPhoneModal]    = useState(false);
+  const [phoneStep,     setPhoneStep]     = useState<"number" | "otp">("number");
+  const [phoneInput,    setPhoneInput]    = useState("");
+  const [otpInput,      setOtpInput]      = useState("");
+  const [phoneSaving,   setPhoneSaving]   = useState(false);
+  const [phoneMsg,      setPhoneMsg]      = useState("");
+
   // ── Load ──────────────────────────────────────────────────────────────────
   useEffect(() => { loadSettings(); }, []);
 
@@ -101,7 +110,7 @@ export default function SettingsScreen() {
 
     const { data } = await supabase
       .from("users")
-      .select("units, notification_prefs, privacy_settings")
+      .select("units, notification_prefs, privacy_settings, phone_verified")
       .eq("id", user.id)
       .single();
 
@@ -109,6 +118,7 @@ export default function SettingsScreen() {
       setUnits((data.units as "imperial" | "metric") ?? "imperial");
       setNotifPrefs({ ...DEFAULT_NOTIF, ...(data.notification_prefs ?? {}) });
       setPrivacyState({ ...DEFAULT_PRIVACY, ...(data.privacy_settings ?? {}) });
+      setPhoneVerified(data.phone_verified ?? false);
     }
     setLoading(false);
   }
@@ -188,6 +198,52 @@ export default function SettingsScreen() {
     }
   }
 
+  function openPhoneModal() {
+    setPhoneStep("number");
+    setPhoneInput("");
+    setOtpInput("");
+    setPhoneMsg("");
+    setPhoneModal(true);
+  }
+
+  async function sendPhoneOtp() {
+    const phone = phoneInput.trim();
+    if (!phone || phoneSaving) return;
+    if (!/^\+\d{7,15}$/.test(phone)) {
+      setPhoneMsg("Enter a valid number with country code, e.g. +14155551234");
+      return;
+    }
+    setPhoneSaving(true);
+    setPhoneMsg("");
+    const { error } = await supabase.auth.updateUser({ phone });
+    if (error) {
+      setPhoneMsg(`Error: ${error.message}`);
+    } else {
+      setPhoneStep("otp");
+      setPhoneMsg("A 6-digit code was sent to your number.");
+    }
+    setPhoneSaving(false);
+  }
+
+  async function verifyPhoneOtp() {
+    const phone = phoneInput.trim();
+    const token = otpInput.trim();
+    if (!token || phoneSaving || !userId) return;
+    setPhoneSaving(true);
+    setPhoneMsg("");
+    const { error } = await supabase.auth.verifyOtp({ phone, token, type: "phone_change" });
+    if (error) {
+      setPhoneMsg(`Incorrect code. Try again.`);
+      setPhoneSaving(false);
+      return;
+    }
+    await supabase.from("users").update({ phone_verified: true, phone }).eq("id", userId);
+    setPhoneVerified(true);
+    setPhoneSaving(false);
+    setPhoneModal(false);
+    Alert.alert("Verified!", "Your phone number has been verified. Your profile now shows a verified badge.");
+  }
+
   async function resetPassword() {
     if (!userEmail) return;
     const { error } = await supabase.auth.resetPasswordForEmail(userEmail);
@@ -221,6 +277,15 @@ export default function SettingsScreen() {
           <ActionRow label="✏️  Edit Profile"     onPress={() => router.push("/(tabs)/profile")} c={c} />
           <ActionRow label="📧  Change Email"      onPress={() => setEmailModal(true)} c={c} />
           <ActionRow label="🔑  Change Password"   onPress={resetPassword} c={c} />
+          {phoneVerified
+            ? <View style={[s.actionRow, { borderColor: c.border, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}>
+                <Text style={[s.actionLabel, { color: c.textSecondary }]}>📱  Phone Number</Text>
+                <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20, backgroundColor: "rgba(34,197,94,0.15)", borderWidth: 1, borderColor: "rgba(34,197,94,0.45)" }}>
+                  <Text style={{ fontSize: 11, fontWeight: "800", color: "#22C55E" }}>✓ Verified</Text>
+                </View>
+              </View>
+            : <ActionRow label="📱  Verify Phone Number" onPress={openPhoneModal} c={c} />
+          }
           <ActionRow label="🚪  Sign Out"          onPress={() => {
             Alert.alert("Sign Out", "Are you sure?", [
               { text: "Cancel", style: "cancel" },
@@ -353,6 +418,84 @@ export default function SettingsScreen() {
         </SettingCard>
 
       </ScrollView>
+
+      {/* ── Phone Verification Modal ── */}
+      <Modal visible={phoneModal} transparent animationType="slide" onRequestClose={() => setPhoneModal(false)}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+        <BlurOverlay onPress={() => setPhoneModal(false)}>
+          <View style={s.overlayInner}>
+          <View style={[s.modalBox, { backgroundColor: c.bgCard, borderColor: c.border }]}>
+            {phoneStep === "number" ? (
+              <>
+                <Text style={[s.modalTitle, { color: c.text }]}>Verify Your Phone</Text>
+                <Text style={[s.modalSub, { color: c.textMuted }]}>
+                  Enter your number with country code. We'll send a one-time code via SMS. Your number is never shown to other users.
+                </Text>
+                <TextInput
+                  style={[s.modalInput, { backgroundColor: c.bgInput, borderColor: c.border, color: c.text }]}
+                  value={phoneInput}
+                  onChangeText={setPhoneInput}
+                  placeholder="+14155551234"
+                  placeholderTextColor={c.textMuted}
+                  keyboardType="phone-pad"
+                  autoCapitalize="none"
+                />
+                {!!phoneMsg && (
+                  <Text style={[s.modalMsg, { color: phoneMsg.startsWith("Error") ? PALETTE.error : PALETTE.success }]}>{phoneMsg}</Text>
+                )}
+                <View style={s.modalBtns}>
+                  <TouchableOpacity style={[s.modalCancel, { borderColor: c.border }]} onPress={() => setPhoneModal(false)}>
+                    <Text style={[s.modalCancelText, { color: c.textMuted }]}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[s.modalOk, { backgroundColor: phoneInput.trim() ? c.brand : c.bgCardAlt }, phoneSaving && { opacity: 0.6 }]}
+                    onPress={sendPhoneOtp}
+                    disabled={!phoneInput.trim() || phoneSaving}
+                  >
+                    {phoneSaving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.modalOkText}>Send Code</Text>}
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <>
+                <Text style={[s.modalTitle, { color: c.text }]}>Enter the Code</Text>
+                <Text style={[s.modalSub, { color: c.textMuted }]}>
+                  A 6-digit code was sent to {phoneInput}. Enter it below.
+                </Text>
+                <TextInput
+                  style={[s.modalInput, { backgroundColor: c.bgInput, borderColor: c.border, color: c.text, letterSpacing: 8, textAlign: "center", fontSize: 22 }]}
+                  value={otpInput}
+                  onChangeText={setOtpInput}
+                  placeholder="------"
+                  placeholderTextColor={c.textMuted}
+                  keyboardType="number-pad"
+                  maxLength={6}
+                />
+                {!!phoneMsg && (
+                  <Text style={[s.modalMsg, { color: phoneMsg.startsWith("Incorrect") ? PALETTE.error : PALETTE.success }]}>{phoneMsg}</Text>
+                )}
+                <View style={s.modalBtns}>
+                  <TouchableOpacity style={[s.modalCancel, { borderColor: c.border }]} onPress={() => setPhoneStep("number")}>
+                    <Text style={[s.modalCancelText, { color: c.textMuted }]}>← Back</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[s.modalOk, { backgroundColor: otpInput.length === 6 ? c.brand : c.bgCardAlt }, phoneSaving && { opacity: 0.6 }]}
+                    onPress={verifyPhoneOtp}
+                    disabled={otpInput.length !== 6 || phoneSaving}
+                  >
+                    {phoneSaving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.modalOkText}>Verify</Text>}
+                  </TouchableOpacity>
+                </View>
+                <TouchableOpacity onPress={sendPhoneOtp}>
+                  <Text style={[{ fontSize: 12, color: c.brand, textAlign: "center", fontWeight: "600" }]}>Didn't receive it? Resend</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+          </View>
+        </BlurOverlay>
+        </KeyboardAvoidingView>
+      </Modal>
 
       {/* ── Change Email Modal ── */}
       <Modal visible={emailModal} transparent animationType="slide" onRequestClose={() => { setEmailModal(false); setEmailMsg(""); setNewEmail(""); }}>
