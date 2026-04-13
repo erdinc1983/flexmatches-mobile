@@ -46,6 +46,10 @@
         "appleId": "erdincemur@gmail.com",
         "ascAppId": "6761497083",
         "appleTeamId": "5R7ZFWNABK"
+      },
+      "android": {
+        "serviceAccountKeyPath": "./google-play-service-account.json",
+        "track": "internal"
       }
     }
   }
