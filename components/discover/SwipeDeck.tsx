@@ -342,38 +342,26 @@ function SwipeCardContent({ user, status, onInfoPress }: {
       {/* ── Info section ───────────────────────────────────────────── */}
       <View style={[card.info, { backgroundColor: c.bgCard }]}>
 
-        {/* Why this works header */}
-        <View style={card.whyRow}>
-          <Text style={[card.whyLabel, { color: c.textMuted }]}>✦ Why this works</Text>
-          <View style={[card.matchPill, { backgroundColor: scoreColor + "20", borderColor: scoreColor + "50" }]}>
-            <Text style={[card.matchPillText, { color: scoreColor }]}>{user.matchScore}% match</Text>
-          </View>
-        </View>
-
-        {/* Reasons */}
-        {user.reasons.length > 0 ? (
-          <View style={card.reasons}>
-            {user.reasons.map((r) => (
-              <View key={r} style={card.reasonRow}>
-                <Text style={card.reasonIcon}>{reasonIcon(r)}</Text>
-                <Text style={[card.reasonText, { color: c.textSecondary }]}>{r}</Text>
+        {/* Reason chips — web style */}
+        <View style={card.reasonsRow}>
+          {user.reasons.length > 0 ? (
+            user.reasons.map((r) => (
+              <View key={r} style={[card.reasonChip, { backgroundColor: c.brandSubtle, borderColor: c.brandBorder }]}>
+                <Text style={[card.reasonChipText, { color: c.brand }]}>{reasonIcon(r)} {r}</Text>
               </View>
-            ))}
-          </View>
-        ) : (
-          <View style={card.reasons}>
-            <View style={card.reasonRow}>
-              <Text style={card.reasonIcon}>✨</Text>
-              <Text style={[card.reasonText, { color: c.textMuted }]}>New to FlexMatches</Text>
+            ))
+          ) : (
+            <View style={[card.reasonChip, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}>
+              <Text style={[card.reasonChipText, { color: c.textMuted }]}>✨ New to FlexMatches</Text>
             </View>
-          </View>
-        )}
+          )}
+        </View>
 
         {/* Sports chips */}
         {sports.length > 0 && (
           <View style={card.sports}>
             {sports.map((sp) => (
-              <View key={sp} style={[card.sportChip, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}>
+              <View key={sp} style={[card.sportChip, { backgroundColor: c.bgCardAlt, borderColor: c.borderMedium }]}>
                 <Text style={[card.sportText, { color: c.textSecondary }]}>{sp}</Text>
               </View>
             ))}
@@ -491,19 +479,14 @@ const card = StyleSheet.create({
   // Info section
   info:       { flex: 1, padding: SPACE[14], gap: SPACE[10] },
 
-  whyRow:     { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  whyLabel:   { fontSize: 11, fontWeight: FONT.weight.bold, letterSpacing: 0.3, textTransform: "uppercase" },
-  matchPill:  { paddingHorizontal: SPACE[8], paddingVertical: 3, borderRadius: RADIUS.pill, borderWidth: 1 },
-  matchPillText: { fontSize: 11, fontWeight: FONT.weight.extrabold },
-
-  reasons:    { gap: SPACE[4] },
-  reasonRow:  { flexDirection: "row", alignItems: "center", gap: SPACE[8] },
-  reasonIcon: { fontSize: 13, width: 18 },
-  reasonText: { fontSize: FONT.size.sm, fontWeight: FONT.weight.medium, flex: 1 },
+  // Reason chips (web style — pill chips, not row list)
+  reasonsRow:      { flexDirection: "row", flexWrap: "wrap", gap: SPACE[6] },
+  reasonChip:      { paddingHorizontal: SPACE[10], paddingVertical: 5, borderRadius: RADIUS.pill, borderWidth: 1 },
+  reasonChipText:  { fontSize: FONT.size.xs, fontWeight: FONT.weight.bold },
 
   sports:     { flexDirection: "row", flexWrap: "wrap", gap: SPACE[6] },
-  sportChip:  { paddingHorizontal: SPACE[8], paddingVertical: 3, borderRadius: RADIUS.sm, borderWidth: 1 },
-  sportText:  { fontSize: FONT.size.xs, fontWeight: FONT.weight.medium },
+  sportChip:  { paddingHorizontal: SPACE[10], paddingVertical: 5, borderRadius: RADIUS.md, borderWidth: 1 },
+  sportText:  { fontSize: FONT.size.xs, fontWeight: FONT.weight.semibold },
 
   statusRow:  { flexDirection: "row", alignItems: "center", gap: SPACE[6], borderRadius: RADIUS.md, borderWidth: 1, padding: SPACE[10] },
   statusText: { fontSize: FONT.size.xs, fontWeight: FONT.weight.semibold },
