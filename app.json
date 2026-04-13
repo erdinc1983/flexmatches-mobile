@@ -11,7 +11,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.flexmatches.app",
-      "buildNumber": "22",
+      "buildNumber": "24",
       "infoPlist": {
         "UIBackgroundModes": [
           "remote-notification"
