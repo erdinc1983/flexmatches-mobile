@@ -34,6 +34,7 @@ import { CirclesSkeleton } from "../../components/ui/Skeleton";
 import { MapLocationPicker } from "../../components/MapLocationPicker";
 import { scheduleEventReminder } from "../../lib/notifications";
 import { notifyUser } from "../../lib/push";
+import { getSportPhoto } from "../../lib/sportPhotos";
 
 const { height: SCREEN_H } = Dimensions.get("window");
 
@@ -654,8 +655,19 @@ export default function CirclesScreen() {
             {/* ── Detail view ── */}
             {popupView === "detail" && (<>
               <View style={s.popupTop}>
-                <View style={[s.popupEmoji, { backgroundColor: c.bgCardAlt }]}>
-                  <Text style={{ fontSize: 36 }}>{selectedCircle.avatar_emoji}</Text>
+                <View style={s.popupPhotoWrap}>
+                  <ImageBackground
+                    source={{ uri: getSportPhoto(selectedCircle.sport ?? selectedCircle.name) }}
+                    style={s.popupPhoto}
+                    resizeMode="cover"
+                    imageStyle={{ borderRadius: RADIUS.xl }}
+                  >
+                    <LinearGradient
+                      colors={["transparent", "rgba(0,0,0,0.60)"]}
+                      style={[StyleSheet.absoluteFill, { borderRadius: RADIUS.xl }]}
+                    />
+                    <Text style={s.popupEmojiOverlay}>{selectedCircle.avatar_emoji}</Text>
+                  </ImageBackground>
                 </View>
                 <Text style={[s.popupName, { color: c.text }]}>{selectedCircle.name}</Text>
                 <View style={s.popupChips}>
@@ -1061,6 +1073,7 @@ export default function CirclesScreen() {
 function CircleCard({ item, onPress, onJoin, joining = false }: { item: Community; onPress: () => void; onJoin: () => void; joining?: boolean }) {
   const { theme } = useTheme();
   const c = theme.colors;
+  const photoUri = getSportPhoto(item.sport ?? item.name);
 
   return (
     <TouchableOpacity
@@ -1068,9 +1081,20 @@ function CircleCard({ item, onPress, onJoin, joining = false }: { item: Communit
       onPress={onPress}
       activeOpacity={0.85}
     >
-      {/* Emoji avatar */}
-      <View style={[s.cardEmoji, { backgroundColor: c.bgCardAlt }]}>
-        <Text style={s.cardEmojiText}>{item.avatar_emoji}</Text>
+      {/* Sport photo thumbnail with emoji badge */}
+      <View style={s.cardPhotoWrap}>
+        <ImageBackground
+          source={{ uri: photoUri }}
+          style={s.cardPhoto}
+          resizeMode="cover"
+          imageStyle={{ borderRadius: RADIUS.lg }}
+        >
+          <LinearGradient
+            colors={["transparent", "rgba(0,0,0,0.55)"]}
+            style={StyleSheet.absoluteFill}
+          />
+          <Text style={s.cardEmojiOverlay}>{item.avatar_emoji}</Text>
+        </ImageBackground>
       </View>
 
       {/* Content */}
@@ -1154,6 +1178,9 @@ const s = StyleSheet.create({
                      padding: SPACE[14], marginBottom: SPACE[10], borderWidth: 1, gap: SPACE[12] },
   cardEmoji:       { width: 52, height: 52, borderRadius: RADIUS.lg, alignItems: "center", justifyContent: "center" },
   cardEmojiText:   { fontSize: 26 },
+  cardPhotoWrap:   { width: 52, height: 52, borderRadius: RADIUS.lg, overflow: "hidden" },
+  cardPhoto:       { width: 52, height: 52, alignItems: "center", justifyContent: "flex-end", paddingBottom: 4 },
+  cardEmojiOverlay:{ fontSize: 20, textAlign: "center" },
   cardName:        { fontSize: FONT.size.md, fontWeight: FONT.weight.bold, marginBottom: SPACE[4] },
   cardMeta:        { flexDirection: "row", gap: SPACE[6], flexWrap: "wrap", marginBottom: SPACE[4] },
   chip:            { flexDirection: "row", alignItems: "center", gap: 3, borderRadius: RADIUS.pill,
@@ -1178,6 +1205,9 @@ const s = StyleSheet.create({
                      alignItems: "center", justifyContent: "center" },
   popupTop:        { alignItems: "center", gap: SPACE[8], paddingTop: SPACE[20] },
   popupEmoji:      { width: 72, height: 72, borderRadius: RADIUS.xl, alignItems: "center", justifyContent: "center" },
+  popupPhotoWrap:  { width: 88, height: 88, borderRadius: RADIUS.xl, overflow: "hidden" },
+  popupPhoto:      { width: 88, height: 88, alignItems: "center", justifyContent: "flex-end", paddingBottom: 6 },
+  popupEmojiOverlay: { fontSize: 30, textAlign: "center" },
   popupName:       { fontSize: FONT.size.xl, fontWeight: FONT.weight.black, textAlign: "center" },
   popupChips:      { flexDirection: "row", gap: SPACE[6], flexWrap: "wrap", justifyContent: "center" },
   popupField:      { flexDirection: "row", alignItems: "flex-start", gap: SPACE[6],

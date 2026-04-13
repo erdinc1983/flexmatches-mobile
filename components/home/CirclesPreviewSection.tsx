@@ -1,19 +1,25 @@
 /**
- * CirclesPreviewSection — "Local Circles"
- * 2 side-by-side cards with emoji, name, member count, Join button.
+ * CirclesPreviewSection — "My Circles"
+ * 2-column grid of full sport-photo cards with gradient overlay.
+ * Replaces the flat emoji+colour cards with Apple-style photo heroes.
  */
 
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Pressable } from "react-native";
+import {
+  View, Text, TouchableOpacity, StyleSheet,
+  ImageBackground, Pressable,
+} from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { Icon } from "../Icon";
 import { router } from "expo-router";
-import { useTheme, SPACE, FONT, RADIUS, SHADOW, TYPE } from "../../lib/theme";
+import { useTheme, SPACE, FONT, RADIUS, SHADOW } from "../../lib/theme";
 import { SectionHeader } from "../ui/SectionHeader";
+import { getSportPhoto } from "../../lib/sportPhotos";
 import type { CirclePreview } from "./types";
 
 type Props = {
-  circles:   CirclePreview[];
-  onPress?:  (circle: CirclePreview) => void;
+  circles:    CirclePreview[];
+  onPress?:   (circle: CirclePreview) => void;
   onDismiss?: (id: string) => void;
 };
 
@@ -22,7 +28,7 @@ export function CirclesPreviewSection({ circles, onPress, onDismiss }: Props) {
   const visible = circles.slice(0, 4);
 
   return (
-    <View style={{ gap: SPACE[10] }}>
+    <View style={{ gap: SPACE[12] }}>
       <SectionHeader
         title="My Circles"
         action={{ label: "See all", onPress: () => router.push("/(tabs)/circles" as any) }}
@@ -36,34 +42,24 @@ export function CirclesPreviewSection({ circles, onPress, onDismiss }: Props) {
   );
 }
 
-function CircleCard({ circle, onPress, onDismiss }: { circle: CirclePreview; onPress?: (c: CirclePreview) => void; onDismiss?: (id: string) => void }) {
-  const { theme, isDark } = useTheme();
+function CircleCard({ circle, onPress, onDismiss }: {
+  circle: CirclePreview;
+  onPress?: (c: CirclePreview) => void;
+  onDismiss?: (id: string) => void;
+}) {
+  const { theme } = useTheme();
   const c = theme.colors;
 
-  const BG_LIGHT: Record<string, string> = {
-    "🏋️": "#E8F4FD",
-    "🏃": "#FFF3E0",
-    "⚽": "#E8F5E9",
-    "🧘": "#F3E5F5",
-    "🚴": "#E0F2F1",
-    "🏊": "#E3F2FD",
-  };
-  const BG_DARK: Record<string, string> = {
-    "🏋️": "#0D1A2D",
-    "🏃": "#1A1200",
-    "⚽": "#0D2D1A",
-    "🧘": "#1A0D20",
-    "🚴": "#091A18",
-    "🏊": "#0A1520",
-  };
-  const emoji = circle.icon ?? "🏟️";
-  const bg    = isDark ? (BG_DARK[emoji] ?? "#1A1610") : (BG_LIGHT[emoji] ?? "#F5F0EA");
+  const photoUri = getSportPhoto(circle.sport ?? circle.name);
+
+  const hasDate = !!circle.event_date;
+  const dateLabel = hasDate ? formatCardDate(circle.event_date!) : null;
 
   return (
     <TouchableOpacity
-      style={[s.card, { borderColor: c.border, ...SHADOW.sm }]}
+      style={[s.card, SHADOW.md]}
       onPress={() => onPress ? onPress(circle) : router.push("/(tabs)/circles" as any)}
-      activeOpacity={0.85}
+      activeOpacity={0.88}
     >
       {/* Dismiss X */}
       {onDismiss && (
@@ -72,38 +68,102 @@ function CircleCard({ circle, onPress, onDismiss }: { circle: CirclePreview; onP
           onPress={(e) => { e.stopPropagation?.(); onDismiss(circle.id); }}
           hitSlop={8}
         >
-          <Icon name="close" size={12} color={c.textFaint} />
+          <View style={s.dismissCircle}>
+            <Icon name="close" size={10} color="#fff" />
+          </View>
         </Pressable>
       )}
 
-      {/* Warm gradient-ish header area */}
-      <View style={[s.cardTop, { backgroundColor: bg }]}>
-        <Text style={s.emoji}>{emoji}</Text>
-      </View>
-
-      {/* Content */}
-      <View style={[s.cardBody, { backgroundColor: c.bgCard }]}>
-        <Text style={[s.name, { color: c.text }]} numberOfLines={1}>{circle.name}</Text>
-        <Text style={[s.members, { color: c.textMuted }]}>
-          {circle.member_count} {circle.member_count === 1 ? "Member" : "Members"}
-        </Text>
-        <View style={[s.viewBtn, { backgroundColor: c.brand }]}>
-          <Text style={s.joinText}>View Details</Text>
+      {/* Sport photo background */}
+      <ImageBackground
+        source={{ uri: photoUri }}
+        style={s.photo}
+        resizeMode="cover"
+      >
+        {/* Emoji badge top-left */}
+        <View style={s.emojiBadge}>
+          <Text style={s.emoji}>{circle.icon ?? "🏟️"}</Text>
         </View>
-      </View>
+
+        {/* Gradient + content */}
+        <LinearGradient
+          colors={["transparent", "rgba(0,0,0,0.78)"]}
+          style={s.gradient}
+          pointerEvents="none"
+        >
+          <View style={s.bottomContent}>
+            {/* Event date chip */}
+            {dateLabel && (
+              <View style={s.dateBadge}>
+                <Icon name="calendar" size={10} color="rgba(255,255,255,0.85)" />
+                <Text style={s.dateText}>{dateLabel}</Text>
+              </View>
+            )}
+
+            <Text style={s.name} numberOfLines={2}>{circle.name}</Text>
+
+            <View style={s.footer}>
+              <View style={s.memberRow}>
+                <Icon name="circlesActive" size={11} color="rgba(255,255,255,0.70)" />
+                <Text style={s.memberCount}>
+                  {circle.member_count} {circle.member_count === 1 ? "member" : "members"}
+                </Text>
+              </View>
+
+              <View style={s.viewBtn}>
+                <Text style={s.viewBtnText}>View</Text>
+              </View>
+            </View>
+          </View>
+        </LinearGradient>
+      </ImageBackground>
     </TouchableOpacity>
   );
 }
 
+function formatCardDate(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const date  = new Date(y, m - 1, d);
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
+  if (date.getTime() === today.getTime()) return "Today";
+  if (date.getTime() === tomorrow.getTime()) return "Tomorrow";
+  return date.toLocaleDateString([], { month: "short", day: "numeric" });
+}
+
+const CARD_H = 165;
+
 const s = StyleSheet.create({
-  grid:    { flexDirection: "row", gap: SPACE[10] },
-  card:    { flex: 1, borderRadius: RADIUS.xl, borderWidth: 1, overflow: "hidden" },
-  cardTop: { height: 72, alignItems: "center", justifyContent: "center" },
-  emoji:   { fontSize: 32 },
-  cardBody:{ padding: SPACE[12], gap: SPACE[6] },
-  name:    { ...TYPE.cardTitle },
-  members: { ...TYPE.caption },
-  viewBtn:    { borderRadius: RADIUS.pill, paddingVertical: SPACE[10], alignItems: "center", marginTop: SPACE[6] },
-  joinText:   { color: "#fff", ...TYPE.caption, fontWeight: FONT.weight.bold },
-  dismissBtn: { position: "absolute", top: SPACE[8], right: SPACE[8], zIndex: 1, padding: SPACE[4] },
+  grid:         { flexDirection: "row", gap: SPACE[10] },
+  card:         { flex: 1, borderRadius: RADIUS.xl, overflow: "hidden", height: CARD_H },
+  photo:        { flex: 1 },
+
+  // Emoji badge
+  emojiBadge:   {
+    position: "absolute", top: SPACE[10], left: SPACE[10],
+    width: 34, height: 34, borderRadius: 17,
+    backgroundColor: "rgba(0,0,0,0.38)",
+    alignItems: "center", justifyContent: "center",
+  },
+  emoji:        { fontSize: 18 },
+
+  // Dismiss
+  dismissBtn:   { position: "absolute", top: SPACE[8], right: SPACE[8], zIndex: 10 },
+  dismissCircle:{ width: 22, height: 22, borderRadius: 11, backgroundColor: "rgba(0,0,0,0.50)", alignItems: "center", justifyContent: "center" },
+
+  // Gradient bottom area
+  gradient:     { position: "absolute", bottom: 0, left: 0, right: 0, height: CARD_H * 0.70, justifyContent: "flex-end" },
+  bottomContent:{ padding: SPACE[12], gap: SPACE[4] },
+
+  name:         { fontSize: 13, fontWeight: FONT.weight.bold, color: "#fff", letterSpacing: -0.2, lineHeight: 17 },
+
+  footer:       { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: SPACE[4] },
+  memberRow:    { flexDirection: "row", alignItems: "center", gap: 4 },
+  memberCount:  { fontSize: 11, color: "rgba(255,255,255,0.70)", fontWeight: FONT.weight.semibold },
+
+  viewBtn:      { backgroundColor: "rgba(255,255,255,0.18)", borderRadius: RADIUS.pill, paddingHorizontal: SPACE[10], paddingVertical: 4, borderWidth: 1, borderColor: "rgba(255,255,255,0.25)" },
+  viewBtnText:  { fontSize: 11, fontWeight: FONT.weight.bold, color: "#fff" },
+
+  dateBadge:    { flexDirection: "row", alignItems: "center", gap: 4, marginBottom: SPACE[2] },
+  dateText:     { fontSize: 11, color: "rgba(255,255,255,0.85)", fontWeight: FONT.weight.semibold },
 });

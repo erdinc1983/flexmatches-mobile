@@ -23,39 +23,11 @@ import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { useTheme, SPACE, FONT, RADIUS, TYPE } from "../../lib/theme";
 import { Icon, IconName } from "../Icon";
+import { getSportPhoto, SPORT_PHOTOS } from "../../lib/sportPhotos";
 import type { PrimaryAction } from "./types";
 
 // ─── Local asset ──────────────────────────────────────────────────────────────
 const GYM_DONE_PHOTO = require("../../assets/images/gym-done.jpeg");
-
-// ─── Unsplash sport photos ────────────────────────────────────────────────────
-const SPORT_PHOTOS: Record<string, string> = {
-  running:    "https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?w=900&q=80",
-  cycling:    "https://images.unsplash.com/photo-1541625602330-2277a4c46182?w=900&q=80",
-  swimming:   "https://images.unsplash.com/photo-1560090995-01632a28895b?w=900&q=80",
-  yoga:       "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=900&q=80",
-  pilates:    "https://images.unsplash.com/photo-1518611012118-696072aa579a?w=900&q=80",
-  boxing:     "https://images.unsplash.com/photo-1549719386-74dfcbf7dbed?w=900&q=80",
-  tennis:     "https://images.unsplash.com/photo-1599391398131-cd12dfc6c24e?w=900&q=80",
-  basketball: "https://images.unsplash.com/photo-1546519638-68e109498ffc?w=900&q=80",
-  hiking:     "https://images.unsplash.com/photo-1551632811-561732d1e306?w=900&q=80",
-  climbing:   "https://images.unsplash.com/photo-1522163182402-834f871fd851?w=900&q=80",
-  crossfit:   "https://images.unsplash.com/photo-1583454110551-21f2fa2afe61?w=900&q=80",
-  volleyball: "https://images.unsplash.com/photo-1612872087720-bb876e2e67d1?w=900&q=80",
-  soccer:     "https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=900&q=80",
-  gym:        "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=900&q=80",
-  weightlifting: "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=900&q=80",
-  default:    "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=900&q=80",
-};
-
-function getSportPhoto(sport?: string | null): string {
-  if (!sport) return SPORT_PHOTOS.default;
-  const lower = sport.toLowerCase();
-  for (const [key, url] of Object.entries(SPORT_PHOTOS)) {
-    if (lower.includes(key)) return url;
-  }
-  return SPORT_PHOTOS.default;
-}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Props = {
