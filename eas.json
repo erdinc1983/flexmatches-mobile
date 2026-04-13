@@ -37,7 +37,7 @@
       "env": {
         "APP_ENV": "production",
         "EXPO_PUBLIC_SUPABASE_URL": "https://bwnklngifvuqgkngelwr.supabase.co",
-        "EXPO_PUBLIC_GOOGLE_PLACES_API_KEY": "AIzaSyDAz0-krc5X3onKpF_JEom6f5u5UdkXxAc"
+        "EXPO_PUBLIC_GOOGLE_PLACES_API_KEY": "AIzaSyCc_uuo3DZM0itnQLAkVFUr556CWa_oyuI"
       }
     }
   },
