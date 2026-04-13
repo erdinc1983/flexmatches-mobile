@@ -14,15 +14,14 @@
 import { useEffect, useState } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  ActivityIndicator, TextInput, Alert, Modal, Switch, Linking,
-  KeyboardAvoidingView, Platform,
+  ActivityIndicator, TextInput, Alert, Switch, Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { supabase } from "../lib/supabase";
 import { unregisterPushToken } from "../lib/push";
 import { useTheme, SPACE, FONT, RADIUS, PALETTE } from "../lib/theme";
-import { BlurOverlay } from "../components/ui/BlurOverlay";
+import { AppModal } from "../components/ui/AppModal";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Privacy = {
@@ -420,200 +419,165 @@ export default function SettingsScreen() {
       </ScrollView>
 
       {/* ── Phone Verification Modal ── */}
-      <Modal visible={phoneModal} transparent animationType="slide" onRequestClose={() => setPhoneModal(false)}>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
-        <BlurOverlay onPress={() => setPhoneModal(false)}>
-          <View style={s.overlayInner}>
-          <View style={[s.modalBox, { backgroundColor: c.bgCard, borderColor: c.border }]}>
-            {phoneStep === "number" ? (
-              <>
-                <Text style={[s.modalTitle, { color: c.text }]}>Verify Your Phone</Text>
-                <Text style={[s.modalSub, { color: c.textMuted }]}>
-                  Enter your number with country code. We'll send a one-time code via SMS. Your number is never shown to other users.
-                </Text>
-                <TextInput
-                  style={[s.modalInput, { backgroundColor: c.bgInput, borderColor: c.border, color: c.text }]}
-                  value={phoneInput}
-                  onChangeText={setPhoneInput}
-                  placeholder="+14155551234"
-                  placeholderTextColor={c.textMuted}
-                  keyboardType="phone-pad"
-                  autoCapitalize="none"
-                />
-                {!!phoneMsg && (
-                  <Text style={[s.modalMsg, { color: phoneMsg.startsWith("Error") ? PALETTE.error : PALETTE.success }]}>{phoneMsg}</Text>
-                )}
-                <View style={s.modalBtns}>
-                  <TouchableOpacity style={[s.modalCancel, { borderColor: c.border }]} onPress={() => setPhoneModal(false)}>
-                    <Text style={[s.modalCancelText, { color: c.textMuted }]}>Cancel</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[s.modalOk, { backgroundColor: phoneInput.trim() ? c.brand : c.bgCardAlt }, phoneSaving && { opacity: 0.6 }]}
-                    onPress={sendPhoneOtp}
-                    disabled={!phoneInput.trim() || phoneSaving}
-                  >
-                    {phoneSaving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.modalOkText}>Send Code</Text>}
-                  </TouchableOpacity>
-                </View>
-              </>
-            ) : (
-              <>
-                <Text style={[s.modalTitle, { color: c.text }]}>Enter the Code</Text>
-                <Text style={[s.modalSub, { color: c.textMuted }]}>
-                  A 6-digit code was sent to {phoneInput}. Enter it below.
-                </Text>
-                <TextInput
-                  style={[s.modalInput, { backgroundColor: c.bgInput, borderColor: c.border, color: c.text, letterSpacing: 8, textAlign: "center", fontSize: 22 }]}
-                  value={otpInput}
-                  onChangeText={setOtpInput}
-                  placeholder="------"
-                  placeholderTextColor={c.textMuted}
-                  keyboardType="number-pad"
-                  maxLength={6}
-                />
-                {!!phoneMsg && (
-                  <Text style={[s.modalMsg, { color: phoneMsg.startsWith("Incorrect") ? PALETTE.error : PALETTE.success }]}>{phoneMsg}</Text>
-                )}
-                <View style={s.modalBtns}>
-                  <TouchableOpacity style={[s.modalCancel, { borderColor: c.border }]} onPress={() => setPhoneStep("number")}>
-                    <Text style={[s.modalCancelText, { color: c.textMuted }]}>← Back</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[s.modalOk, { backgroundColor: otpInput.length === 6 ? c.brand : c.bgCardAlt }, phoneSaving && { opacity: 0.6 }]}
-                    onPress={verifyPhoneOtp}
-                    disabled={otpInput.length !== 6 || phoneSaving}
-                  >
-                    {phoneSaving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.modalOkText}>Verify</Text>}
-                  </TouchableOpacity>
-                </View>
-                <TouchableOpacity onPress={sendPhoneOtp}>
-                  <Text style={[{ fontSize: 12, color: c.brand, textAlign: "center", fontWeight: "600" }]}>Didn't receive it? Resend</Text>
-                </TouchableOpacity>
-              </>
-            )}
-          </View>
-          </View>
-        </BlurOverlay>
-        </KeyboardAvoidingView>
-      </Modal>
-
-      {/* ── Change Email Modal ── */}
-      <Modal visible={emailModal} transparent animationType="slide" onRequestClose={() => { setEmailModal(false); setEmailMsg(""); setNewEmail(""); }}>
-        <BlurOverlay onPress={() => { setEmailModal(false); setEmailMsg(""); setNewEmail(""); }}>
-          <View style={s.overlayInner}>
-          <View style={[s.modalBox, { backgroundColor: c.bgCard, borderColor: c.border }]}>
-            <Text style={[s.modalTitle, { color: c.text }]}>Change Email</Text>
-            <Text style={[s.modalSub, { color: c.textMuted }]}>Current: {userEmail}</Text>
+      <AppModal
+        visible={phoneModal}
+        onClose={() => setPhoneModal(false)}
+        title={phoneStep === "number" ? "Verify Your Phone" : "Enter the Code"}
+      >
+        {phoneStep === "number" ? (
+          <>
+            <Text style={[s.modalSub, { color: c.textMuted }]}>
+              Enter your number with country code. We'll send a one-time SMS code. Your number is never shown to other users.
+            </Text>
             <TextInput
               style={[s.modalInput, { backgroundColor: c.bgInput, borderColor: c.border, color: c.text }]}
-              value={newEmail}
-              onChangeText={setNewEmail}
-              placeholder="new@email.com"
+              value={phoneInput}
+              onChangeText={setPhoneInput}
+              placeholder="+14155551234"
               placeholderTextColor={c.textMuted}
-              keyboardType="email-address"
+              keyboardType="phone-pad"
               autoCapitalize="none"
             />
-            {!!emailMsg && (
-              <Text style={[s.modalMsg, { color: emailMsg.startsWith("Error") ? PALETTE.error : PALETTE.success }]}>
-                {emailMsg}
-              </Text>
+            {!!phoneMsg && (
+              <Text style={[s.modalMsg, { color: phoneMsg.startsWith("Error") ? PALETTE.error : PALETTE.success }]}>{phoneMsg}</Text>
             )}
-            <View style={s.modalBtns}>
-              <TouchableOpacity style={[s.modalCancel, { borderColor: c.border }]} onPress={() => { setEmailModal(false); setEmailMsg(""); setNewEmail(""); }}>
-                <Text style={[s.modalCancelText, { color: c.textMuted }]}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[s.modalOk, { backgroundColor: newEmail.trim() ? c.brand : c.bgCardAlt }, emailSaving && { opacity: 0.6 }]}
-                onPress={changeEmail}
-                disabled={!newEmail.trim() || emailSaving}
-              >
-                {emailSaving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.modalOkText}>Send Verification</Text>}
-              </TouchableOpacity>
-            </View>
-          </View>
-          </View>
-        </BlurOverlay>
-      </Modal>
-
-      {/* ── Report Bug Modal ── */}
-      <Modal visible={reportModal} transparent animationType="slide" onRequestClose={() => setReportModal(false)}>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
-        <BlurOverlay onPress={() => setReportModal(false)}>
-          <View style={s.overlayInner}>
-          <View style={[s.modalBox, { backgroundColor: c.bgCard, borderColor: c.border }]}>
-            <Text style={[s.modalTitle, { color: c.text }]}>Report a Bug or Issue</Text>
-            {reportSent ? (
-              <View style={s.reportSent}>
-                <Text style={s.reportSentEmoji}>✅</Text>
-                <Text style={[s.reportSentText, { color: PALETTE.success }]}>Report sent! Thank you.</Text>
-              </View>
-            ) : (
-              <>
-                <TextInput
-                  style={[s.modalInput, { backgroundColor: c.bgInput, borderColor: c.border, color: c.text, height: 100, textAlignVertical: "top" }]}
-                  value={reportText}
-                  onChangeText={setReportText}
-                  placeholder="Describe the issue you encountered..."
-                  placeholderTextColor={c.textMuted}
-                  multiline
-                />
-                <View style={s.modalBtns}>
-                  <TouchableOpacity style={[s.modalCancel, { borderColor: c.border }]} onPress={() => setReportModal(false)}>
-                    <Text style={[s.modalCancelText, { color: c.textMuted }]}>Cancel</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[s.modalOk, { backgroundColor: reportText.trim() ? c.brand : c.bgCardAlt }, reportSaving && { opacity: 0.6 }]}
-                    onPress={submitReport}
-                    disabled={!reportText.trim() || reportSaving}
-                  >
-                    {reportSaving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.modalOkText}>Submit Report</Text>}
-                  </TouchableOpacity>
-                </View>
-              </>
-            )}
-          </View>
-          </View>
-        </BlurOverlay>
-        </KeyboardAvoidingView>
-      </Modal>
-
-      {/* ── Delete Account Modal ── */}
-      <Modal visible={deleteModal} transparent animationType="fade" onRequestClose={() => { setDeleteModal(false); setDeleteInput(""); }}>
-        <BlurOverlay onPress={() => { setDeleteModal(false); setDeleteInput(""); }}>
-          <View style={s.overlayCenter}>
-          <View style={[s.modalBox, { backgroundColor: c.bgCard, borderColor: PALETTE.error + "44", borderRadius: RADIUS.xl, borderBottomLeftRadius: RADIUS.xl, borderBottomRightRadius: RADIUS.xl }]}>
-            <Text style={[s.modalTitle, { color: c.text, textAlign: "center" }]}>⚠️ Delete Account</Text>
-            <Text style={[s.modalSub, { color: c.textMuted, textAlign: "center", lineHeight: 20 }]}>
-              This will permanently delete your profile, matches, goals, and all data. This cannot be undone.
-            </Text>
-            <Text style={[s.deleteHint, { color: c.textMuted }]}>
-              Type <Text style={{ color: PALETTE.error, fontWeight: "700" }}>DELETE</Text> to confirm:
+            <TouchableOpacity
+              style={[s.modalOk, { backgroundColor: phoneInput.trim() ? c.brand : c.bgCardAlt }, phoneSaving && { opacity: 0.6 }]}
+              onPress={sendPhoneOtp}
+              disabled={!phoneInput.trim() || phoneSaving}
+            >
+              {phoneSaving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.modalOkText}>Send Code</Text>}
+            </TouchableOpacity>
+          </>
+        ) : (
+          <>
+            <Text style={[s.modalSub, { color: c.textMuted }]}>
+              A 6-digit code was sent to {phoneInput}.
             </Text>
             <TextInput
-              style={[s.modalInput, { backgroundColor: c.bgCard, borderColor: PALETTE.error + "44", color: c.text }]}
-              value={deleteInput}
-              onChangeText={setDeleteInput}
-              placeholder="DELETE"
-              placeholderTextColor={c.textSecondary}
-              autoCapitalize="characters"
-              selectionColor={PALETTE.error}
+              style={[s.modalInput, { backgroundColor: c.bgInput, borderColor: c.border, color: c.text, letterSpacing: 8, textAlign: "center", fontSize: 22 }]}
+              value={otpInput}
+              onChangeText={setOtpInput}
+              placeholder="------"
+              placeholderTextColor={c.textMuted}
+              keyboardType="number-pad"
+              maxLength={6}
+              autoFocus
             />
-            <View style={s.modalBtns}>
-              <TouchableOpacity style={[s.modalCancel, { borderColor: c.border }]} onPress={() => { setDeleteModal(false); setDeleteInput(""); }}>
-                <Text style={[s.modalCancelText, { color: c.textMuted }]}>Cancel</Text>
+            {!!phoneMsg && (
+              <Text style={[s.modalMsg, { color: phoneMsg.startsWith("Incorrect") ? PALETTE.error : PALETTE.success }]}>{phoneMsg}</Text>
+            )}
+            <TouchableOpacity
+              style={[s.modalOk, { backgroundColor: otpInput.length === 6 ? c.brand : c.bgCardAlt }, phoneSaving && { opacity: 0.6 }]}
+              onPress={verifyPhoneOtp}
+              disabled={otpInput.length !== 6 || phoneSaving}
+            >
+              {phoneSaving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.modalOkText}>Verify</Text>}
+            </TouchableOpacity>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: SPACE[12] }}>
+              <TouchableOpacity style={[s.modalCancel, { borderColor: c.border, flex: 1 }]} onPress={() => setPhoneStep("number")}>
+                <Text style={[s.modalCancelText, { color: c.textMuted }]}>← Back</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[s.modalOk, { backgroundColor: deleteInput === "DELETE" ? PALETTE.error : c.bgCardAlt }, deleting && { opacity: 0.6 }]}
-                onPress={deleteAccount}
-                disabled={deleteInput !== "DELETE" || deleting}
-              >
-                {deleting ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.modalOkText}>Delete</Text>}
+              <TouchableOpacity onPress={sendPhoneOtp} style={{ flex: 1, alignItems: "center" }}>
+                <Text style={{ fontSize: 12, color: c.brand, fontWeight: "600" }}>Resend code</Text>
               </TouchableOpacity>
             </View>
+          </>
+        )}
+      </AppModal>
+
+      {/* ── Change Email Modal ── */}
+      <AppModal
+        visible={emailModal}
+        onClose={() => { setEmailModal(false); setEmailMsg(""); setNewEmail(""); }}
+        title="Change Email"
+      >
+        <Text style={[s.modalSub, { color: c.textMuted }]}>Current: {userEmail}</Text>
+        <TextInput
+          style={[s.modalInput, { backgroundColor: c.bgInput, borderColor: c.border, color: c.text }]}
+          value={newEmail}
+          onChangeText={setNewEmail}
+          placeholder="new@email.com"
+          placeholderTextColor={c.textMuted}
+          keyboardType="email-address"
+          autoCapitalize="none"
+        />
+        {!!emailMsg && (
+          <Text style={[s.modalMsg, { color: emailMsg.startsWith("Error") ? PALETTE.error : PALETTE.success }]}>
+            {emailMsg}
+          </Text>
+        )}
+        <TouchableOpacity
+          style={[s.modalOk, { backgroundColor: newEmail.trim() ? c.brand : c.bgCardAlt }, emailSaving && { opacity: 0.6 }]}
+          onPress={changeEmail}
+          disabled={!newEmail.trim() || emailSaving}
+        >
+          {emailSaving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.modalOkText}>Send Verification</Text>}
+        </TouchableOpacity>
+      </AppModal>
+
+      {/* ── Report Bug Modal ── */}
+      <AppModal
+        visible={reportModal}
+        onClose={() => setReportModal(false)}
+        title="Report a Bug or Issue"
+      >
+        {reportSent ? (
+          <View style={s.reportSent}>
+            <Text style={s.reportSentEmoji}>✅</Text>
+            <Text style={[s.reportSentText, { color: PALETTE.success }]}>Report sent! Thank you.</Text>
           </View>
-          </View>
-        </BlurOverlay>
-      </Modal>
+        ) : (
+          <>
+            <TextInput
+              style={[s.modalInput, { backgroundColor: c.bgInput, borderColor: c.border, color: c.text, height: 100, textAlignVertical: "top" }]}
+              value={reportText}
+              onChangeText={setReportText}
+              placeholder="Describe the issue you encountered..."
+              placeholderTextColor={c.textMuted}
+              multiline
+            />
+            <TouchableOpacity
+              style={[s.modalOk, { backgroundColor: reportText.trim() ? c.brand : c.bgCardAlt }, reportSaving && { opacity: 0.6 }]}
+              onPress={submitReport}
+              disabled={!reportText.trim() || reportSaving}
+            >
+              {reportSaving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.modalOkText}>Submit Report</Text>}
+            </TouchableOpacity>
+          </>
+        )}
+      </AppModal>
+
+      {/* ── Delete Account Modal ── */}
+      <AppModal
+        visible={deleteModal}
+        onClose={() => { setDeleteModal(false); setDeleteInput(""); }}
+        title="⚠️ Delete Account"
+        danger
+      >
+        <Text style={[s.modalSub, { color: c.textMuted, lineHeight: 20 }]}>
+          This will permanently delete your profile, matches, goals, and all data. This cannot be undone.
+        </Text>
+        <Text style={[s.deleteHint, { color: c.textMuted }]}>
+          Type <Text style={{ color: PALETTE.error, fontWeight: "700" }}>DELETE</Text> to confirm:
+        </Text>
+        <TextInput
+          style={[s.modalInput, { backgroundColor: c.bgInput, borderColor: PALETTE.error + "44", color: c.text }]}
+          value={deleteInput}
+          onChangeText={setDeleteInput}
+          placeholder="DELETE"
+          placeholderTextColor={c.textSecondary}
+          autoCapitalize="characters"
+          selectionColor={PALETTE.error}
+        />
+        <TouchableOpacity
+          style={[s.modalOk, { backgroundColor: deleteInput === "DELETE" ? PALETTE.error : c.bgCardAlt }, deleting && { opacity: 0.6 }]}
+          onPress={deleteAccount}
+          disabled={deleteInput !== "DELETE" || deleting}
+        >
+          {deleting ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.modalOkText}>Delete Forever</Text>}
+        </TouchableOpacity>
+      </AppModal>
     </SafeAreaView>
   );
 }
@@ -689,23 +653,17 @@ const s = StyleSheet.create({
   infoLabel: { fontSize: FONT.size.base },
   infoValue: { fontSize: FONT.size.base },
 
-  // Modals
-  overlay:       { flex: 1, backgroundColor: "#00000099", justifyContent: "flex-end" },
-  overlayInner:  { flex: 1, justifyContent: "flex-end" },
-  overlayCenter: { flex: 1, justifyContent: "center", paddingHorizontal: SPACE[20] },
-  modalBox:      { borderRadius: RADIUS.xl, borderWidth: 1, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, padding: SPACE[24], gap: SPACE[12] },
-  modalTitle:    { fontSize: FONT.size.lg, fontWeight: FONT.weight.black },
-  modalSub:      { fontSize: FONT.size.sm, lineHeight: 18 },
-  modalInput:    { borderRadius: RADIUS.lg, borderWidth: 1.5, paddingHorizontal: SPACE[14], paddingVertical: SPACE[12], fontSize: FONT.size.md },
-  modalMsg:      { fontSize: FONT.size.sm, lineHeight: 18 },
-  modalBtns:     { flexDirection: "row", gap: SPACE[10], marginTop: SPACE[4] },
-  modalCancel:   { flex: 1, paddingVertical: SPACE[14], borderRadius: RADIUS.lg, borderWidth: 1, alignItems: "center" },
+  // Modal content styles
+  modalSub:        { fontSize: FONT.size.sm, lineHeight: 18 },
+  modalInput:      { borderRadius: RADIUS.lg, borderWidth: 1.5, paddingHorizontal: SPACE[14], paddingVertical: SPACE[12], fontSize: FONT.size.md },
+  modalMsg:        { fontSize: FONT.size.sm, lineHeight: 18 },
+  modalCancel:     { paddingVertical: SPACE[14], borderRadius: RADIUS.lg, borderWidth: 1, alignItems: "center" },
   modalCancelText: { fontWeight: FONT.weight.bold },
-  modalOk:       { flex: 1, paddingVertical: SPACE[14], borderRadius: RADIUS.lg, alignItems: "center" },
-  modalOkText:   { color: "#fff", fontWeight: FONT.weight.extrabold },
+  modalOk:         { paddingVertical: SPACE[14], borderRadius: RADIUS.pill, alignItems: "center" },
+  modalOkText:     { color: "#fff", fontWeight: FONT.weight.extrabold, fontSize: FONT.size.base },
 
-  deleteHint: { fontSize: FONT.size.sm },
-  reportSent: { alignItems: "center", paddingVertical: SPACE[20], gap: SPACE[8] },
+  deleteHint:      { fontSize: FONT.size.sm },
+  reportSent:      { alignItems: "center", paddingVertical: SPACE[20], gap: SPACE[8] },
   reportSentEmoji: { fontSize: 40 },
   reportSentText:  { fontSize: FONT.size.md, fontWeight: FONT.weight.bold },
 });
