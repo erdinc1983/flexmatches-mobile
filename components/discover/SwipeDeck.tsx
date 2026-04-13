@@ -312,7 +312,7 @@ function SwipeCardContent({ user, status, onInfoPress }: {
 
         {/* Match score — top right */}
         <View style={[card.scorePill, { backgroundColor: scoreColor + "DD" }]}>
-          <Text style={card.scoreText}>{user.matchScore}% match</Text>
+          <Text style={card.scoreText}>{Math.max(0, Math.round(user.matchScore))}% match</Text>
         </View>
 
         {/* Name + meta overlay — bottom of photo */}
@@ -342,29 +342,36 @@ function SwipeCardContent({ user, status, onInfoPress }: {
       {/* ── Info section ───────────────────────────────────────────── */}
       <View style={[card.info, { backgroundColor: c.bgCard }]}>
 
-        {/* Reason chips — web style */}
-        <View style={card.reasonsRow}>
-          {user.reasons.length > 0 ? (
-            user.reasons.map((r) => (
-              <View key={r} style={[card.reasonChip, { backgroundColor: c.brandSubtle, borderColor: c.brandBorder }]}>
-                <Text style={[card.reasonChipText, { color: c.brand }]}>{reasonIcon(r)} {r}</Text>
-              </View>
-            ))
-          ) : (
-            <View style={[card.reasonChip, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}>
-              <Text style={[card.reasonChipText, { color: c.textMuted }]}>✨ New to FlexMatches</Text>
+        {/* Why chips — labeled section */}
+        {user.reasons.length > 0 && (
+          <View style={card.whySection}>
+            <Text style={[card.whyLabel, { color: c.textMuted }]}>WHY YOU MATCH</Text>
+            <View style={card.reasonsRow}>
+              {user.reasons.map((r) => (
+                <View key={r} style={[card.reasonChip, { backgroundColor: c.brandSubtle, borderColor: c.brandBorder }]}>
+                  <Text style={[card.reasonChipText, { color: c.brand }]}>{reasonIcon(r)} {r}</Text>
+                </View>
+              ))}
             </View>
-          )}
-        </View>
+          </View>
+        )}
+        {user.reasons.length === 0 && (
+          <View style={[card.reasonChip, { backgroundColor: c.bgCardAlt, borderColor: c.border, alignSelf: "flex-start" }]}>
+            <Text style={[card.reasonChipText, { color: c.textMuted }]}>✨ New to FlexMatches</Text>
+          </View>
+        )}
 
-        {/* Sports chips */}
+        {/* Sports chips — neutral label-style tags */}
         {sports.length > 0 && (
-          <View style={card.sports}>
-            {sports.map((sp) => (
-              <View key={sp} style={[card.sportChip, { backgroundColor: c.bgCardAlt, borderColor: c.borderMedium }]}>
-                <Text style={[card.sportText, { color: c.textSecondary }]}>{sp}</Text>
-              </View>
-            ))}
+          <View style={card.sportsSection}>
+            <Text style={[card.sportsLabel, { color: c.textMuted }]}>TRAINS</Text>
+            <View style={card.sports}>
+              {sports.map((sp) => (
+                <View key={sp} style={[card.sportChip, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}>
+                  <Text style={[card.sportText, { color: c.textSecondary }]}>{sp}</Text>
+                </View>
+              ))}
+            </View>
           </View>
         )}
 
@@ -479,14 +486,19 @@ const card = StyleSheet.create({
   // Info section
   info:       { flex: 1, padding: SPACE[14], gap: SPACE[10] },
 
-  // Reason chips (web style — pill chips, not row list)
-  reasonsRow:      { flexDirection: "row", flexWrap: "wrap", gap: SPACE[6] },
-  reasonChip:      { paddingHorizontal: SPACE[10], paddingVertical: 5, borderRadius: RADIUS.pill, borderWidth: 1 },
-  reasonChipText:  { fontSize: FONT.size.xs, fontWeight: FONT.weight.bold },
+  // "Why you match" section
+  whySection:    { gap: SPACE[6] },
+  whyLabel:      { fontSize: 9, fontWeight: FONT.weight.extrabold, letterSpacing: 0.8, textTransform: "uppercase" },
+  reasonsRow:    { flexDirection: "row", flexWrap: "wrap", gap: SPACE[6] },
+  reasonChip:    { paddingHorizontal: SPACE[10], paddingVertical: 5, borderRadius: RADIUS.pill, borderWidth: 1 },
+  reasonChipText:{ fontSize: FONT.size.xs, fontWeight: FONT.weight.bold },
 
-  sports:     { flexDirection: "row", flexWrap: "wrap", gap: SPACE[6] },
-  sportChip:  { paddingHorizontal: SPACE[10], paddingVertical: 5, borderRadius: RADIUS.md, borderWidth: 1 },
-  sportText:  { fontSize: FONT.size.xs, fontWeight: FONT.weight.semibold },
+  // Sports section — neutral tag style, clearly different from reasons
+  sportsSection: { gap: SPACE[4] },
+  sportsLabel:   { fontSize: 9, fontWeight: FONT.weight.extrabold, letterSpacing: 0.8, textTransform: "uppercase" },
+  sports:    { flexDirection: "row", flexWrap: "wrap", gap: SPACE[4] },
+  sportChip: { paddingHorizontal: SPACE[8], paddingVertical: 3, borderRadius: RADIUS.sm, borderWidth: 1 },
+  sportText: { fontSize: FONT.size.xs, fontWeight: FONT.weight.medium },
 
   statusRow:  { flexDirection: "row", alignItems: "center", gap: SPACE[6], borderRadius: RADIUS.md, borderWidth: 1, padding: SPACE[10] },
   statusText: { fontSize: FONT.size.xs, fontWeight: FONT.weight.semibold },

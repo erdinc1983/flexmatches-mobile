@@ -222,7 +222,7 @@ export default function LeaderboardScreen() {
                   onPress={() => setTab(t)}
                 >
                   <Text style={[s.tabBtnText, { color: tab === t ? "#fff" : c.textMuted }]}>
-                    {t === "global" ? "🌍 Global" : "🤝 Friends"}
+                    {t === "global" ? "Global" : "Friends"}
                   </Text>
                 </TouchableOpacity>
               ))}

@@ -18,6 +18,7 @@ const SCREEN_W = Dimensions.get("window").width;
 const H_PAD    = 20; // home screen's paddingHorizontal SPACE[20]
 const CARD_GAP = 12; // gap in contentContainerStyle SPACE[12]
 const CARD_W   = (SCREEN_W - H_PAD * 2 - CARD_GAP) / 2;
+const CARD_H   = 280;
 
 // Cartoon fallback — same logic as Avatar.tsx
 const WEB_BASE = "https://flexmatches.com";
@@ -44,7 +45,7 @@ export function BestMatchesSection({ users, onPress }: Props) {
   return (
     <View style={{ gap: SPACE[12] }}>
       <SectionHeader
-        title="Today's Matches"
+        title="Training Partners Near You"
         action={{ label: "See all", onPress: () => router.push("/(tabs)/discover") }}
       />
       <ScrollView
@@ -114,7 +115,7 @@ function MatchPhotoCard({ user, onPress }: { user: SuggestedUser; onPress: () =>
           </View>
         )}
         <TouchableOpacity style={s.connectBtn} onPress={onPress} activeOpacity={0.85}>
-          <Text style={s.connectText}>Connect</Text>
+          <Text style={s.connectText}>Train Together</Text>
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
@@ -122,9 +123,9 @@ function MatchPhotoCard({ user, onPress }: { user: SuggestedUser; onPress: () =>
 }
 
 const s = StyleSheet.create({
-  card:      { width: CARD_W, height: 240, borderRadius: RADIUS.xl, overflow: "hidden" },
-  photo:     { position: "absolute", top: 0, left: 0, width: CARD_W, height: 240 },
-  gradient:  { position: "absolute", bottom: 0, left: 0, right: 0, height: 160 },
+  card:      { width: CARD_W, height: CARD_H, borderRadius: RADIUS.xl, overflow: "hidden" },
+  photo:     { position: "absolute", top: 0, left: 0, width: CARD_W, height: CARD_H },
+  gradient:  { position: "absolute", bottom: 0, left: 0, right: 0, height: 180 },
   info:      { position: "absolute", bottom: 0, left: 0, right: 0, padding: SPACE[14], gap: SPACE[6] },
   labelName: { ...TYPE.cardTitle, color: "#fff", letterSpacing: -0.3 },
   tagsRow:   { flexDirection: "row", gap: SPACE[4] },

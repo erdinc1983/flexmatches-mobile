@@ -616,7 +616,9 @@ export default function ProfileScreen() {
           onPress={() => router.push("/referral")}
           activeOpacity={0.8}
         >
-          <Text style={s.inviteEmoji}>📣</Text>
+          <View style={[s.inviteIconWrap, { backgroundColor: "#FF450018" }]}>
+            <Icon name="matchActive" size={20} color="#FF4500" />
+          </View>
           <View style={{ flex: 1 }}>
             <Text style={[s.inviteTitle, { color: c.text }]}>Invite Friends</Text>
             <Text style={[s.inviteSub, { color: c.textMuted }]}>Earn rewards for every friend who joins</Text>
@@ -703,14 +705,14 @@ export default function ProfileScreen() {
 }
 
 // ─── Accordion Section ────────────────────────────────────────────────────────
-function AccordionSection({ title, emoji, defaultOpen, colors, children }: {
-  title: string; emoji: string; defaultOpen?: boolean; colors: any; children: React.ReactNode;
+function AccordionSection({ title, defaultOpen, colors, children }: {
+  title: string; defaultOpen?: boolean; colors: any; children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(!!defaultOpen);
   return (
     <View style={[acc.wrap, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
       <TouchableOpacity style={acc.header} onPress={() => setOpen(o => !o)} activeOpacity={0.7}>
-        <Text style={acc.emoji}>{emoji}</Text>
+        <View style={[acc.accent, { backgroundColor: colors.brand }]} />
         <Text style={[acc.title, { color: colors.text }]}>{title}</Text>
         <Text style={[acc.chevron, { color: colors.textMuted }]}>{open ? "▲" : "▽"}</Text>
       </TouchableOpacity>
@@ -770,7 +772,9 @@ function ViewMode({ profile, workoutsThisMonth, levelColor, earnedBadges, userTi
       {/* Verification banner */}
       {phoneVerified ? (
         <View style={[s.verifiedBanner, { backgroundColor: "rgba(34,197,94,0.08)", borderColor: "rgba(34,197,94,0.30)" }]}>
-          <Text style={s.verifiedIcon}>✓</Text>
+          <View style={[s.verifiedIconWrap, { backgroundColor: "rgba(34,197,94,0.15)" }]}>
+            <Icon name="checkActive" size={18} color="#22C55E" />
+          </View>
           <View style={{ flex: 1 }}>
             <Text style={[s.verifiedTitle, { color: "#22C55E" }]}>Phone Verified</Text>
             <Text style={[s.verifiedSub, { color: c.textMuted }]}>Your profile shows a trusted badge to others</Text>
@@ -782,10 +786,12 @@ function ViewMode({ profile, workoutsThisMonth, levelColor, earnedBadges, userTi
           onPress={onVerifyPress}
           activeOpacity={0.8}
         >
-          <Text style={s.verifiedIcon}>📱</Text>
+          <View style={[s.verifiedIconWrap, { backgroundColor: c.brandSubtle }]}>
+            <Icon name="notification" size={18} color={c.brand} />
+          </View>
           <View style={{ flex: 1 }}>
             <Text style={[s.verifiedTitle, { color: c.text }]}>Get your Verified badge</Text>
-            <Text style={[s.verifiedSub, { color: c.textMuted }]}>Verify your phone — show others you're a real person</Text>
+            <Text style={[s.verifiedSub, { color: c.textMuted }]}>Verify your phone — show others you're real</Text>
           </View>
           <Text style={{ fontSize: 13, color: c.brand, fontWeight: "700" }}>Verify →</Text>
         </TouchableOpacity>
@@ -805,7 +811,7 @@ function ViewMode({ profile, workoutsThisMonth, levelColor, earnedBadges, userTi
       </View>
 
       {/* 2×2 info grid */}
-      <AccordionSection title="Stats" emoji="📊" defaultOpen colors={c}>
+      <AccordionSection title="Stats" defaultOpen colors={c}>
         <View style={s.infoGrid}>
           <InfoCard label="Activities"  value={(profile.sports ?? []).length > 0 ? (profile.sports ?? []).slice(0, 3).join(", ") : "Not set"} />
           <InfoCard label="Best Time"   value={getBestTime(profile.availability)} />
@@ -818,7 +824,7 @@ function ViewMode({ profile, workoutsThisMonth, levelColor, earnedBadges, userTi
 
       {/* 1 — Training */}
       {hasTraining && (
-        <AccordionSection title="Training" emoji="⚽" colors={c}>
+        <AccordionSection title="Training" colors={c}>
           {(profile.sports ?? []).length > 0 && (
             <View style={[s.sportsWrap, { marginBottom: SPACE[12] }]}>
               {(profile.sports ?? []).map(sport => (
@@ -850,7 +856,7 @@ function ViewMode({ profile, workoutsThisMonth, levelColor, earnedBadges, userTi
       )}
 
       {/* 2 — Progress */}
-      <AccordionSection title="Progress" emoji="📈" colors={c}>
+      <AccordionSection title="Progress" colors={c}>
         {/* Consistency score */}
         <View style={[acc.innerCard, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}>
           <View style={s.consistencyHeader}>
@@ -914,7 +920,7 @@ function ViewMode({ profile, workoutsThisMonth, levelColor, earnedBadges, userTi
           <View style={s.trustRow}>
             {profile.sessions_completed > 0 && (
               <View style={[s.trustPill, { backgroundColor: "#22C55E18", borderColor: "#22C55E44" }]}>
-                <Text style={{ fontSize: 14 }}>🤝</Text>
+                <Icon name="checkActive" size={16} color="#22C55E" />
                 <View>
                   <Text style={[s.trustPillValue, { color: "#22C55E" }]}>{profile.sessions_completed}</Text>
                   <Text style={[s.trustPillLabel, { color: c.textMuted }]}>sessions done</Text>
@@ -926,7 +932,7 @@ function ViewMode({ profile, workoutsThisMonth, levelColor, earnedBadges, userTi
                 backgroundColor: profile.response_rate >= 80 ? "#22C55E18" : profile.response_rate >= 50 ? "#F59E0B18" : "#EF444418",
                 borderColor:     profile.response_rate >= 80 ? "#22C55E44" : profile.response_rate >= 50 ? "#F59E0B44" : "#EF444444",
               }]}>
-                <Text style={{ fontSize: 14 }}>⚡</Text>
+                <Icon name="clock" size={16} color={profile.response_rate >= 80 ? "#22C55E" : profile.response_rate >= 50 ? "#F59E0B" : "#EF4444"} />
                 <View>
                   <Text style={[s.trustPillValue, { color: profile.response_rate >= 80 ? "#22C55E" : profile.response_rate >= 50 ? "#F59E0B" : "#EF4444" }]}>
                     {profile.response_rate}%
@@ -941,7 +947,7 @@ function ViewMode({ profile, workoutsThisMonth, levelColor, earnedBadges, userTi
 
       {/* 3 — Details */}
       {hasDetails && (
-        <AccordionSection title="Details" emoji="ℹ️" colors={c}>
+        <AccordionSection title="Details" colors={c}>
           {profile.training_intent && (
             <View style={[s.intentRow, { backgroundColor: c.brandSubtle, borderColor: c.brandBorder, marginBottom: SPACE[10] }]}>
               <Text style={[s.intentText, { color: c.brand }]}>
@@ -973,7 +979,7 @@ function ViewMode({ profile, workoutsThisMonth, levelColor, earnedBadges, userTi
 
       {/* 4 — Career */}
       {hasCareer && (
-        <AccordionSection title="Career" emoji="💼" colors={c}>
+        <AccordionSection title="Career" colors={c}>
           {profile.company         && <Text style={[s.careerRow, { color: c.textSecondary }]}>{profile.company}</Text>}
           {profile.industry        && <Text style={[s.careerRow, { color: c.textSecondary }]}>{profile.industry}</Text>}
           {profile.education_level && <Text style={[s.careerRow, { color: c.textSecondary }]}>{profile.education_level}</Text>}
@@ -1402,10 +1408,10 @@ const s = StyleSheet.create({
   completeMissing:{ fontSize: FONT.size.sm },
 
   // Verification banner
-  verifiedBanner: { flexDirection: "row", alignItems: "center", gap: SPACE[12], borderRadius: RADIUS.xl, borderWidth: 1, padding: SPACE[16] },
-  verifiedIcon:   { fontSize: 22 },
-  verifiedTitle:  { fontSize: FONT.size.base, fontWeight: FONT.weight.bold },
-  verifiedSub:    { fontSize: FONT.size.xs, marginTop: 2, lineHeight: 16 },
+  verifiedBanner:  { flexDirection: "row", alignItems: "center", gap: SPACE[12], borderRadius: RADIUS.xl, borderWidth: 1, padding: SPACE[16] },
+  verifiedIconWrap:{ width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  verifiedTitle:   { fontSize: FONT.size.base, fontWeight: FONT.weight.bold },
+  verifiedSub:     { fontSize: FONT.size.xs, marginTop: 2, lineHeight: 16 },
 
   // View mode
   bio:              { fontSize: FONT.size.md, textAlign: "center", lineHeight: 22 },
@@ -1519,7 +1525,7 @@ const s = StyleSheet.create({
   logoutBtn:  { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: SPACE[8], marginTop: SPACE[8], paddingVertical: SPACE[16], borderRadius: RADIUS.xl, borderWidth: 1 },
   logoutText: { fontWeight: FONT.weight.bold, fontSize: FONT.size.sm },
   inviteBtn:      { flexDirection: "row", alignItems: "center", gap: SPACE[12], borderRadius: RADIUS.xl, padding: SPACE[16], borderWidth: 1, marginTop: SPACE[4] },
-  inviteEmoji:    { fontSize: 24 },
+  inviteIconWrap: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
   inviteTitle:    { fontSize: FONT.size.sm, fontWeight: FONT.weight.bold },
   inviteSub:      { fontSize: FONT.size.xs, marginTop: 2 },
   proUpgradeBtn:  { backgroundColor: "#FF4500", borderRadius: RADIUS.xl, paddingVertical: SPACE[16], alignItems: "center", shadowColor: "#FF4500", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 5 },
@@ -1532,7 +1538,7 @@ const s = StyleSheet.create({
 const acc = StyleSheet.create({
   wrap:      { borderRadius: RADIUS.xl, borderWidth: 1, marginBottom: SPACE[2], overflow: "hidden" },
   header:    { flexDirection: "row", alignItems: "center", paddingHorizontal: SPACE[16], paddingVertical: SPACE[14], gap: SPACE[10] },
-  emoji:     { fontSize: 18 },
+  accent:    { width: 3, height: 16, borderRadius: 2 },
   title:     { flex: 1, fontSize: FONT.size.md, fontWeight: FONT.weight.bold },
   chevron:   { fontSize: 11 },
   body:      { borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: SPACE[16], paddingVertical: SPACE[14] },

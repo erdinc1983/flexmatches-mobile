@@ -1,281 +1,308 @@
 /**
  * PrimaryActionCard
  *
- * Renders the top "what to do next" card.
- * Driven by a PrimaryAction discriminated union — each variant
- * has its own copy, icon, colour, and CTA.
+ * Full-width photo hero card — every variant uses a sport/gym Unsplash photo
+ * with a gradient overlay so there's always a rich visual at the top of Home.
+ *
+ * Variants:
+ *   session_today   → sport photo + dark gradient
+ *   session_pending → sport photo + blue gradient
+ *   match_request   → people-training photo + brand gradient
+ *   unread          → gym photo + blue gradient
+ *   at_gym_log      → gym photo + green gradient
+ *   log_streak      → gym/workout photo + orange gradient
+ *   done            → local gym-done.jpeg (unchanged)
  */
 
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet, ImageBackground, ActivityIndicator } from "react-native";
+import {
+  View, Text, TouchableOpacity, StyleSheet,
+  ImageBackground, ActivityIndicator,
+} from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import { useTheme, SPACE, FONT, RADIUS, TYPE, BRAND } from "../../lib/theme";
+import { useTheme, SPACE, FONT, RADIUS, TYPE } from "../../lib/theme";
 import { Icon, IconName } from "../Icon";
 import type { PrimaryAction } from "./types";
 
-// Gym photo shown when workout is already logged for the day
-// TODO: Replace gym-done.jpg with a real gym photo (bench press + shoulder training scene)
-const GYM_PHOTO = require("../../assets/images/gym-done.jpeg");
+// ─── Local asset ──────────────────────────────────────────────────────────────
+const GYM_DONE_PHOTO = require("../../assets/images/gym-done.jpeg");
 
-// Light-mode friendly green surface tokens (not in PALETTE which is shared/dark-only)
-const G = {
-  darkBg:     "#0D2D1A",
-  darkBorder: "#166534",
-  darkIcon:   "#16A34A22",
-  lightBg:    "#ECFDF5",
-  lightBorder:"#BBF7D0",
-  lightIcon:  "#D1FAE5",
-  text:       "#16A34A",
-  textSub:    "#15803D",
-} as const;
+// ─── Unsplash sport photos ────────────────────────────────────────────────────
+const SPORT_PHOTOS: Record<string, string> = {
+  running:    "https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?w=900&q=80",
+  cycling:    "https://images.unsplash.com/photo-1541625602330-2277a4c46182?w=900&q=80",
+  swimming:   "https://images.unsplash.com/photo-1560090995-01632a28895b?w=900&q=80",
+  yoga:       "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=900&q=80",
+  pilates:    "https://images.unsplash.com/photo-1518611012118-696072aa579a?w=900&q=80",
+  boxing:     "https://images.unsplash.com/photo-1549719386-74dfcbf7dbed?w=900&q=80",
+  tennis:     "https://images.unsplash.com/photo-1599391398131-cd12dfc6c24e?w=900&q=80",
+  basketball: "https://images.unsplash.com/photo-1546519638-68e109498ffc?w=900&q=80",
+  hiking:     "https://images.unsplash.com/photo-1551632811-561732d1e306?w=900&q=80",
+  climbing:   "https://images.unsplash.com/photo-1522163182402-834f871fd851?w=900&q=80",
+  crossfit:   "https://images.unsplash.com/photo-1583454110551-21f2fa2afe61?w=900&q=80",
+  volleyball: "https://images.unsplash.com/photo-1612872087720-bb876e2e67d1?w=900&q=80",
+  soccer:     "https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=900&q=80",
+  gym:        "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=900&q=80",
+  weightlifting: "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=900&q=80",
+  default:    "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=900&q=80",
+};
 
+function getSportPhoto(sport?: string | null): string {
+  if (!sport) return SPORT_PHOTOS.default;
+  const lower = sport.toLowerCase();
+  for (const [key, url] of Object.entries(SPORT_PHOTOS)) {
+    if (lower.includes(key)) return url;
+  }
+  return SPORT_PHOTOS.default;
+}
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 type Props = {
   action:       PrimaryAction;
   onLogWorkout: () => void;
   checkingIn?:  boolean;
 };
 
-type CardConfig = {
-  eyebrow:   string;
-  title:     string;
-  subtitle:  string;
-  ctaLabel:  string;
-  ctaAction: () => void;
-  iconName:  IconName;
-  iconColor: string;
-  iconBg:    string;
-  cardBg:    string;
-  cardBorder:string;
-  ctaBg:     string;
-  isHero?:   boolean;
-};
-
+// ─── Component ────────────────────────────────────────────────────────────────
 export function PrimaryActionCard({ action, onLogWorkout, checkingIn }: Props) {
-  const { theme, isDark } = useTheme();
+  const { theme } = useTheme();
   const c = theme.colors;
 
   const isLogAction = action.kind === "log_streak" || action.kind === "at_gym_log";
-  const cfg = getConfig(action, c, isDark, onLogWorkout);
 
-  // "done" variant: full gym photo card
+  // ── "done" — local photo, unchanged ─────────────────────────────────────────
   if (action.kind === "done") {
     return (
       <ImageBackground
-        source={GYM_PHOTO}
-        style={s.doneCard}
-        imageStyle={{ borderRadius: RADIUS.xl }}
+        source={GYM_DONE_PHOTO}
+        style={s.card}
+        imageStyle={{ borderRadius: RADIUS.xxl }}
         resizeMode="cover"
       >
-        {/* Dark gradient overlay — bottom-heavy so text readable */}
         <LinearGradient
-          colors={["rgba(0,0,0,0.0)", "rgba(0,0,0,0.60)"]}
-          style={[StyleSheet.absoluteFill, { borderRadius: RADIUS.xl }]}
+          colors={["rgba(0,0,0,0.0)", "rgba(0,0,0,0.68)"]}
+          style={[StyleSheet.absoluteFill, { borderRadius: RADIUS.xxl }]}
         />
-
-        {/* Bottom content */}
-        <View style={s.doneContent}>
-          <View style={s.doneBadge}>
-            <Icon name="checkActive" size={13} color="#22C55E" />
-            <Text style={s.doneBadgeText}>Workout Logged</Text>
+        <View style={s.content}>
+          <View style={s.pill}>
+            <Icon name="checkActive" size={12} color="#22C55E" />
+            <Text style={[s.pillText, { color: "#22C55E" }]}>Workout Logged</Text>
           </View>
-          <Text style={s.doneStreak}>
-            {action.streak > 0 ? `🔥 ${action.streak}-day streak` : "First workout done!"}
+          <Text style={s.title}>
+            {action.streak > 0 ? `${action.streak}-day streak` : "First workout done"}
           </Text>
-          <Text style={s.doneSub}>Come back tomorrow to keep it going.</Text>
+          <Text style={s.sub}>Come back tomorrow to keep it going.</Text>
         </View>
       </ImageBackground>
     );
   }
 
-  // Hero variant — full orange gradient (streak / log workout)
-  if (cfg.isHero) {
-    return (
+  // ── All other variants — Unsplash photo + gradient ───────────────────────────
+  const cfg = getPhotoConfig(action, onLogWorkout);
+
+  return (
+    <ImageBackground
+      source={{ uri: cfg.photoUrl }}
+      style={s.card}
+      imageStyle={{ borderRadius: RADIUS.xxl }}
+      resizeMode="cover"
+    >
+      {/* Gradient overlay */}
       <LinearGradient
-        colors={["#FFB347", "#FF7C1F", "#E03200"]}
+        colors={cfg.gradient as [string, string, string]}
         start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={s.hero}
-      >
-        {/* Bottom wave decoration */}
-        <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-          <View style={s.waveBottom1} />
-          <View style={s.waveBottom2} />
+        end={{ x: 0, y: 1 }}
+        style={[StyleSheet.absoluteFill, { borderRadius: RADIUS.xxl }]}
+      />
+
+      {/* Content */}
+      <View style={s.content}>
+        {/* Eyebrow pill */}
+        <View style={[s.pill, { backgroundColor: cfg.pillBg }]}>
+          <Icon name={cfg.iconName} size={12} color="#fff" />
+          <Text style={s.pillText}>{cfg.eyebrow}</Text>
         </View>
 
-        <Text style={s.heroTitle}>{cfg.title}</Text>
-        <Text style={s.heroSub}>{cfg.subtitle}</Text>
+        <Text style={s.title}>{cfg.title}</Text>
+        <Text style={s.sub}>{cfg.subtitle}</Text>
+
+        {/* CTA */}
         <TouchableOpacity
-          style={[s.heroBtn, isLogAction && checkingIn && { opacity: 0.6 }]}
+          style={[s.cta, { backgroundColor: cfg.ctaBg },
+            isLogAction && checkingIn && { opacity: 0.6 }]}
           onPress={cfg.ctaAction}
           disabled={isLogAction && checkingIn}
           activeOpacity={0.85}
         >
           {isLogAction && checkingIn
             ? <ActivityIndicator color="#fff" size="small" />
-            : <Text style={s.heroBtnText}>{cfg.ctaLabel}</Text>
+            : <Text style={s.ctaText}>{cfg.ctaLabel}</Text>
           }
         </TouchableOpacity>
-      </LinearGradient>
-    );
-  }
-
-  return (
-    <View style={[s.card, { backgroundColor: cfg.cardBg, borderColor: cfg.cardBorder }]}>
-      <View style={s.top}>
-        <View style={[s.iconWrap, { backgroundColor: cfg.iconBg }]}>
-          <Icon name={cfg.iconName} size={22} color={cfg.iconColor} />
-        </View>
-        <View style={{ flex: 1, gap: 3 }}>
-          <Text style={[s.eyebrow, { color: cfg.iconColor }]}>{cfg.eyebrow}</Text>
-          <Text style={[s.title, { color: c.text }]}>{cfg.title}</Text>
-          <Text style={[s.subtitle, { color: c.textMuted }]}>{cfg.subtitle}</Text>
-        </View>
       </View>
-      <TouchableOpacity
-        style={[s.cta, { backgroundColor: cfg.ctaBg }, isLogAction && checkingIn && { opacity: 0.6 }]}
-        onPress={cfg.ctaAction}
-        disabled={isLogAction && checkingIn}
-        activeOpacity={0.85}
-      >
-        {isLogAction && checkingIn
-          ? <ActivityIndicator color="#fff" size="small" />
-          : <Text style={s.ctaText}>{cfg.ctaLabel}</Text>
-        }
-      </TouchableOpacity>
-    </View>
+    </ImageBackground>
   );
 }
 
-// ─── Config per action kind ────────────────────────────────────────────────────
-function getConfig(
-  action:       PrimaryAction,
-  c:            ReturnType<typeof useTheme>["theme"]["colors"],
-  isDark:       boolean,
-  onLogWorkout: () => void,
-): CardConfig {
-  const greenIconBg  = isDark ? G.darkBg     : G.lightIcon;
-  const greenBorder  = isDark ? G.darkBorder : G.lightBorder;
-  const blueIconBg   = isDark ? "#0D1A2D"    : "#EFF6FF";
-  const blueBorder   = isDark ? "#1E40AF44"  : "#BFDBFE";
+// ─── Photo config per variant ─────────────────────────────────────────────────
+type PhotoConfig = {
+  photoUrl:  string;
+  gradient:  string[];
+  pillBg:    string;
+  eyebrow:   string;
+  title:     string;
+  subtitle:  string;
+  ctaLabel:  string;
+  ctaAction: () => void;
+  ctaBg:     string;
+  iconName:  IconName;
+};
 
+function getPhotoConfig(action: PrimaryAction, onLogWorkout: () => void): PhotoConfig {
   switch (action.kind) {
     case "session_today":
       return {
-        eyebrow:    "SESSION TODAY",
-        title:      `${action.sport} with ${action.partnerName}`,
-        subtitle:   action.time ? `Scheduled for ${action.time}` : "Confirmed — open chat to coordinate.",
-        ctaLabel:   "Open Chat →",
-        ctaAction:  () => router.push("/(tabs)/messages"),
-        iconName:   "calendar",
-        iconColor:  "#22C55E",
-        iconBg:     greenIconBg,
-        cardBg:     c.bgCard,
-        cardBorder: greenBorder,
-        ctaBg:      "#16A34A",
+        photoUrl:  getSportPhoto(action.sport),
+        gradient:  ["rgba(0,0,0,0.05)", "rgba(0,0,0,0.35)", "rgba(0,0,0,0.82)"],
+        pillBg:    "rgba(34,197,94,0.85)",
+        eyebrow:   "SESSION TODAY",
+        title:     `${action.sport} with ${action.partnerName}`,
+        subtitle:  action.time ? `Confirmed · ${action.time}` : "Confirmed — tap to open chat",
+        ctaLabel:  "Open Chat",
+        ctaAction: () => router.push("/(tabs)/messages"),
+        ctaBg:     "#16A34A",
+        iconName:  "calendar",
       };
+
     case "session_pending":
       return {
-        eyebrow:    "SESSION REQUEST",
-        title:      `${action.partnerName} proposed a ${action.sport} session`,
-        subtitle:   "Tap to view the details and respond.",
-        ctaLabel:   "View Request →",
-        ctaAction:  () => router.push("/(tabs)/matches" as any),
-        iconName:   "calendar",
-        iconColor:  "#3B82F6",
-        iconBg:     blueIconBg,
-        cardBg:     c.bgCard,
-        cardBorder: blueBorder,
-        ctaBg:      "#2563EB",
+        photoUrl:  getSportPhoto(action.sport),
+        gradient:  ["rgba(0,0,0,0.05)", "rgba(0,0,0,0.35)", "rgba(0,0,0,0.82)"],
+        pillBg:    "rgba(59,130,246,0.85)",
+        eyebrow:   "SESSION REQUEST",
+        title:     `${action.partnerName} wants to train`,
+        subtitle:  `Proposed a ${action.sport} session — respond now`,
+        ctaLabel:  "View Request",
+        ctaAction: () => router.push("/(tabs)/matches" as any),
+        ctaBg:     "#2563EB",
+        iconName:  "calendar",
       };
-    case "unread":
-      return {
-        eyebrow:    "UNREAD MESSAGES",
-        title:      `${action.count} unread message${action.count > 1 ? "s" : ""}`,
-        subtitle:   "Your training partners are waiting.",
-        ctaLabel:   "Open Chat →",
-        ctaAction:  () => router.push("/(tabs)/messages"),
-        iconName:   "chatActive",
-        iconColor:  "#3B82F6",
-        iconBg:     blueIconBg,
-        cardBg:     c.bgCard,
-        cardBorder: blueBorder,
-        ctaBg:      "#2563EB",
-      };
+
     case "match_request":
       return {
-        eyebrow:    "NEW REQUEST",
-        title:      `${action.requesterName} wants to train with you`,
-        subtitle:   "Review their profile and respond.",
-        ctaLabel:   "Review →",
-        ctaAction:  () => router.push("/(tabs)/matches" as any),
-        iconName:   "matchActive",
-        iconColor:  c.brand,
-        iconBg:     c.brandSubtle,
-        cardBg:     c.bgCard,
-        cardBorder: c.brandBorder,
-        ctaBg:      c.brand,
+        photoUrl:  SPORT_PHOTOS.default,
+        gradient:  ["rgba(255,69,0,0.15)", "rgba(200,51,0,0.55)", "rgba(160,30,0,0.90)"],
+        pillBg:    "rgba(255,69,0,0.85)",
+        eyebrow:   "TRAINING REQUEST",
+        title:     `${action.requesterName} wants to train with you`,
+        subtitle:  "Review their profile and accept to start chatting",
+        ctaLabel:  "Review Profile",
+        ctaAction: () => router.push("/(tabs)/matches" as any),
+        ctaBg:     "#FF4500",
+        iconName:  "matchActive",
       };
+
+    case "unread":
+      return {
+        photoUrl:  SPORT_PHOTOS.gym,
+        gradient:  ["rgba(0,0,0,0.05)", "rgba(0,0,0,0.35)", "rgba(15,40,80,0.88)"],
+        pillBg:    "rgba(59,130,246,0.85)",
+        eyebrow:   "UNREAD MESSAGES",
+        title:     `${action.count} message${action.count > 1 ? "s" : ""} waiting`,
+        subtitle:  "Your training partners are waiting for you",
+        ctaLabel:  "Open Chat",
+        ctaAction: () => router.push("/(tabs)/messages"),
+        ctaBg:     "#2563EB",
+        iconName:  "chatActive",
+      };
+
     case "at_gym_log":
       return {
-        eyebrow:    "YOU'RE AT THE GYM",
-        title:      action.streak > 0 ? `${action.streak}-day streak — log this session` : "Log this gym session",
-        subtitle:   "Quick check-in keeps your streak alive.",
-        ctaLabel:   "Log Workout →",
-        ctaAction:  onLogWorkout,
-        iconName:   "gymActive",
-        iconColor:  "#22C55E",
-        iconBg:     greenIconBg,
-        cardBg:     c.bgCard,
-        cardBorder: greenBorder,
-        ctaBg:      "#16A34A",
+        photoUrl:  SPORT_PHOTOS.gym,
+        gradient:  ["rgba(0,0,0,0.05)", "rgba(0,0,0,0.30)", "rgba(5,30,15,0.88)"],
+        pillBg:    "rgba(34,197,94,0.85)",
+        eyebrow:   "YOU'RE AT THE GYM",
+        title:     action.streak > 0
+          ? `${action.streak}-day streak — log this session`
+          : "Log this gym session",
+        subtitle:  "Quick tap keeps your streak alive",
+        ctaLabel:  "Log Workout",
+        ctaAction: onLogWorkout,
+        ctaBg:     "#16A34A",
+        iconName:  "gymActive",
       };
+
     case "log_streak":
     default:
       return {
-        eyebrow:    action.streak > 0 ? "DON'T BREAK IT" : "START TODAY",
-        title:      action.streak > 0 ? `${action.streak}-day streak on the line` : "Start your first streak",
-        subtitle:   action.streak > 0 ? "Every session strengthens the habit. Keep it going." : "Log your first workout to begin your streak.",
-        ctaLabel:   "Log Workout",
-        ctaAction:  onLogWorkout,
-        iconName:   "streakActive",
-        iconColor:  c.brand,
-        iconBg:     c.brandSubtle,
-        cardBg:     c.bgCard,
-        cardBorder: c.brandBorder,
-        ctaBg:      "#CC3700",
-        isHero:     true,
+        photoUrl:  SPORT_PHOTOS.default,
+        gradient:  ["rgba(255,100,0,0.20)", "rgba(220,60,0,0.55)", "rgba(180,30,0,0.92)"],
+        pillBg:    "rgba(255,69,0,0.85)",
+        eyebrow:   (action as any).streak > 0 ? "KEEP YOUR STREAK" : "START TODAY",
+        title:     (action as any).streak > 0
+          ? `Day ${(action as any).streak} — don't stop now`
+          : "Log your first workout",
+        subtitle:  (action as any).streak > 0
+          ? "Every session builds the habit. You've got this."
+          : "Start your streak today — even 20 minutes counts.",
+        ctaLabel:  "Log Workout",
+        ctaAction: onLogWorkout,
+        ctaBg:     "#CC3700",
+        iconName:  "streakActive",
       };
   }
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  card:       { borderRadius: RADIUS.xl, padding: SPACE[16], gap: SPACE[14], borderWidth: 1 },
-  top:        { flexDirection: "row", alignItems: "flex-start", gap: SPACE[12] },
-  iconWrap:   { width: 44, height: 44, borderRadius: RADIUS.md, alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  eyebrow:    { ...TYPE.label },
-  title:      { ...TYPE.sectionTitle, lineHeight: 26 },
-  subtitle:   { ...TYPE.caption, lineHeight: 18 },
-  cta:        { borderRadius: RADIUS.pill, paddingVertical: SPACE[16], alignItems: "center" },
-  ctaText:    { ...TYPE.button, color: "#fff" },
-
-  // Hero gradient variant
-  hero:        { borderRadius: RADIUS.xxl, paddingTop: SPACE[32], paddingBottom: SPACE[28], paddingHorizontal: SPACE[24], gap: SPACE[12], alignItems: "center", overflow: "hidden" },
-  heroTitle:   { ...TYPE.screenTitle, color: "#fff", textAlign: "center" },
-  heroSub:     { ...TYPE.body, color: "rgba(255,255,255,0.88)", textAlign: "center", lineHeight: 22 },
-  heroSubBold: { fontWeight: FONT.weight.bold, color: "#fff" },
-  heroBtn:     { backgroundColor: "#C83000", borderRadius: RADIUS.pill, paddingVertical: SPACE[16], paddingHorizontal: SPACE[48], alignItems: "center", marginTop: SPACE[6] },
-  heroBtnText: { ...TYPE.button, color: "#fff" },
-
-  // Bottom wave decoration — large warm ellipses clipped at bottom
-  waveBottom1: { position: "absolute", width: 500, height: 200, borderRadius: 100, backgroundColor: "rgba(255,255,255,0.10)", bottom: -120, left: -60 },
-  waveBottom2: { position: "absolute", width: 400, height: 160, borderRadius: 80,  backgroundColor: "rgba(255,255,255,0.07)", bottom: -80,  left: 40 },
-
-  // "done" gym photo variant
-  doneCard:      { height: 220, borderRadius: RADIUS.xl, overflow: "hidden", justifyContent: "flex-end" },
-  doneContent:   { padding: SPACE[16], gap: SPACE[4] },
-  doneBadge:     { flexDirection: "row", alignItems: "center", gap: SPACE[6], alignSelf: "flex-start", backgroundColor: "rgba(0,0,0,0.40)", paddingHorizontal: SPACE[10], paddingVertical: SPACE[4], borderRadius: RADIUS.pill, marginBottom: SPACE[4] },
-  doneBadgeText: { color: "#22C55E", fontSize: 12, fontWeight: FONT.weight.bold },
-  doneStreak:    { color: "#fff", fontSize: FONT.size.lg, fontWeight: FONT.weight.black, letterSpacing: -0.3 },
-  doneSub:       { color: "rgba(255,255,255,0.72)", fontSize: FONT.size.sm },
+  card: {
+    height:        220,
+    borderRadius:  RADIUS.xxl,
+    overflow:      "hidden",
+    justifyContent:"flex-end",
+  },
+  content: {
+    padding:     SPACE[20],
+    paddingTop:  SPACE[16],
+    gap:         SPACE[8],
+  },
+  pill: {
+    flexDirection:  "row",
+    alignItems:     "center",
+    gap:            SPACE[4],
+    alignSelf:      "flex-start",
+    paddingHorizontal: SPACE[10],
+    paddingVertical:   4,
+    borderRadius:   RADIUS.pill,
+    marginBottom:   SPACE[2],
+  },
+  pillText: {
+    fontSize:   11,
+    fontWeight: FONT.weight.extrabold,
+    color:      "#fff",
+    letterSpacing: 0.5,
+  },
+  title: {
+    fontSize:      FONT.size.xl,
+    fontWeight:    FONT.weight.black,
+    color:         "#fff",
+    letterSpacing: -0.4,
+    lineHeight:    28,
+  },
+  sub: {
+    fontSize:   FONT.size.sm,
+    color:      "rgba(255,255,255,0.80)",
+    lineHeight: 20,
+  },
+  cta: {
+    borderRadius:    RADIUS.pill,
+    paddingVertical: SPACE[14],
+    alignItems:      "center",
+    marginTop:       SPACE[4],
+  },
+  ctaText: {
+    ...TYPE.button,
+    color: "#fff",
+  },
 });

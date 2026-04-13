@@ -241,7 +241,7 @@ export default function GoalsScreen() {
                     <Text style={s.goalEmoji}>{typeInfo?.emoji ?? "🎯"}</Text>
                     <View style={{ flex: 1 }}>
                       <Text style={[s.goalTitle, { color: item.completed ? c.textMuted : c.text }]}>
-                        {item.completed ? "✅ " : ""}{item.title}
+                        {item.title}
                       </Text>
                       {item.deadline && (
                         <View style={s.deadlineRow}>

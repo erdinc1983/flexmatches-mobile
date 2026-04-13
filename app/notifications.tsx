@@ -45,47 +45,47 @@ const TABS: { key: Category; label: string }[] = [
 ];
 
 // ─── Notification type config ─────────────────────────────────────────────────
-const TYPE_META: Record<string, { emoji: string; color: string; category: Category }> = {
+const TYPE_META: Record<string, { iconName: string; color: string; category: Category }> = {
   // Matches
-  match_request:        { emoji: "🤝", color: "#6366F1", category: "matches" },
-  match_accepted:       { emoji: "✅", color: "#22C55E", category: "matches" },
-  match_rejected:       { emoji: "❌", color: "#EF4444", category: "matches" },
-  discover_suggestion:  { emoji: "💡", color: "#6366F1", category: "matches" },
+  match_request:        { iconName: "matchActive",   color: "#6366F1", category: "matches" },
+  match_accepted:       { iconName: "checkActive",   color: "#22C55E", category: "matches" },
+  match_rejected:       { iconName: "close",         color: "#EF4444", category: "matches" },
+  discover_suggestion:  { iconName: "matchActive",   color: "#6366F1", category: "matches" },
 
   // Messages
-  message:              { emoji: "💬", color: "#3B82F6", category: "messages" },
-  new_message:          { emoji: "💬", color: "#3B82F6", category: "messages" },
+  message:              { iconName: "chatActive",    color: "#3B82F6", category: "messages" },
+  new_message:          { iconName: "chatActive",    color: "#3B82F6", category: "messages" },
 
   // Sessions
-  session_proposed:     { emoji: "📅", color: "#06B6D4", category: "sessions" },
-  session_accepted:     { emoji: "🤜", color: "#22C55E", category: "sessions" },
-  session_confirmed:    { emoji: "🤜", color: "#22C55E", category: "sessions" },
-  session_declined:     { emoji: "🚫", color: "#EF4444", category: "sessions" },
-  session_cancelled:    { emoji: "🚫", color: "#EF4444", category: "sessions" },
-  session_reminder:     { emoji: "⏰", color: "#F59E0B", category: "sessions" },
-  workout_invite:       { emoji: "💪", color: "#06B6D4", category: "sessions" },
-  streak_reminder:      { emoji: "🔥", color: "#F97316", category: "sessions" },
-  streak_milestone:     { emoji: "🔥", color: "#F97316", category: "sessions" },
+  session_proposed:     { iconName: "calendar",      color: "#06B6D4", category: "sessions" },
+  session_accepted:     { iconName: "checkActive",   color: "#22C55E", category: "sessions" },
+  session_confirmed:    { iconName: "checkActive",   color: "#22C55E", category: "sessions" },
+  session_declined:     { iconName: "close",         color: "#EF4444", category: "sessions" },
+  session_cancelled:    { iconName: "close",         color: "#EF4444", category: "sessions" },
+  session_reminder:     { iconName: "clock",         color: "#F59E0B", category: "sessions" },
+  workout_invite:       { iconName: "gymActive",     color: "#06B6D4", category: "sessions" },
+  streak_reminder:      { iconName: "streakActive",  color: "#F97316", category: "sessions" },
+  streak_milestone:     { iconName: "streakActive",  color: "#F97316", category: "sessions" },
 
   // Circles
-  circle_invite:        { emoji: "⭕", color: "#8B5CF6", category: "circles" },
-  circle_joined:        { emoji: "⭕", color: "#8B5CF6", category: "circles" },
-  circle_new_member:    { emoji: "👥", color: "#8B5CF6", category: "circles" },
-  circle_event:         { emoji: "📆", color: "#06B6D4", category: "circles" },
+  circle_invite:        { iconName: "circlesActive", color: "#8B5CF6", category: "circles" },
+  circle_joined:        { iconName: "circlesActive", color: "#8B5CF6", category: "circles" },
+  circle_new_member:    { iconName: "circlesActive", color: "#8B5CF6", category: "circles" },
+  circle_event:         { iconName: "calendar",      color: "#06B6D4", category: "circles" },
 
   // General (show under All)
-  badge_unlocked:       { emoji: "🏆", color: "#F59E0B", category: "all" },
-  goal_completed:       { emoji: "🎯", color: "#22C55E", category: "all" },
-  goal_milestone:       { emoji: "💪", color: "#6366F1", category: "all" },
-  kudos:                { emoji: "👏", color: "#F59E0B", category: "all" },
-  leaderboard_moved:    { emoji: "🏅", color: "#F59E0B", category: "all" },
-  tier_promoted:        { emoji: "💎", color: "#60A5FA", category: "all" },
-  partner_workout:      { emoji: "💪", color: "#22C55E", category: "all" },
+  badge_unlocked:       { iconName: "notification",  color: "#F59E0B", category: "all" },
+  goal_completed:       { iconName: "checkActive",   color: "#22C55E", category: "all" },
+  goal_milestone:       { iconName: "gymActive",     color: "#6366F1", category: "all" },
+  kudos:                { iconName: "matchActive",   color: "#F59E0B", category: "all" },
+  leaderboard_moved:    { iconName: "streakActive",  color: "#F59E0B", category: "all" },
+  tier_promoted:        { iconName: "streakActive",  color: "#60A5FA", category: "all" },
+  partner_workout:      { iconName: "gymActive",     color: "#22C55E", category: "all" },
 };
 
 function getMeta(type: string | null) {
-  if (!type) return { emoji: "🔔", color: "#888", category: "all" as Category };
-  return TYPE_META[type] ?? { emoji: "🔔", color: "#888", category: "all" as Category };
+  if (!type) return { iconName: "notification", color: "#888", category: "all" as Category };
+  return TYPE_META[type] ?? { iconName: "notification", color: "#888", category: "all" as Category };
 }
 
 function matchesTab(n: Notif, tab: Category): boolean {
@@ -130,12 +130,12 @@ function deepLink(notif: Notif) {
     return router.push("/(tabs)/goals" as any);
 }
 
-const EMPTY: Record<Category, { emoji: string; title: string; sub: string }> = {
-  all:      { emoji: "🔔", title: "All caught up",          sub: "New activity will appear here" },
-  matches:  { emoji: "🤝", title: "No match activity",      sub: "Start swiping to find partners" },
-  messages: { emoji: "💬", title: "No message alerts",      sub: "Your conversations are quiet" },
-  sessions: { emoji: "📅", title: "No session activity",    sub: "Propose a session with a match" },
-  circles:  { emoji: "⭕", title: "No circle activity",     sub: "Join a circle to see updates" },
+const EMPTY: Record<Category, { iconName: string; title: string; sub: string }> = {
+  all:      { iconName: "notification",  title: "All caught up",          sub: "New activity will appear here" },
+  matches:  { iconName: "matchActive",   title: "No match activity",      sub: "Start swiping to find partners" },
+  messages: { iconName: "chatActive",    title: "No message alerts",      sub: "Your conversations are quiet" },
+  sessions: { iconName: "calendar",      title: "No session activity",    sub: "Propose a session with a match" },
+  circles:  { iconName: "circlesActive", title: "No circle activity",     sub: "Join a circle to see updates" },
 };
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
@@ -344,7 +344,7 @@ export default function NotificationsScreen() {
       {/* ── List ── */}
       {flatData.length === 0 ? (
         <View style={s.empty}>
-          <Text style={s.emptyEmoji}>{empty.emoji}</Text>
+          <Icon name={empty.iconName as any} size={52} color={c.textMuted} />
           <Text style={[s.emptyTitle, { color: c.text }]}>{empty.title}</Text>
           <Text style={[s.emptySub, { color: c.textMuted }]}>{empty.sub}</Text>
           {tab === "matches" && (
@@ -382,7 +382,7 @@ export default function NotificationsScreen() {
               >
                 {/* Icon */}
                 <View style={[s.iconWrap, { backgroundColor: meta.color + "18" }]}>
-                  <Text style={s.iconEmoji}>{meta.emoji}</Text>
+                  <Icon name={meta.iconName as any} size={20} color={meta.color} />
                 </View>
 
                 {/* Content */}
@@ -461,9 +461,8 @@ const s = StyleSheet.create({
   row:     { flexDirection: "row", alignItems: "flex-start", paddingHorizontal: SPACE[16],
              paddingVertical: SPACE[14], gap: SPACE[12], borderBottomWidth: StyleSheet.hairlineWidth },
   iconWrap:{ width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  iconEmoji: { fontSize: 20 },
   content: { flex: 1, gap: 3 },
-  rowText: { fontSize: FONT.size.base, color: "#000", lineHeight: 20 },
+  rowText: { fontSize: FONT.size.base, lineHeight: 20 },
   rowTextUnread: { fontWeight: FONT.weight.bold },
   rowSub:  { fontSize: FONT.size.sm },
   meta:    { alignItems: "flex-end", gap: SPACE[6], flexShrink: 0 },
@@ -479,7 +478,6 @@ const s = StyleSheet.create({
 
   // Empty
   empty:       { flex: 1, alignItems: "center", justifyContent: "center", gap: SPACE[10], padding: SPACE[40] },
-  emptyEmoji:  { fontSize: 52 },
   emptyTitle:  { fontSize: FONT.size.xl, fontWeight: FONT.weight.black, textAlign: "center" },
   emptySub:    { fontSize: FONT.size.base, textAlign: "center", lineHeight: 22 },
   emptyCTA:    { marginTop: SPACE[8], paddingHorizontal: SPACE[28], paddingVertical: SPACE[14], borderRadius: RADIUS.xl },

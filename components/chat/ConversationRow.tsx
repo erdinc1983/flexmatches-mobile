@@ -16,7 +16,7 @@ import React, { useRef } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
 import { Ionicons } from "@expo/vector-icons";
-import { SPACE, FONT, RADIUS } from "../../lib/theme";
+import { useTheme, SPACE, FONT, RADIUS } from "../../lib/theme";
 import { Avatar } from "../Avatar";
 import { getSessionState, formatSessionDate } from "./SessionBanner";
 import type { BuddySession } from "./SessionBanner";
@@ -137,6 +137,8 @@ export function ConversationRow({
   unreadCount, session, saved, myId,
   onPress, onSave, onDeleteMessages, onUnmatch,
 }: Props) {
+  const { theme } = useTheme();
+  const c = theme.colors;
   const swipeRef = useRef<Swipeable>(null);
   const unread   = unreadCount > 0;
   const pill     = getSessionPill(session, myId);
@@ -159,12 +161,12 @@ export function ConversationRow({
       )}
       overshootRight={false}
     >
-      <TouchableOpacity style={s.row} onPress={onPress} activeOpacity={0.7}>
+      <TouchableOpacity style={[s.row, { backgroundColor: c.bgCard }]} onPress={onPress} activeOpacity={0.7}>
 
         {/* Unread dot */}
         <View style={s.dotCol}>
           {unread
-            ? <View style={s.dot} />
+            ? <View style={[s.dot, { backgroundColor: c.brand }]} />
             : <View style={s.dotPlaceholder} />
           }
         </View>
@@ -176,13 +178,13 @@ export function ConversationRow({
         <View style={s.content}>
           <View style={s.topRow}>
             <Text
-              style={[s.name, { fontWeight: unread ? "700" : "500" }]}
+              style={[s.name, { color: c.text, fontWeight: unread ? "700" : "500" }]}
               numberOfLines={1}
             >
               {name}
             </Text>
             {lastMessageAt && (
-              <Text style={[s.time, unread && s.timeUnread]}>
+              <Text style={[s.time, { color: unread ? c.brand : c.textMuted }, unread && s.timeUnread]}>
                 {timeLabel(lastMessageAt)}
               </Text>
             )}
@@ -197,7 +199,7 @@ export function ConversationRow({
             </View>
           ) : (
             <Text
-              style={[s.preview, unread && s.previewUnread]}
+              style={[s.preview, { color: unread ? c.textSecondary : c.textMuted }]}
               numberOfLines={1}
             >
               {lastMessage ?? "Matched — say hello!"}
@@ -207,15 +209,15 @@ export function ConversationRow({
           {/* Saved indicator */}
           {saved && !pill && (
             <View style={s.savedRow}>
-              <Ionicons name="bookmark" size={11} color="#007AFF" />
-              <Text style={s.savedText}>Saved</Text>
+              <Ionicons name="bookmark" size={11} color={c.brand} />
+              <Text style={[s.savedText, { color: c.brand }]}>Saved</Text>
             </View>
           )}
         </View>
 
         {/* Unread count badge */}
         {unread && (
-          <View style={s.badge}>
+          <View style={[s.badge, { backgroundColor: c.brand }]}>
             <Text style={s.badgeText}>{unreadCount > 99 ? "99+" : unreadCount}</Text>
           </View>
         )}
@@ -227,26 +229,25 @@ export function ConversationRow({
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  row:            { flexDirection: "row", alignItems: "center", paddingVertical: SPACE[12], paddingRight: SPACE[16], backgroundColor: "#fff" },
+  row:            { flexDirection: "row", alignItems: "center", paddingVertical: SPACE[12], paddingRight: SPACE[16] },
   dotCol:         { width: 20, alignItems: "center" },
-  dot:            { width: 9, height: 9, borderRadius: 5, backgroundColor: "#007AFF" },
+  dot:            { width: 9, height: 9, borderRadius: 5 },
   dotPlaceholder: { width: 9 },
 
   content:        { flex: 1, marginLeft: SPACE[12], gap: 3 },
   topRow:         { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  name:           { fontSize: 16, color: "#000", flex: 1, marginRight: SPACE[8] },
-  time:           { fontSize: 12, color: "#8E8E93", fontWeight: "400" },
-  timeUnread:     { color: "#007AFF", fontWeight: "600" },
+  name:           { fontSize: 16, flex: 1, marginRight: SPACE[8] },
+  time:           { fontSize: 12, fontWeight: "400" },
+  timeUnread:     { fontWeight: "600" },
 
-  preview:        { fontSize: 14, color: "#8E8E93", fontWeight: "400" },
-  previewUnread:  { color: "#3C3C43CC" },
+  preview:        { fontSize: 14, fontWeight: "400" },
 
   pill:           { alignSelf: "flex-start", paddingHorizontal: SPACE[8], paddingVertical: 3, borderRadius: RADIUS.pill },
   pillText:       { fontSize: 12, fontWeight: "600" },
 
   savedRow:       { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 1 },
-  savedText:      { fontSize: 11, color: "#007AFF", fontWeight: "500" },
+  savedText:      { fontSize: 11, fontWeight: "500" },
 
-  badge:          { minWidth: 20, height: 20, borderRadius: 10, alignItems: "center", justifyContent: "center", paddingHorizontal: 5, backgroundColor: "#007AFF" },
+  badge:          { minWidth: 20, height: 20, borderRadius: 10, alignItems: "center", justifyContent: "center", paddingHorizontal: 5 },
   badgeText:      { fontSize: 12, fontWeight: "700", color: "#fff" },
 });

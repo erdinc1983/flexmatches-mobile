@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, FlatList,
   ActivityIndicator, TextInput, Modal, Alert, RefreshControl,
-  KeyboardAvoidingView, Platform, ScrollView,
+  KeyboardAvoidingView, Platform, ScrollView, Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "expo-router";
@@ -22,9 +22,7 @@ type Workout = {
 
 const SPORTS = ["Running", "Cycling", "Swimming", "Weightlifting", "CrossFit", "Yoga", "Boxing", "Tennis", "Basketball", "Hiking", "Climbing", "Other"];
 
-const SPORT_EMOJI: Record<string, string> = {
-  Running: "🏃", Cycling: "🚴", Swimming: "🏊", Yoga: "🧘", Boxing: "🥊",
-};
+const APP_LOGO = require("../../assets/images/icon.png");
 
 export default function ActivityScreen() {
   const { theme } = useTheme();
@@ -297,9 +295,9 @@ export default function ActivityScreen() {
               {group.items.map((w) => (
                 <View key={w.id} style={[s.workoutCard, { backgroundColor: c.bgCard, borderColor: c.border }]}>
                   <View style={s.workoutLeft}>
-                    <Text style={s.workoutEmoji}>
-                      {SPORT_EMOJI[w.exercise_type ?? ""] ?? "💪"}
-                    </Text>
+                    <View style={s.workoutLogoWrap}>
+                      <Image source={APP_LOGO} style={s.workoutLogo} resizeMode="cover" />
+                    </View>
                     <View>
                       <Text style={[s.workoutSport, { color: c.text }]}>{w.exercise_type ?? "Workout"}</Text>
                       {w.notes && <Text style={[s.workoutNotes, { color: c.textMuted }]} numberOfLines={1}>{w.notes}</Text>}
@@ -412,8 +410,9 @@ const s = StyleSheet.create({
   group: { marginBottom: SPACE[24] },
   groupDate: { fontSize: FONT.size.xs, fontWeight: FONT.weight.bold, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: SPACE[10] },
   workoutCard: { flexDirection: "row", alignItems: "center", borderRadius: RADIUS.md, padding: SPACE[14], marginBottom: SPACE[8], borderWidth: 1 },
-  workoutLeft: { flex: 1, flexDirection: "row", alignItems: "center", gap: SPACE[12] },
-  workoutEmoji: { fontSize: 28 },
+  workoutLeft:     { flex: 1, flexDirection: "row", alignItems: "center", gap: SPACE[12] },
+  workoutLogoWrap: { width: 40, height: 40, borderRadius: 10, overflow: "hidden" },
+  workoutLogo:     { width: 40, height: 40 },
   workoutSport: { fontSize: FONT.size.md, fontWeight: FONT.weight.bold },
   workoutNotes: { fontSize: FONT.size.xs, marginTop: 2 },
   workoutRight: { alignItems: "flex-end", gap: SPACE[4] },

@@ -10,15 +10,15 @@
 import React, { useState } from "react";
 import {
   Modal, View, Text, TouchableOpacity, ScrollView,
-  StyleSheet, Dimensions, TouchableWithoutFeedback, Alert, ActivityIndicator,
+  StyleSheet, Dimensions, Alert, ActivityIndicator, Pressable,
 } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
+import { BlurView } from "expo-blur";
 import { useTheme, SPACE, FONT, RADIUS, PALETTE } from "../../lib/theme";
 import { Icon } from "../Icon";
 import { resolveUrl } from "../Avatar";
 import { supabase } from "../../lib/supabase";
-import { BlurOverlay } from "../ui/BlurOverlay";
 import { RequestStatus, DiscoverUser } from "./PersonCard";
 
 // Cartoon fallback
@@ -58,7 +58,7 @@ type Props = {
 };
 
 export function ProfileSheet({ user, status, onConnect, onClose, onBlock }: Props) {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const c = theme.colors;
 
   const [menuOpen,    setMenuOpen]    = useState(false);
@@ -106,16 +106,24 @@ export function ProfileSheet({ user, status, onConnect, onClose, onBlock }: Prop
   }
 
   return (
-    <Modal visible animationType="fade" transparent onRequestClose={onClose}>
-      <BlurOverlay onPress={() => { setMenuOpen(false); setShowReport(false); onClose(); }}>
+    <Modal visible animationType="fade" transparent statusBarTranslucent onRequestClose={onClose}>
+      {/* Blurred backdrop — tap outside to close */}
+      <Pressable style={StyleSheet.absoluteFill} onPress={() => { setMenuOpen(false); setShowReport(false); onClose(); }}>
+        <BlurView
+          intensity={isDark ? 40 : 50}
+          tint={isDark ? "dark" : "light"}
+          style={StyleSheet.absoluteFill}
+        />
+        <View style={s.backdropDim} />
+      </Pressable>
 
-      {/* Centered card */}
-      <View style={s.centeredWrap} pointerEvents="box-none">
-        <View style={[s.card, { backgroundColor: c.bgCard, maxHeight: H * 0.82 }]}>
+      {/* Centered card — tap inside does not close */}
+      <Pressable style={s.centeredWrap} onPress={() => { setMenuOpen(false); setShowReport(false); onClose(); }}>
+        <Pressable onPress={(e) => e.stopPropagation()} style={[s.card, { backgroundColor: c.bgCard, maxHeight: H * 0.82 }]}>
 
-          {/* Close button */}
-          <TouchableOpacity style={[s.closeBtn, { backgroundColor: c.bgCardAlt }]} onPress={onClose} hitSlop={8}>
-            <Icon name="close" size={16} color={c.textMuted} />
+          {/* Close button — matches AppModal style */}
+          <TouchableOpacity style={[s.closeBtn, { backgroundColor: c.bgCardAlt, borderColor: c.border }]} onPress={onClose} hitSlop={8}>
+            <Text style={[s.closeX, { color: c.textMuted }]}>✕</Text>
           </TouchableOpacity>
 
           {/* 3-dot safety menu */}
@@ -200,6 +208,11 @@ export function ProfileSheet({ user, status, onConnect, onClose, onBlock }: Prop
                   <View style={{ flexDirection: "row", alignItems: "flex-end", gap: SPACE[8] }}>
                     <Text style={s.photoName} numberOfLines={1}>{displayName}</Text>
                     {user.age != null && <Text style={s.photoAge}>{user.age}</Text>}
+                    {user.phone_verified && (
+                      <View style={s.verifiedBadge}>
+                        <Text style={s.verifiedText}>✓ Verified</Text>
+                      </View>
+                    )}
                   </View>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: SPACE[8], flexWrap: "wrap" }}>
                     {user.fitness_level && (
@@ -332,9 +345,8 @@ export function ProfileSheet({ user, status, onConnect, onClose, onBlock }: Prop
             </View>
 
           </ScrollView>
-        </View>
-      </View>
-      </BlurOverlay>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 }
@@ -353,11 +365,12 @@ function StatCell({ label, value, valueColor }: { label: string; value: string; 
 const CARD_W = Math.min(W - SPACE[32], 400);
 
 const s = StyleSheet.create({
-  backdrop:    { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.55)" },
-  centeredWrap:{ ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
-  card:        { width: CARD_W, borderRadius: RADIUS.xxl, overflow: "hidden" },
+  backdropDim: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.30)" },
+  centeredWrap:{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: SPACE[20] },
+  card:        { width: CARD_W, borderRadius: RADIUS.xxl, overflow: "hidden", shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 20, shadowOffset: { width: 0, height: 8 }, elevation: 10 },
 
-  closeBtn:    { position: "absolute", top: SPACE[14], right: SPACE[14], zIndex: 10, width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
+  closeBtn:    { position: "absolute", top: SPACE[14], right: SPACE[14], zIndex: 10, width: 32, height: 32, borderRadius: 16, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  closeX:      { fontSize: 13, fontWeight: FONT.weight.bold, lineHeight: 16 },
   menuBtn:     { position: "absolute", top: SPACE[14], left: SPACE[14], zIndex: 10, width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
   menuDots:    { fontSize: 18, fontWeight: "700", letterSpacing: 1 },
 
@@ -388,6 +401,9 @@ const s = StyleSheet.create({
   photoMeta:       { fontSize: FONT.size.xs, color: "rgba(255,255,255,0.75)", fontWeight: FONT.weight.medium },
   levelBadge:      { paddingHorizontal: SPACE[8], paddingVertical: 2, borderRadius: RADIUS.pill, borderWidth: 1 },
   levelText:       { fontSize: FONT.size.xs, fontWeight: FONT.weight.extrabold, textTransform: "capitalize" },
+
+  verifiedBadge: { paddingHorizontal: SPACE[8], paddingVertical: 2, borderRadius: RADIUS.pill, backgroundColor: "rgba(34,197,94,0.25)", borderWidth: 1, borderColor: "rgba(34,197,94,0.60)", marginBottom: 2 },
+  verifiedText:  { fontSize: 11, fontWeight: FONT.weight.extrabold, color: "#4ADE80" },
 
   intentChip:  { alignSelf: "center", paddingHorizontal: SPACE[14], paddingVertical: SPACE[6], borderRadius: RADIUS.pill, borderWidth: 1 },
   intentText:  { fontSize: FONT.size.xs, fontWeight: FONT.weight.bold },

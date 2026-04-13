@@ -110,7 +110,7 @@ export function GridCard({ user, status, onPress, onConnect, matchId }: Props) {
 
         {/* Match % */}
         <View style={[s.matchBadge, { backgroundColor: scoreColor + "E0" }]}>
-          <Text style={s.matchText}>{user.matchScore}%</Text>
+          <Text style={s.matchText}>{Math.max(0, Math.round(user.matchScore))}%</Text>
         </View>
 
         {/* Name overlay */}

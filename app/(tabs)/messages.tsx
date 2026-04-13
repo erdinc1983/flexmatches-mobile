@@ -23,7 +23,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { router, useFocusEffect } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import { requestNotificationPermission } from "../../lib/notifications";
-import { useTheme, SPACE, FONT } from "../../lib/theme";
+import { useTheme, SPACE, FONT, RADIUS } from "../../lib/theme";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { MessagesSkeleton } from "../../components/ui/Skeleton";
 import { ConversationRow } from "../../components/chat/ConversationRow";
@@ -262,9 +262,20 @@ export default function MessagesScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.brand} />}
           ListHeaderComponent={
             <View style={s.header}>
-              <Text style={[s.title, { color: c.text }]}>Chat</Text>
+              <View style={s.headerTop}>
+                <Text style={[s.title, { color: c.text }]}>Chat</Text>
+                {conversations.some((cv) => cv.unreadCount > 0) && (
+                  <View style={[s.unreadPill, { backgroundColor: c.brand }]}>
+                    <Text style={s.unreadPillText}>
+                      {conversations.reduce((sum, cv) => sum + cv.unreadCount, 0)}
+                    </Text>
+                  </View>
+                )}
+              </View>
               {conversations.length > 0 && (
-                <Text style={[s.subtitle, { color: c.textMuted }]}>{conversations.length} conversation{conversations.length !== 1 ? "s" : ""}</Text>
+                <Text style={[s.subtitle, { color: c.textMuted }]}>
+                  {conversations.length} conversation{conversations.length !== 1 ? "s" : ""}
+                </Text>
               )}
             </View>
           }
@@ -308,8 +319,11 @@ export default function MessagesScreen() {
 const s = StyleSheet.create({
   root:         { flex: 1 },
   header:       { paddingHorizontal: SPACE[20], paddingTop: SPACE[20], paddingBottom: SPACE[12] },
-  title:        { fontSize: 34, fontWeight: "700", letterSpacing: 0.37 },
-  subtitle:     { fontSize: 13, marginTop: 2 },
+  headerTop:    { flexDirection: "row", alignItems: "center", gap: SPACE[10] },
+  title:        { fontSize: 34, fontWeight: FONT.weight.black, letterSpacing: -0.5 },
+  subtitle:     { fontSize: FONT.size.sm, marginTop: 2, fontWeight: FONT.weight.medium },
+  unreadPill:   { paddingHorizontal: SPACE[8], paddingVertical: 3, borderRadius: RADIUS.pill, marginBottom: 2 },
+  unreadPillText:{ fontSize: FONT.size.xs, fontWeight: FONT.weight.extrabold, color: "#fff" },
   // Separator starts after: dotCol(20) + gap(0) + avatar(50) + gap(12) = 82px
   separator:    { height: StyleSheet.hairlineWidth, marginLeft: 82 },
   emptyWrapper: { paddingTop: 80 },
