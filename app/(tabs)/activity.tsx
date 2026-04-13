@@ -100,7 +100,7 @@ export default function ActivityScreen() {
       loadingRef.current = false;
       if (mountedRef.current) setLoading(false);
     }
-  }, []);
+  }, [appUser, updateAppUser]);
 
   useFocusEffect(useCallback(() => {
     const elapsed = Date.now() - lastLoadRef.current;

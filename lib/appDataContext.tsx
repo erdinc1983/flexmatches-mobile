@@ -67,12 +67,19 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const loadedForRef = useRef<string | null>(null);
 
   const fetchUser = useCallback(async (uid: string) => {
-    const { data, error } = await supabase
-      .from("users")
-      .select(SELECT)
-      .eq("id", uid)
-      .single();
-    if (error || !data) { console.warn("[AppData] fetch error:", error?.message); return; }
+    // Retry up to 3 times with exponential backoff — cold Supabase / slow network
+    let data: any = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const { data: row, error } = await supabase
+        .from("users")
+        .select(SELECT)
+        .eq("id", uid)
+        .single();
+      if (!error && row) { data = row; break; }
+      console.warn(`[AppData] fetch attempt ${attempt + 1} failed:`, error?.message);
+      if (attempt < 2) await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+    }
+    if (!data) { console.warn("[AppData] all retries failed — appUser stays null"); return; }
     const d = data as any;
     setAppUser({
       id:               d.id,

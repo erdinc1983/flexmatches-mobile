@@ -183,7 +183,7 @@ export default function MatchesScreen() {
       loadingRef.current = false;
       if (mountedRef.current) setLoading(false);
     }
-  }, []);
+  }, [appUser]);
 
   async function loadBuddySessions(userId: string) {
     const { data } = await supabase
