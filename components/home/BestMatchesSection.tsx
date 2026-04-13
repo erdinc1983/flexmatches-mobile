@@ -64,13 +64,16 @@ function MatchPhotoCard({ user, onPress }: { user: SuggestedUser; onPress: () =>
   const { theme } = useTheme();
   const c = theme.colors;
 
-  const rawName     = user.full_name?.split(" ")[0] ?? user.username;
-  const isUUID      = /^[0-9a-f-]{20,}$/i.test(rawName);
-  const displayName = isUUID ? "Member" : rawName;
+  // Use full name for avatar hash (must match GridCard/PersonCard)
+  const fullName    = user.full_name ?? user.username;
+  const isUUID      = /^[0-9a-f-]{20,}$/i.test(fullName);
+  const hashName    = isUUID ? "user" : fullName;
+  // Display only first name for card space, but hash from full name
+  const displayName = isUUID ? "Member" : (user.full_name?.split(" ")[0] ?? user.username);
 
   // Resolve URL — same logic as Avatar component
   const resolvedUrl = resolveUrl(user.avatar_url);
-  const fallbackUrl = cartoonAvatar(displayName);
+  const fallbackUrl = cartoonAvatar(hashName);
   const photoUrl    = resolvedUrl ?? fallbackUrl;
 
   const tags = [
