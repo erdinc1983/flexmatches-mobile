@@ -46,7 +46,6 @@ export async function notifyUser(
     read:       false,
   });
   if (error) console.warn("[notifyUser] Insert failed:", error.message);
-  else console.log("[notifyUser] Notification inserted for", userId);
 
   // 2. Send push notification (shows on device — all types including messages)
   await sendPushToUser(userId, {
@@ -95,7 +94,7 @@ export async function registerPushToken(): Promise<string | null> {
       projectId: "4e957dd8-fd32-4678-9b74-4232d65e658d",
     });
     const token = tokenData.data;
-    console.log("[Push] Got token:", token.slice(0, 25) + "...");
+    if (__DEV__) console.log("[Push] Token registered");
 
     // Store in Supabase
     const { data: { user } } = await supabase.auth.getUser();
@@ -105,7 +104,7 @@ export async function registerPushToken(): Promise<string | null> {
         .update({ expo_push_token: token })
         .eq("id", user.id);
       if (upErr) console.warn("[Push] Token store failed:", upErr.message);
-      else console.log("[Push] Token stored for user:", user.id);
+      else if (__DEV__) console.log("[Push] Token stored");
     }
 
     return token;
@@ -156,7 +155,6 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
       .single();
 
     const token = data?.expo_push_token;
-    console.log("[Push] token lookup for", userId, "→", token ? `${token.slice(0, 20)}...` : "NULL (no token stored)");
     if (!token) return;
 
     await fetch(EXPO_PUSH_URL, {

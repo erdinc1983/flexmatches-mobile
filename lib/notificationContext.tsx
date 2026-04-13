@@ -113,7 +113,14 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           { event: "UPDATE", schema: "public", table: "messages" },
           () => fetchCount(user.id),
         )
-        .subscribe();
+        .on(
+          "postgres_changes",
+          { event: "DELETE", schema: "public", table: "messages" },
+          () => fetchCount(user.id),
+        )
+        .subscribe((status, err) => {
+          if (err) console.warn("[NotifCtx] Subscription error:", err.message);
+        });
     });
 
     return () => {

@@ -255,7 +255,9 @@ export default function ChatScreen() {
           m.id === (payload.new as Message).id ? { ...m, read_at: (payload.new as Message).read_at } : m
         ));
       })
-      .subscribe();
+      .subscribe((status, err) => {
+        if (err) console.warn("[Chat] Messages subscription error:", err.message);
+      });
 
     const sessionChannel = supabase
       .channel(`chat-sessions:${matchId}`)
@@ -274,7 +276,9 @@ export default function ChatScreen() {
         if (["declined","cancelled","completed"].includes(s.status)) setSession(null);
         else setSession(s);
       })
-      .subscribe();
+      .subscribe((status, err) => {
+        if (err) console.warn("[Chat] Sessions subscription error:", err.message);
+      });
 
     return () => {
       supabase.removeChannel(msgChannel);
@@ -503,9 +507,25 @@ export default function ChatScreen() {
   // ── Propose session ───────────────────────────────────────────────────────
   async function proposeSession() {
     if (!userId || !other || !sessionDate.trim() || proposing) return;
+
+    // Validate inputs
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(sessionDate.trim())) {
+      Alert.alert("Invalid date", "Please select a valid date.");
+      return;
+    }
+    if (sessionLocation.trim().length > 200) {
+      Alert.alert("Location too long", "Please shorten the location to 200 characters or less.");
+      return;
+    }
+    const ALLOWED_SPORTS = ["Gym", "Running", "Cycling", "Swimming", "Boxing", "Tennis", "Basketball", "Yoga", "CrossFit", "Hiking", "Other"];
+    if (!ALLOWED_SPORTS.includes(sessionSport)) {
+      Alert.alert("Invalid sport", "Please select a sport from the list.");
+      return;
+    }
+
     setProposing(true);
     try {
-      const sportValue = sessionSport === "Other" && sessionTitle.trim() ? sessionTitle.trim() : sessionSport;
+      const sportValue = sessionSport === "Other" && sessionTitle.trim() ? sessionTitle.trim().slice(0, 100) : sessionSport;
       const { error } = await supabase.from("buddy_sessions").insert({
         proposer_id: userId, receiver_id: other.id, match_id: matchId,
         sport: sportValue, session_date: sessionDate.trim(),

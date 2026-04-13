@@ -1,2 +1,3 @@
-// API keys — restricted by bundle ID + API scope in Google Cloud Console
-export const GOOGLE_PLACES_API_KEY = "AIzaSyDAz0-krc5X3onKpF_JEom6f5u5UdkXxAc";
+// API keys — loaded from environment variables, never hardcoded
+// Set EXPO_PUBLIC_GOOGLE_PLACES_API_KEY in .env (local) and EAS secrets (CI/CD)
+export const GOOGLE_PLACES_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY ?? "";

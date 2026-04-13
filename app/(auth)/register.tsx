@@ -54,6 +54,8 @@ export default function RegisterScreen() {
   const canSubmit      = !!email && !!username && strength?.label === "Strong" && passwordsMatch
                          && usernameStatus === "available";
 
+  const usernameQueryId = useRef(0);
+
   function handleUsernameChange(v: string) {
     setUsername(v);
     setUsernameStatus("idle");
@@ -61,12 +63,16 @@ export default function RegisterScreen() {
     if (v.trim().length < 3) return;
     setUsernameStatus("checking");
     usernameTimer.current = setTimeout(async () => {
+      const queryId = ++usernameQueryId.current;
       const { data } = await supabase
         .from("users")
         .select("id")
         .eq("username", v.trim().toLowerCase())
         .maybeSingle();
-      setUsernameStatus(data ? "taken" : "available");
+      // Only apply result if this is still the latest query (no race condition)
+      if (queryId === usernameQueryId.current) {
+        setUsernameStatus(data ? "taken" : "available");
+      }
     }, 300);
   }
 
