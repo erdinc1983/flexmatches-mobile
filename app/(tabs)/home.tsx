@@ -90,7 +90,7 @@ export default function HomeScreen() {
   const { theme } = useTheme();
   const c = theme.colors;
   const { unreadMessages: unreadCount, unreadCount: notifUnread, refresh: refreshNotifs } = useNotifications();
-  const { appUser, appUserLoading, updateAppUser } = useAppData();
+  const { appUser, appUserLoading, updateAppUser, fetchAppUser } = useAppData();
 
   const [profile,           setProfile]           = useState<HomeProfile | null>(null);
   const [pendingRequests,   setPendingRequests]   = useState<PendingRequest[]>([]);
@@ -107,10 +107,10 @@ export default function HomeScreen() {
   const [error,             setError]             = useState(false);
 
   useEffect(() => {
-    if (!loading || appUserLoading) return; // wait for AppDataContext before starting timeout
+    if (!loading) return;
     const t = setTimeout(() => { setLoading(false); setError(true); }, 30_000);
     return () => clearTimeout(t);
-  }, [loading, appUserLoading]);
+  }, [loading]);
 
   // Fix 2: mark unmounted so async load() won't setState after component gone
   useEffect(() => {
@@ -170,18 +170,9 @@ export default function HomeScreen() {
     if (!user) return;
     const uid = user.id;
 
-    // Use global AppDataContext for own profile — wait if still loading
-    const profileData = appUser;
-    if (!profileData) {
-      // AppDataContext not ready yet — wait up to 10s then retry
-      await new Promise<void>((resolve) => {
-        const interval = setInterval(() => {
-          if (appUser || !mountedRef.current) { clearInterval(interval); resolve(); }
-        }, 300);
-        setTimeout(() => { clearInterval(interval); resolve(); }, 10_000);
-      });
-      if (!appUser) return; // still not ready — let timeout handle it
-    }
+    // Use global AppDataContext for own profile; fall back to direct fetch if context failed
+    const profileData = appUser ?? await fetchAppUser();
+    if (!profileData) throw new Error("Could not load user profile");
 
     // Update last_active after render — deferred so it doesn't block the RPC
     InteractionManager.runAfterInteractions(() => {
@@ -371,18 +362,17 @@ export default function HomeScreen() {
       loadingRef.current = false; // Fix 1: release lock
       if (mountedRef.current) setLoading(false);
     }
-  }, [today, appUser, updateAppUser]);
+  }, [today, appUser, updateAppUser, fetchAppUser]);
 
-  // Trigger load once appUser becomes available (resolves race with AppDataContext)
+  // Trigger load immediately on mount — load() handles fetchAppUser() fallback internally
   useEffect(() => {
-    if (appUser && !profile) load();
-  }, [appUser]);
+    if (!profile && !loadingRef.current) load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // mount-only; useFocusEffect covers stale re-fetch
 
   useFocusEffect(useCallback(() => {
     // Always refresh notification counts (instant — from context)
     refreshNotifs();
-    // Skip if appUser not ready yet
-    if (!appUser) return;
     // Skip heavy re-fetch if data was loaded recently
     const elapsed = Date.now() - lastLoadRef.current;
     if (elapsed > STALE_MS || !profile) {
@@ -390,7 +380,7 @@ export default function HomeScreen() {
     }
     // Close any open modal when the tab loses focus
     return () => { setSelectedSession(null); };
-  }, [load, profile, refreshNotifs, appUser]));
+  }, [load, profile, refreshNotifs]));
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

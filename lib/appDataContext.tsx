@@ -45,6 +45,8 @@ type AppDataContextValue = {
   appUserLoading:   boolean;
   refreshAppUser:   () => Promise<void>;
   updateAppUser:    (partial: Partial<AppUser>) => void;
+  /** Returns cached appUser or does a fresh direct fetch. Never throws. */
+  fetchAppUser:     () => Promise<AppUser | null>;
 };
 
 const AppDataContext = createContext<AppDataContextValue>({
@@ -52,6 +54,7 @@ const AppDataContext = createContext<AppDataContextValue>({
   appUserLoading: true,
   refreshAppUser: async () => {},
   updateAppUser:  () => {},
+  fetchAppUser:   async () => null,
 });
 
 const SELECT = [
@@ -69,13 +72,18 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
   const fetchUser = useCallback(async (uid: string) => {
     // Retry up to 3 times with exponential backoff — cold Supabase / slow network
+    // Each attempt races against a 10s timeout to avoid hanging indefinitely.
     let data: any = null;
     for (let attempt = 0; attempt < 3; attempt++) {
-      const { data: row, error } = await supabase
+      const fetchPromise = supabase
         .from("users")
         .select(SELECT)
         .eq("id", uid)
         .single();
+      const timeoutPromise = new Promise<{ data: null; error: Error }>((resolve) =>
+        setTimeout(() => resolve({ data: null, error: new Error("timeout") }), 10_000)
+      );
+      const { data: row, error } = await Promise.race([fetchPromise, timeoutPromise]);
       if (!error && row) { data = row; break; }
       console.warn(`[AppData] fetch attempt ${attempt + 1} failed:`, error?.message);
       if (attempt < 2) await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
@@ -157,8 +165,57 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     setAppUser((prev) => prev ? { ...prev, ...partial } : prev);
   }, []);
 
+  /**
+   * Returns cached appUser if available, otherwise does a direct Supabase fetch.
+   * Used by tabs as a fallback when AppDataContext's background load failed.
+   * Never throws — returns null on any error.
+   */
+  const fetchAppUser = useCallback(async (): Promise<AppUser | null> => {
+    if (appUser) return appUser;
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) return null;
+      const { data: row, error } = await supabase
+        .from("users")
+        .select(SELECT)
+        .eq("id", authUser.id)
+        .single();
+      if (error || !row) return null;
+      const d = row as any;
+      const profile: AppUser = {
+        id:               d.id,
+        username:         d.username ?? "",
+        full_name:        d.full_name ?? null,
+        avatar_url:       d.avatar_url ?? null,
+        bio:              d.bio ?? null,
+        city:             d.city ?? null,
+        fitness_level:    d.fitness_level ?? null,
+        sports:           d.sports ?? null,
+        current_streak:   d.current_streak ?? 0,
+        last_checkin_date: d.last_checkin_date ?? null,
+        is_at_gym:        d.is_at_gym ?? false,
+        gym_checkin_at:   d.gym_checkin_at ?? null,
+        gym_name:         d.gym_name ?? null,
+        availability:     d.availability ?? null,
+        lat:              d.lat ?? null,
+        lng:              d.lng ?? null,
+        training_intent:  d.training_intent ?? null,
+        show_me:          d.show_me ?? null,
+        gender:           d.gender ?? null,
+        age:              d.age ?? null,
+        is_pro:           d.is_pro ?? false,
+        is_admin:         d.is_admin ?? false,
+        phone_verified:   d.phone_verified ?? false,
+      };
+      setAppUser(profile); // cache it for other consumers
+      return profile;
+    } catch {
+      return null;
+    }
+  }, [appUser]);
+
   return (
-    <AppDataContext.Provider value={{ appUser, appUserLoading, refreshAppUser, updateAppUser }}>
+    <AppDataContext.Provider value={{ appUser, appUserLoading, refreshAppUser, updateAppUser, fetchAppUser }}>
       {children}
     </AppDataContext.Provider>
   );

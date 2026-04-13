@@ -295,7 +295,7 @@ const fp = StyleSheet.create({
 export default function DiscoverScreen() {
   const { theme } = useTheme();
   const c = theme.colors;
-  const { appUser, appUserLoading } = useAppData();
+  const { appUser, appUserLoading, fetchAppUser } = useAppData();
 
   const [myProfile,    setMyProfile]    = useState<MyProfile | null>(null);
   const [users,        setUsers]        = useState<DiscoverUser[]>([]);   // new people (swipe deck)
@@ -306,10 +306,10 @@ export default function DiscoverScreen() {
   const [error,        setError]        = useState(false);
 
   useEffect(() => {
-    if (!loading || appUserLoading) return; // wait for AppDataContext before starting timeout
+    if (!loading) return;
     const t = setTimeout(() => { setLoading(false); setError(true); }, 30_000);
     return () => clearTimeout(t);
-  }, [loading, appUserLoading]);
+  }, [loading]);
 
   const [refreshing,   setRefreshing]   = useState(false);
   const [filters,      setFilters]      = useState<Filters>(EMPTY_FILTERS);
@@ -352,9 +352,9 @@ export default function DiscoverScreen() {
       supabase.from("users").update({ last_active: new Date().toISOString() }).eq("id", user.id).then(() => {});
     });
 
-    // Use AppDataContext for own profile — no users table query needed
-    const meData = appUser;
-    if (!meData) return;
+    // Use AppDataContext for own profile; fall back to direct fetch if context failed
+    const meData = appUser ?? await fetchAppUser();
+    if (!meData) throw new Error("Could not load user profile");
 
     const [
       { data: matchData },
@@ -456,7 +456,7 @@ export default function DiscoverScreen() {
       loadingRef.current = false;
       if (mountedRef.current) setLoading(false);
     }
-  }, [appUser]);
+  }, [appUser, fetchAppUser]);
 
   // ── Load next page ───────────────────────────────────────────────────────────
   const loadMore = useCallback(async () => {
@@ -495,16 +495,16 @@ export default function DiscoverScreen() {
     }
   }, [loadingMore, hasMore, rawOffset]);
 
-  // Trigger load once appUser becomes available
+  // Trigger load immediately on mount — load() handles fetchAppUser() fallback internally
   useEffect(() => {
-    if (appUser && users.length === 0) load();
-  }, [appUser]);
+    if (users.length === 0 && !loadingRef.current) load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // mount-only; useFocusEffect covers stale re-fetch
 
   // Reload on focus if stale or empty; reset filters but keep user's gender preference
   useFocusEffect(useCallback(() => {
     setFilters({ ...EMPTY_FILTERS, showMe: appUser?.show_me ?? null });
     setSearchQuery("");
-    if (!appUser) return;
     const elapsed = Date.now() - lastLoadRef.current;
     if (elapsed > STALE_MS || users.length === 0) load();
   }, [load, users.length, appUser]));

@@ -154,7 +154,7 @@ export default function ProfileScreen() {
   const { theme } = useTheme();
   const c = theme.colors;
   const { unreadCount } = useNotifications();
-  const { appUser, appUserLoading, refreshAppUser, updateAppUser } = useAppData();
+  const { appUser, appUserLoading, refreshAppUser, updateAppUser, fetchAppUser } = useAppData();
 
   const [profile,           setProfile]           = useState<Profile | null>(null);
   const [loading,           setLoading]           = useState(true);
@@ -191,9 +191,9 @@ export default function ProfileScreen() {
     if (!user) return;
     setUserId(user.id);
 
-    // Use AppDataContext for own profile — no users table query needed
-    const data = appUser; // appUser is in deps so this is always fresh
-    if (!data) return;
+    // Use AppDataContext for own profile; fall back to direct fetch if context failed
+    const data = appUser ?? await fetchAppUser();
+    if (!data) throw new Error("Could not load user profile");
     setIsAdmin(data.is_admin ?? false);
 
     const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
@@ -251,12 +251,13 @@ export default function ProfileScreen() {
     } finally {
       setLoading(false);
     }
-  }, [appUser]); // appUser in deps — closure always sees the latest value
+  }, [appUser, fetchAppUser]); // appUser in deps — closure always sees the latest value
 
-  // Trigger load once appUser becomes available (resolves race with AppDataContext)
+  // Trigger load immediately on mount — fetchProfile() handles fetchAppUser() fallback internally
   useEffect(() => {
-    if (appUser && !profile && !appUserLoading) fetchProfile();
-  }, [appUser, appUserLoading]);
+    if (!profile) fetchProfile();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // mount-only; useFocusEffect covers stale re-fetch
 
   useFocusEffect(useCallback(() => {
     const elapsed = Date.now() - lastLoadRef.current;
@@ -264,10 +265,10 @@ export default function ProfileScreen() {
   }, [fetchProfile, profile]));
 
   useEffect(() => {
-    if (!loading || appUserLoading) return; // wait for AppDataContext before starting timeout
+    if (!loading) return;
     const t = setTimeout(() => { setLoading(false); setError(true); }, 30_000);
     return () => clearTimeout(t);
-  }, [loading, appUserLoading]);
+  }, [loading]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
