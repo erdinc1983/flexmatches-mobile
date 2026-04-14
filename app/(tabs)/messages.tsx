@@ -15,8 +15,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ErrorState } from "../../components/ui/ErrorState";
 import {
-  View, Text, StyleSheet, FlatList,
-  ActivityIndicator, RefreshControl, Alert,
+  View, Text, StyleSheet, FlatList, RefreshControl, Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";

@@ -6,15 +6,15 @@ import {
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { PENDING_REF_KEY } from "../_layout";
-
-const TERMS_URL   = "https://www.flexmatches.com/terms";
-const PRIVACY_URL = "https://www.flexmatches.com/privacy-policy";
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as AppleAuthentication from "expo-apple-authentication";
 import { supabase } from "../../lib/supabase";
 import { signInWithApple, isAppleAuthAvailable } from "../../lib/appleAuth";
+
+const TERMS_URL   = "https://www.flexmatches.com/terms";
+const PRIVACY_URL = "https://www.flexmatches.com/privacy-policy";
 
 function getStrength(pw: string): { label: string; color: string; bars: number } {
   if (pw.length < 6) return { label: "Too short", color: "#E53E3E", bars: 1 };

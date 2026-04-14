@@ -21,8 +21,7 @@ import { useFocusEffect, router } from "expo-router";
 import { ErrorState } from "../../components/ui/ErrorState";
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  ActivityIndicator, RefreshControl, ScrollView, Modal, Alert,
-  TouchableWithoutFeedback, TextInput, InteractionManager,
+  ActivityIndicator, RefreshControl, ScrollView, Modal, Alert, TextInput, InteractionManager,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
@@ -34,11 +33,14 @@ import { Icon } from "../../components/Icon";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { DiscoverSkeleton } from "../../components/ui/Skeleton";
 import { BlurOverlay } from "../../components/ui/BlurOverlay";
-import { PersonCard, DiscoverUser, RequestStatus } from "../../components/discover/PersonCard";
+import { DiscoverUser, RequestStatus } from "../../components/discover/PersonCard";
 import { ProfileSheet } from "../../components/discover/ProfileSheet";
 import { DiscoverMap } from "../../components/discover/DiscoverMap";
 import { SwipeDeck, SwipeDeckRef } from "../../components/discover/SwipeDeck";
 import { GridCard } from "../../components/discover/GridCard";
+
+// ─── At Gym Bubble ────────────────────────────────────────────────────────────
+import { Avatar as AvatarComp } from "../../components/Avatar";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type MyProfile = {
@@ -295,7 +297,7 @@ const fp = StyleSheet.create({
 export default function DiscoverScreen() {
   const { theme } = useTheme();
   const c = theme.colors;
-  const { appUser, appUserLoading, fetchAppUser } = useAppData();
+  const { appUser, appUserLoading: _appUserLoading, fetchAppUser } = useAppData();
 
   const [myProfile,    setMyProfile]    = useState<MyProfile | null>(null);
   const [users,        setUsers]        = useState<DiscoverUser[]>([]);   // new people (swipe deck)
@@ -507,6 +509,7 @@ export default function DiscoverScreen() {
     setSearchQuery("");
     const elapsed = Date.now() - lastLoadRef.current;
     if (elapsed > STALE_MS || users.length === 0) load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load, users.length, appUser]));
 
   const onRefresh = useCallback(async () => {
@@ -603,7 +606,7 @@ export default function DiscoverScreen() {
   }
 
   // ── Cancel / withdraw pending request (tap Pending button) ───────────────────
-  async function cancelRequest(userId: string) {
+  async function _cancelRequest(userId: string) {
     const uid = currentUserIdRef.current;
     if (!uid) return;
     // Optimistic update — remove from pending list and statuses
@@ -619,7 +622,7 @@ export default function DiscoverScreen() {
 
   // ── Derived ─────────────────────────────────────────────────────────────────
   const atGymUsers   = users.filter((u) => u.is_at_gym);
-  const atGymUserIds = new Set(atGymUsers.map((u) => u.id));
+  const _atGymUserIds = new Set(atGymUsers.map((u) => u.id));
   const sportOptions = myProfile?.sports?.length ? myProfile.sports : ["Gym", "Running", "Cycling"];
   const filterCount  = activeFilterCount(filters);
 
@@ -1132,9 +1135,7 @@ function OptionChip({ label, active, onPress }: { label: string; active: boolean
   );
 }
 
-// ─── At Gym Bubble ────────────────────────────────────────────────────────────
-import { Avatar as AvatarComp } from "../../components/Avatar";
-
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function AtGymBubble({ user, onPress }: { user: DiscoverUser; onPress: () => void }) {
   const { theme } = useTheme();
   const c = theme.colors;
@@ -1154,6 +1155,7 @@ function AtGymBubble({ user, onPress }: { user: DiscoverUser; onPress: () => voi
   );
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function FilterChip({
   label, active, onPress, dot,
 }: { label: string; active: boolean; onPress: () => void; dot?: boolean }) {

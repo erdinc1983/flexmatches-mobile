@@ -170,6 +170,7 @@ export default function ChallengesScreen() {
   useFocusEffect(useCallback(() => {
     const elapsed = Date.now() - lastLoadRef.current;
     if (elapsed > STALE_MS || challenges.length === 0) load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load, challenges.length]));
 
   useEffect(() => {

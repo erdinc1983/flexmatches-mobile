@@ -24,7 +24,7 @@ type Props = {
 
 export function QuickActionsSection({ unreadCount, isAtGym, gymToggling, onToggleGym }: Props) {
   const { theme } = useTheme();
-  const c = theme.colors;
+  const _c = theme.colors;
 
   return (
     <View style={{ gap: SPACE[10] }}>

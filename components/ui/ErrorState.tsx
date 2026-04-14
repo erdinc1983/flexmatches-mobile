@@ -8,7 +8,7 @@
 
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
-import { useTheme, FONT, SPACE, RADIUS, PALETTE } from "../../lib/theme";
+import { useTheme, FONT, SPACE, PALETTE } from "../../lib/theme";
 import { Button } from "./Button";
 
 type ErrorStateProps = {

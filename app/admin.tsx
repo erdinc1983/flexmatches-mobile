@@ -8,13 +8,14 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  ActivityIndicator, TextInput, Alert, Modal, FlatList,
+  View, Text, StyleSheet, TouchableOpacity,
+  ActivityIndicator, TextInput, Modal, FlatList,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { supabase } from "../lib/supabase";
-import { useTheme, SPACE, FONT, RADIUS, PALETTE, BRAND } from "../lib/theme";
+import { useTheme, SPACE, FONT, RADIUS, PALETTE } from "../lib/theme";
+import { Avatar } from "../components/Avatar";
 
 const ADMIN_ACTION_URL = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/admin-action`;
 
@@ -39,7 +40,6 @@ async function callAdminAction(
     return { ok: false, error: e.message ?? "Network error" };
   }
 }
-import { Avatar } from "../components/Avatar";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type AdminUser = {

@@ -16,7 +16,7 @@ const MAX_VISIBLE = 2;
 
 export function PendingRequestsSection({ requests, onAccept, onDecline }: Props) {
   const { theme } = useTheme();
-  const c = theme.colors;
+  const _c = theme.colors;
 
   if (requests.length === 0) return null;
 

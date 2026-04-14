@@ -198,6 +198,7 @@ export default function MatchesScreen() {
   useFocusEffect(useCallback(() => {
     const elapsed = Date.now() - lastLoadRef.current;
     if (elapsed > STALE_MS || pending.length + accepted.length === 0) load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load, pending.length, accepted.length]));
 
   const onRefresh = useCallback(async () => {

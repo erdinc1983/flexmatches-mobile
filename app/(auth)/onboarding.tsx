@@ -8,7 +8,7 @@ import { router } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import { CityAutocomplete } from "../../components/CityAutocomplete";
 
-const { width } = Dimensions.get("window");
+const { width: _width } = Dimensions.get("window");
 const TOTAL_STEPS = 5;
 
 const INTENT_OPTIONS = [

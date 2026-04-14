@@ -34,7 +34,7 @@ const { height: H, width: W } = Dimensions.get("window");
 const LEVEL_COLOR: Record<string, string> = {
   beginner: "#22C55E", intermediate: "#F59E0B", advanced: "#FF4500",
 };
-const TAG_PALETTE: Array<[string, string]> = [
+const TAG_PALETTE: [string, string][] = [
   ["#FF450018", "#FF4500"], ["#22C55E18", "#22C55E"], ["#3B82F618", "#3B82F6"],
 ];
 const SLOT_LABEL: Record<string, string> = {

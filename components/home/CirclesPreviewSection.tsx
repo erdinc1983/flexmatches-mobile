@@ -48,7 +48,7 @@ function CircleCard({ circle, onPress, onDismiss }: {
   onDismiss?: (id: string) => void;
 }) {
   const { theme } = useTheme();
-  const c = theme.colors;
+  const _c = theme.colors;
 
   const photoUri = getSportPhoto(circle.sport, circle.name);
 

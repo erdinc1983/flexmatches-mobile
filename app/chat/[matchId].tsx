@@ -13,11 +13,11 @@
  *   Step 3 — Time (optional) + Location → Propose
  */
 
-import { useCallback, useEffect, useRef, useState, useMemo } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
   FlatList, KeyboardAvoidingView, Platform, ActivityIndicator,
-  Modal, ScrollView, Dimensions, Vibration, Alert, useWindowDimensions,
+  Modal, ScrollView, Dimensions, Vibration, Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -182,7 +182,7 @@ function TimeColumn({ value, max, step, onChange, colors }: {
 // ─── Screen ───────────────────────────────────────────────────────────────────
 export default function ChatScreen() {
   const { matchId }       = useLocalSearchParams<{ matchId: string }>();
-  const { theme, isDark } = useTheme();
+  const { theme, isDark: _isDark } = useTheme();
   const c = theme.colors;
   const { refresh: refreshNotifs } = useNotifications();
 

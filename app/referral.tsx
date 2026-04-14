@@ -9,11 +9,10 @@
 import { useCallback, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, Share, Alert, RefreshControl,
-} from "react-native";
+  ActivityIndicator, Share, RefreshControl,
+ Clipboard } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
-import { Clipboard } from "react-native";
 import { supabase } from "../lib/supabase";
 import { useTheme, SPACE, FONT, RADIUS, PALETTE } from "../lib/theme";
 import { Icon } from "../components/Icon";

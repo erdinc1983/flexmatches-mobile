@@ -95,6 +95,16 @@ type Venue = {
 
 type NearbyUser = DiscoverUser & { latitude: number; longitude: number };
 
+/**
+ * Fuzz a partner's coordinate before rendering on the map.
+ * Rounds to ~1.1km precision (2 decimal places) so we never reveal exact
+ * home/gym location. Deterministic: same input → same output (no per-query
+ * jitter that could be averaged away). Self markers are NOT fuzzed.
+ */
+function fuzzCoord(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
 type Props = {
   users:       DiscoverUser[];
   statuses:    Record<string, RequestStatus>;
@@ -133,10 +143,10 @@ export function DiscoverMap({ users, statuses, onUserPress }: Props) {
     const r: Region = { latitude, longitude, latitudeDelta: DELTA, longitudeDelta: DELTA };
     setRegion(r);
 
-    // Save location to profile (best-effort)
+    // Save location to profile (best-effort). DB columns are lat/lng (not latitude/longitude).
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
-      supabase.from("users").update({ latitude, longitude }).eq("id", user.id).then(() => {});
+      supabase.from("users").update({ lat: latitude, lng: longitude }).eq("id", user.id).then(() => {});
     }
 
     await Promise.all([
@@ -203,22 +213,25 @@ export function DiscoverMap({ users, statuses, onUserPress }: Props) {
   }
 
   async function fetchNearbyUsers(lat: number, lon: number) {
-    // Fetch users who have shared coordinates (after migration)
+    // DB columns are lat/lng (not latitude/longitude). Fetch exact coords for
+    // distance calculation, then fuzz before storing for render.
     const { data } = await supabase
       .from("users")
-      .select(DISCOVER_USER_COLUMNS + ", latitude, longitude")
-      .not("latitude", "is", null)
-      .not("longitude", "is", null)
+      .select(DISCOVER_USER_COLUMNS)
+      .not("lat", "is", null)
+      .not("lng", "is", null)
       .limit(50);
 
     const KM = 15;
     const nearby = (data ?? []).filter((u: any) => {
-      const dist = haversine(lat, lon, u.latitude, u.longitude);
+      const dist = haversine(lat, lon, u.lat, u.lng);
       return dist <= KM;
     }).map((u: any): NearbyUser => ({
       ...toDiscoverUser(u),
-      latitude:  u.latitude,
-      longitude: u.longitude,
+      // Fuzz to ~1.1km precision for map render. Real lat/lng stay in
+      // toDiscoverUser() → user.lat/lng for profile sheet distance text.
+      latitude:  fuzzCoord(u.lat),
+      longitude: fuzzCoord(u.lng),
     }));
 
     setNearbyUsers(nearby);

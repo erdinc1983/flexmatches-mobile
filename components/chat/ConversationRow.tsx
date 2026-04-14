@@ -16,7 +16,7 @@ import React, { useRef } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
 import { Ionicons } from "@expo/vector-icons";
-import { useTheme, SPACE, FONT, RADIUS } from "../../lib/theme";
+import { useTheme, SPACE, RADIUS } from "../../lib/theme";
 import { Avatar } from "../Avatar";
 import { getSessionState, formatSessionDate } from "./SessionBanner";
 import type { BuddySession } from "./SessionBanner";

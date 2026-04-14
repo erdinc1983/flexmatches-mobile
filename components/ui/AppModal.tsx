@@ -16,9 +16,8 @@ import React from "react";
 import {
   Modal, View, Text, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform,
-} from "react-native";
+ Pressable } from "react-native";
 import { BlurView } from "expo-blur";
-import { Pressable } from "react-native";
 import { useTheme, SPACE, FONT, RADIUS } from "../../lib/theme";
 
 type Props = {

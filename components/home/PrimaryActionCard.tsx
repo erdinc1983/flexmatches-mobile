@@ -39,7 +39,7 @@ type Props = {
 // ─── Component ────────────────────────────────────────────────────────────────
 export function PrimaryActionCard({ action, onLogWorkout, checkingIn }: Props) {
   const { theme } = useTheme();
-  const c = theme.colors;
+  const _c = theme.colors;
 
   const isLogAction = action.kind === "log_streak" || action.kind === "at_gym_log";
 

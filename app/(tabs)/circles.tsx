@@ -14,18 +14,12 @@ import {
   ActivityIndicator, TextInput, Modal, ScrollView,
   RefreshControl, Alert, KeyboardAvoidingView, Platform, Dimensions,
   useWindowDimensions, Pressable,
-} from "react-native";
+ ImageBackground } from "react-native";
 import { BlurView } from "expo-blur";
-
-const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-const DAY_LABELS = ["Su","Mo","Tu","We","Th","Fr","Sa"];
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
-import { ImageBackground } from "react-native";
 import { supabase } from "../../lib/supabase";
-
-const HERO_IMG = require("../../assets/images/circles-hero.jpeg");
 import { useTheme, SPACE, FONT, RADIUS } from "../../lib/theme";
 import { Icon } from "../../components/Icon";
 import { Avatar } from "../../components/Avatar";
@@ -35,6 +29,11 @@ import { MapLocationPicker } from "../../components/MapLocationPicker";
 import { scheduleEventReminder } from "../../lib/notifications";
 import { notifyUser } from "../../lib/push";
 import { getSportPhoto } from "../../lib/sportPhotos";
+
+const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const DAY_LABELS = ["Su","Mo","Tu","We","Th","Fr","Sa"];
+
+const HERO_IMG = require("../../assets/images/circles-hero.jpeg");
 
 const { height: SCREEN_H } = Dimensions.get("window");
 
@@ -50,7 +49,7 @@ type CategoryKey = typeof ACTIVITY_CATEGORIES[number]["key"];
 
 const EMOJIS = ["🏋️", "🏃", "🚴", "🏊", "⚽", "🏀", "🎾", "🥊", "🧘", "💪", "♟️", "🎲", "🏔️", "🧗", "🔥", "⚡", "🎯", "🌿"];
 
-function categoryOfActivity(activity: string): CategoryKey {
+function _categoryOfActivity(activity: string): CategoryKey {
   for (const cat of ACTIVITY_CATEGORIES) {
     if ((cat.activities as readonly string[]).includes(activity)) return cat.key;
   }
@@ -276,6 +275,7 @@ export default function CirclesScreen() {
   useFocusEffect(useCallback(() => {
     const elapsed = Date.now() - lastLoadRef.current;
     if (elapsed > STALE_MS || communities.length === 0) load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load, communities.length]));
 
   useEffect(() => {

@@ -272,7 +272,7 @@ export default function RootLayout() {
     });
 
     return () => { sub.remove(); linkingSub.remove(); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, []);
 
   useEffect(() => {

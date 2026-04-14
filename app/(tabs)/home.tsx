@@ -15,11 +15,10 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 // FM-101: ErrorState for load() failure recovery
 import { ErrorState } from "../../components/ui/ErrorState";
-import { useFocusEffect } from "expo-router";
-import { router } from "expo-router";
+import { useFocusEffect , router } from "expo-router";
 import {
   ScrollView, ActivityIndicator, Alert, RefreshControl,
-  StyleSheet, View, Text, TouchableOpacity, Pressable, Modal, TextInput, KeyboardAvoidingView, Platform,
+  StyleSheet, View, Text, TouchableOpacity, Pressable, TextInput, KeyboardAvoidingView, Platform,
   InteractionManager, ImageBackground, Dimensions,
 } from "react-native";
 import { Image } from "expo-image";
@@ -32,7 +31,7 @@ import { notifyMatchAccepted } from "../../lib/notifications";
 import { notifyUser } from "../../lib/push";
 import { useTheme, SPACE, FONT, RADIUS, PALETTE, SHADOW, TYPE } from "../../lib/theme";
 import { useAppData } from "../../lib/appDataContext";
-import { getSportPhoto, SPORT_PHOTOS } from "../../lib/sportPhotos";
+import { getSportPhoto } from "../../lib/sportPhotos";
 import { Icon } from "../../components/Icon";
 import { Avatar } from "../../components/Avatar";
 
@@ -94,7 +93,7 @@ export default function HomeScreen() {
   const { theme } = useTheme();
   const c = theme.colors;
   const { unreadMessages: unreadCount, unreadCount: notifUnread, refresh: refreshNotifs } = useNotifications();
-  const { appUser, appUserLoading, updateAppUser, fetchAppUser } = useAppData();
+  const { appUser, appUserLoading: _appUserLoading, updateAppUser, fetchAppUser } = useAppData();
 
   const [profile,           setProfile]           = useState<HomeProfile | null>(null);
   const [pendingRequests,   setPendingRequests]   = useState<PendingRequest[]>([]);
@@ -1772,7 +1771,7 @@ function SessionDetailModal({ session, onClose, onCancel, onReschedule }: {
   onCancel:      (id: string) => void;
   onReschedule:  (id: string, date: string, time: string | null) => void;
 }) {
-  const { theme, isDark } = useTheme();
+  const { theme, isDark: _isDark } = useTheme();
   const c = theme.colors;
 
   const [view,        setView]        = useState<"detail" | "reschedule">("detail");

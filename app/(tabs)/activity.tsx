@@ -103,6 +103,7 @@ export default function ActivityScreen() {
   useFocusEffect(useCallback(() => {
     const elapsed = Date.now() - lastLoadRef.current;
     if (elapsed > STALE_MS || workouts.length === 0) load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load, workouts.length]));
 
   useEffect(() => {

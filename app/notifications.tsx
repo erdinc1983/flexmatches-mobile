@@ -17,7 +17,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { supabase } from "../lib/supabase";
 import { ErrorState } from "../components/ui/ErrorState";
-import { useTheme, SPACE, FONT, RADIUS, PALETTE } from "../lib/theme";
+import { useTheme, SPACE, FONT, RADIUS } from "../lib/theme";
 import { useNotifications } from "../lib/notificationContext";
 import { Icon } from "../components/Icon";
 

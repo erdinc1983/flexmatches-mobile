@@ -34,23 +34,38 @@ const TYPE_TO_PREF: Record<NotifType, string> = {
 
 /**
  * Check whether the recipient has opted in to receive this notification type.
- * Returns true if allowed (including on lookup failure — default is to send).
+ *
+ * Supabase returns { data, error } and does not throw on RLS denial or query
+ * failure — we must check `error` explicitly. On any failure we default to
+ * SEND (preserves existing engagement behaviour), but log the failure so it
+ * shows up in Sentry / dev logs. If you're auditing silenced notifications,
+ * grep for "[recipientAllowsType]".
+ *
+ * Long-term: move enforcement server-side via Edge Function using the
+ * service-role key so the sender's client can't bypass the check.
  */
 async function recipientAllowsType(userId: string, type: NotifType): Promise<boolean> {
   const prefKey = TYPE_TO_PREF[type];
   if (!prefKey) return true; // unknown type → default to send
-  try {
-    const { data } = await supabase
-      .from("users")
-      .select("notification_prefs")
-      .eq("id", userId)
-      .single();
-    const prefs = (data?.notification_prefs ?? {}) as Record<string, boolean>;
-    // Missing pref defaults to enabled (matches DEFAULT_NOTIF behaviour in settings.tsx)
-    return prefs[prefKey] !== false;
-  } catch {
+
+  const { data, error } = await supabase
+    .from("users")
+    .select("notification_prefs")
+    .eq("id", userId)
+    .single();
+
+  if (error) {
+    console.warn("[recipientAllowsType] Prefs lookup failed, defaulting to send:", error.message);
     return true;
   }
+  if (!data) {
+    console.warn("[recipientAllowsType] No user row for", userId, "— defaulting to send");
+    return true;
+  }
+
+  const prefs = (data.notification_prefs ?? {}) as Record<string, boolean>;
+  // Missing pref key defaults to enabled (matches DEFAULT_NOTIF in settings.tsx)
+  return prefs[prefKey] !== false;
 }
 
 /**

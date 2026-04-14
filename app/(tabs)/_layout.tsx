@@ -8,7 +8,7 @@ import { Icon } from "../../components/Icon";
 export default function TabsLayout() {
   const { theme } = useTheme();
   const c = theme.colors;
-  const { unreadCount, unreadMessages } = useNotifications();
+  const { unreadCount: _unreadCount, unreadMessages } = useNotifications();
   const insets = useSafeAreaInsets();
 
   return (

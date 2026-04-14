@@ -13,7 +13,6 @@ import { ErrorState } from "../../components/ui/ErrorState";
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   ActivityIndicator, TextInput, Alert, RefreshControl, Share,
-  Switch,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
@@ -25,7 +24,7 @@ import { useAppData } from "../../lib/appDataContext";
 import { Icon } from "../../components/Icon";
 import { Avatar } from "../../components/Avatar";
 import { ProfileSkeleton } from "../../components/ui/Skeleton";
-import { TIERS, BADGES, BADGE_MAP, calcTier, calcUserPoints, type BadgeKey, type Tier } from "../../lib/badges";
+import { TIERS, BADGE_MAP, calcTier, calcUserPoints, type BadgeKey, type Tier } from "../../lib/badges";
 import { useNotifications } from "../../lib/notificationContext";
 import { unregisterPushToken } from "../../lib/push";
 import { AppModal } from "../../components/ui/AppModal";
@@ -154,7 +153,7 @@ export default function ProfileScreen() {
   const { theme } = useTheme();
   const c = theme.colors;
   const { unreadCount } = useNotifications();
-  const { appUser, appUserLoading, refreshAppUser, updateAppUser, fetchAppUser } = useAppData();
+  const { appUser, appUserLoading: _appUserLoading, refreshAppUser: _refreshAppUser, updateAppUser, fetchAppUser } = useAppData();
 
   const [profile,           setProfile]           = useState<Profile | null>(null);
   const [loading,           setLoading]           = useState(true);
@@ -275,6 +274,7 @@ export default function ProfileScreen() {
   useFocusEffect(useCallback(() => {
     const elapsed = Date.now() - lastLoadRef.current;
     if (elapsed > STALE_MS || !profile) fetchProfile();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchProfile, profile]));
 
   useEffect(() => {
@@ -759,7 +759,7 @@ function ViewMode({ profile, workoutsThisMonth, levelColor, earnedBadges, userTi
   const nextTier = TIERS.find(t => t.minPoints > userPoints);
 
   const hasTraining = (profile.sports ?? []).length > 0 || activeDays.length > 0;
-  const hasProgress = true;
+  const _hasProgress = true;
   const hasDetails  = !!(profile.training_intent || (profile.certifications ?? []).length > 0 || profile.target_weight || profile.weight || profile.gender);
   const hasCareer   = !!(profile.company || profile.industry || profile.education_level || profile.career_goals);
 
