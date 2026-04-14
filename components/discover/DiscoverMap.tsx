@@ -3,17 +3,16 @@
  *
  * Interactive map for the Discover tab:
  *   - Fetches sports venues from Overpass API (gym, soccer, basketball, tennis, pool)
- *   - Shows nearby FlexMatches users who have shared their location
+ *   - Shows nearby FlexMatches users via the get_nearby_users RPC — the server
+ *     computes distance, fuzzes marker coords to ~1.1km, and returns zero raw
+ *     partner coordinates to the client
  *   - Category filter chips to show/hide venue types
  *   - Tap user marker → opens ProfileSheet via onUserPress callback
  *   - Tap venue marker → shows venue name callout
  *
- * Requires: latitude / longitude columns on public.users (see migration below)
- *
- * Migration SQL (run once in Supabase SQL editor):
- *   ALTER TABLE public.users
- *     ADD COLUMN IF NOT EXISTS latitude  double precision,
- *     ADD COLUMN IF NOT EXISTS longitude double precision;
+ * Privacy boundary: other users' exact lat/lng are never fetched by this
+ * component. See supabase/sql/05_get_nearby_users.sql for the server-side
+ * SECURITY DEFINER function.
  */
 
 import React, { useEffect, useRef, useState } from "react";
@@ -27,7 +26,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "../../lib/supabase";
 import { useTheme, SPACE, FONT, RADIUS, PALETTE } from "../../lib/theme";
 import { Avatar } from "../Avatar";
-import { toDiscoverUser, DISCOVER_USER_COLUMNS, type DiscoverUser, type RequestStatus } from "./PersonCard";
+import { toDiscoverUser, type DiscoverUser, type RequestStatus } from "./PersonCard";
 
 // ─── Venue cache ──────────────────────────────────────────────────────────────
 // In-memory: survives view-mode switches within the session (instant re-open)
@@ -93,17 +92,14 @@ type Venue = {
   lon:      number;
 };
 
-type NearbyUser = DiscoverUser & { latitude: number; longitude: number };
-
-/**
- * Fuzz a partner's coordinate before rendering on the map.
- * Rounds to ~1.1km precision (2 decimal places) so we never reveal exact
- * home/gym location. Deterministic: same input → same output (no per-query
- * jitter that could be averaged away). Self markers are NOT fuzzed.
- */
-function fuzzCoord(n: number): number {
-  return Math.round(n * 100) / 100;
-}
+// Marker coordinates returned by get_nearby_users RPC are already fuzzed
+// server-side (rounded to 2 decimal places ≈ 1.1km). Raw lat/lng never
+// cross the network for other users.
+type NearbyUser = DiscoverUser & {
+  latitude:     number;   // fuzzed marker position for map render
+  longitude:    number;   // fuzzed marker position for map render
+  distance_km:  number;   // server-computed haversine distance
+};
 
 type Props = {
   users:       DiscoverUser[];
@@ -213,25 +209,28 @@ export function DiscoverMap({ users, statuses, onUserPress }: Props) {
   }
 
   async function fetchNearbyUsers(lat: number, lon: number) {
-    // DB columns are lat/lng (not latitude/longitude). Fetch exact coords for
-    // distance calculation, then fuzz before storing for render.
-    const { data } = await supabase
-      .from("users")
-      .select(DISCOVER_USER_COLUMNS)
-      .not("lat", "is", null)
-      .not("lng", "is", null)
-      .limit(50);
+    // Server-side privacy boundary: get_nearby_users returns
+    // { ...profileFields, distance_km, marker_lat, marker_lng } — raw
+    // partner lat/lng are never sent to this client.
+    const { data, error } = await supabase.rpc("get_nearby_users", {
+      p_caller_lat: lat,
+      p_caller_lng: lon,
+      p_radius_km:  15,
+      p_limit:      50,
+    });
+    if (error) {
+      console.warn("[DiscoverMap] get_nearby_users failed:", error.message);
+      setNearbyUsers([]);
+      return;
+    }
 
-    const KM = 15;
-    const nearby = (data ?? []).filter((u: any) => {
-      const dist = haversine(lat, lon, u.lat, u.lng);
-      return dist <= KM;
-    }).map((u: any): NearbyUser => ({
-      ...toDiscoverUser(u),
-      // Fuzz to ~1.1km precision for map render. Real lat/lng stay in
-      // toDiscoverUser() → user.lat/lng for profile sheet distance text.
-      latitude:  fuzzCoord(u.lat),
-      longitude: fuzzCoord(u.lng),
+    const nearby: NearbyUser[] = (data ?? []).map((row: any) => ({
+      // toDiscoverUser handles missing lat/lng by defaulting to null —
+      // that's correct here because the server intentionally did not return them.
+      ...toDiscoverUser(row),
+      latitude:    row.marker_lat,
+      longitude:   row.marker_lng,
+      distance_km: row.distance_km,
     }));
 
     setNearbyUsers(nearby);
@@ -382,17 +381,6 @@ export function DiscoverMap({ users, statuses, onUserPress }: Props) {
       )}
     </View>
   );
-}
-
-// ─── Haversine distance (km) ──────────────────────────────────────────────────
-function haversine(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R  = 6371;
-  const dL = ((lat2 - lat1) * Math.PI) / 180;
-  const dO = ((lon2 - lon1) * Math.PI) / 180;
-  const a  =
-    Math.sin(dL / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dO / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────

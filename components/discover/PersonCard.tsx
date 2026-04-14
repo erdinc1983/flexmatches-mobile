@@ -59,9 +59,15 @@ export type DiscoverUser = {
 /**
  * Supabase column list for selecting a full DiscoverUser row.
  * Keep in sync with DiscoverUser fields. Use with .select(DISCOVER_USER_COLUMNS).
+ *
+ * Intentionally excludes lat/lng — peer-user coordinates must never be fetched
+ * by the client. For nearby-user discovery use the get_nearby_users RPC, which
+ * returns server-fuzzed marker coords and server-computed distance. Callers
+ * that spread this through toDiscoverUser() get lat:null / lng:null, which is
+ * the correct default.
  */
 export const DISCOVER_USER_COLUMNS =
-  "id, username, full_name, avatar_url, bio, city, fitness_level, age, gender, sports, current_streak, last_active, is_at_gym, availability, training_intent, lat, lng, sessions_completed, reliability_score, phone_verified";
+  "id, username, full_name, avatar_url, bio, city, fitness_level, age, gender, sports, current_streak, last_active, is_at_gym, availability, training_intent, sessions_completed, reliability_score, phone_verified";
 
 /**
  * Build a DiscoverUser from a raw Supabase row. Fills required numeric/
