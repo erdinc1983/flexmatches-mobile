@@ -9,6 +9,12 @@
 --   • Home suggested-partner — same as discover, single-row lookup via
 --                              p_only_id filter
 --
+-- This is a privileged SECURITY DEFINER RPC: it executes with the permissions
+-- of the function owner (the DB role that ran CREATE FUNCTION), bypassing the
+-- caller's RLS. That's what lets us read users.lat/lng without exposing it —
+-- the raw columns stay inside this function and never appear in the returned
+-- row set. SET search_path = public prevents search_path hijacking.
+--
 -- Guarantees:
 --   • NEVER returns raw u.lat / u.lng to the caller
 --   • Computes haversine server-side so the client never sees partner coords
