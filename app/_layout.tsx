@@ -228,7 +228,11 @@ async function resolveAppState(session: Session | null): Promise<AppState> {
 
 export default function RootLayout() {
   const [appState, setAppState] = useState<AppState>("loading");
+  const appStateRef = useRef<AppState>("loading");
   const pendingRoute = useRef<string | null>(null);
+
+  // Keep a live ref to appState so listener closures see current value
+  useEffect(() => { appStateRef.current = appState; }, [appState]);
 
   async function checkAuth() {
     setAppState("loading");
@@ -259,8 +263,8 @@ export default function RootLayout() {
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
       const route = extractRoute(response);
       if (!route) return;
-      // If already ready, navigate immediately; otherwise queue for after auth
-      if (appState === "ready") {
+      // Read the LIVE app state from ref (closure captured "loading" at mount)
+      if (appStateRef.current === "ready") {
         router.push(route as any);
       } else {
         pendingRoute.current = route;

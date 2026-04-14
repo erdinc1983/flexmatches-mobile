@@ -21,9 +21,43 @@ const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 
 export type NotifType = "match_request" | "match_accepted" | "message" | "session_proposed" | "session_accepted" | "session_declined";
 
+// Map notification type to the user pref key that controls whether to send.
+// Keys must match settings.tsx NotifPrefs shape.
+const TYPE_TO_PREF: Record<NotifType, string> = {
+  match_request:     "match_requests",
+  match_accepted:    "match_requests",
+  message:           "new_messages",
+  session_proposed:  "event_reminders",
+  session_accepted:  "event_reminders",
+  session_declined:  "event_reminders",
+};
+
+/**
+ * Check whether the recipient has opted in to receive this notification type.
+ * Returns true if allowed (including on lookup failure — default is to send).
+ */
+async function recipientAllowsType(userId: string, type: NotifType): Promise<boolean> {
+  const prefKey = TYPE_TO_PREF[type];
+  if (!prefKey) return true; // unknown type → default to send
+  try {
+    const { data } = await supabase
+      .from("users")
+      .select("notification_prefs")
+      .eq("id", userId)
+      .single();
+    const prefs = (data?.notification_prefs ?? {}) as Record<string, boolean>;
+    // Missing pref defaults to enabled (matches DEFAULT_NOTIF behaviour in settings.tsx)
+    return prefs[prefKey] !== false;
+  } catch {
+    return true;
+  }
+}
+
 /**
  * Create an in-app notification entry + send push.
  * This is the single function to call for all notification events.
+ * Honours the recipient's notification_prefs — if the user has disabled
+ * this type, we skip both the in-app row AND the push.
  */
 export async function notifyUser(
   userId: string,
@@ -35,6 +69,10 @@ export async function notifyUser(
     data?: Record<string, any>;
   }
 ): Promise<void> {
+  // Respect user's notification preferences — skip entirely if opted out
+  const allowed = await recipientAllowsType(userId, opts.type);
+  if (!allowed) return;
+
   // 1. Insert into notifications table (all types including messages)
   const { error } = await supabase.from("notifications").insert({
     user_id:    userId,

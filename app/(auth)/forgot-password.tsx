@@ -21,7 +21,7 @@ export default function ForgotPasswordScreen() {
     setError(null);
     try {
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(trimmed, {
-        redirectTo: "flexmatches://reset-password",
+        redirectTo: "flexmatchesmobile://reset-password",
       });
       if (resetError) throw resetError;
       setSent(true);

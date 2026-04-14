@@ -90,7 +90,7 @@ export default function AdminScreen() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { router.replace("/(auth)/login"); return; }
     const { data } = await supabase.from("users").select("is_admin").eq("id", user.id).single();
-    if (!data?.is_admin) { router.replace("/app/home"); return; }
+    if (!data?.is_admin) { router.replace("/(tabs)/home"); return; }
     loadUsers();
   }
 
