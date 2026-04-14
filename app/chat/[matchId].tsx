@@ -340,7 +340,7 @@ export default function ChatScreen() {
   const loadSession = useCallback(async () => {
     const { data } = await supabase
       .from("buddy_sessions")
-      .select("id, match_id, proposer_id, receiver_id, sport, session_date, session_time, location, notes, status")
+      .select("id, match_id, proposer_id, receiver_id, sport, session_date, session_time, location, notes, status, proposer_confirmed, receiver_confirmed")
       .eq("match_id", matchId)
       .not("status", "in", '("declined","cancelled","completed")')
       .order("session_date", { ascending: true })

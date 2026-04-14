@@ -40,13 +40,19 @@ export type BuddySession = {
   location:     string | null;
   notes:        string | null;
   status:       "pending" | "accepted" | "completed" | "cancelled" | "declined";
+  // Mutual-confirmation flags (FM-602). Both true → server transitions
+  // status to "completed" and increments stats. Until then the session
+  // stays in "accepted" with one or both flags set.
+  proposer_confirmed: boolean;
+  receiver_confirmed: boolean;
 };
 
 export type SessionState =
   | "pending_mine"
   | "pending_theirs"
   | "upcoming"
-  | "needs_confirm"
+  | "needs_confirm"            // session date passed, I haven't confirmed yet
+  | "awaiting_partner_confirm" // I confirmed, waiting on partner
   | "confirmed";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -54,7 +60,11 @@ export function getSessionState(session: BuddySession, myId: string): SessionSta
   if (session.status === "completed") return "confirmed";
 
   if (session.status === "accepted") {
-    return isDatePast(session.session_date) ? "needs_confirm" : "upcoming";
+    if (!isDatePast(session.session_date)) return "upcoming";
+    const myConfirmed = session.proposer_id === myId
+      ? session.proposer_confirmed
+      : session.receiver_confirmed;
+    return myConfirmed ? "awaiting_partner_confirm" : "needs_confirm";
   }
 
   // pending
@@ -223,6 +233,29 @@ export function SessionBanner({ session, myId, partnerName, onAccept, onDecline,
               : <Text style={s.ctaText}>Accept</Text>
             }
           </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  // ── Awaiting partner confirm: I marked done, partner hasn't yet ────────────
+  if (state === "awaiting_partner_confirm") {
+    const bg     = isDark ? AMBER.darkBg     : AMBER.lightBg;
+    const border = isDark ? AMBER.darkBorder : AMBER.lightBorder;
+    const txt    = isDark ? AMBER.darkText   : AMBER.lightText;
+    const sub    = isDark ? AMBER.darkSub    : AMBER.lightSub;
+    return (
+      <View style={[s.banner, { backgroundColor: bg, borderBottomColor: border }]}>
+        <View style={s.row}>
+          <Icon name="checkActive" size={13} color={AMBER.icon} />
+          <View style={s.textCol}>
+            <Text style={[s.text, { color: txt }]}>
+              {session.sport} · {dateLabel}
+            </Text>
+            <Text style={[s.sub, { color: sub }]}>
+              You confirmed — waiting for {partnerName} to confirm
+            </Text>
+          </View>
         </View>
       </View>
     );
