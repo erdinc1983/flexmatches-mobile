@@ -106,6 +106,13 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
           "FlexMatches uses your location to show nearby training partners and sports venues.",
       },
     ],
+    [
+      "@sentry/react-native/expo",
+      {
+        organization: process.env.SENTRY_ORG ?? "flexmatches",
+        project: process.env.SENTRY_PROJECT ?? "flexmatches-mobile",
+      },
+    ],
   ],
 
   experiments: {
