@@ -88,16 +88,6 @@ const SHOW_ME_OPTIONS = [
 
 const DISTANCE_OPTIONS = [5, 10, 25, 50];
 
-// Haversine distance in km
-function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLng = (lng2 - lng1) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
 // Intent compatibility bonus (0–15 pts)
 function intentBonus(myIntent: string | null, theirIntent: string | null): number {
   if (!myIntent || !theirIntent) return 5; // neutral
@@ -109,7 +99,12 @@ function intentBonus(myIntent: string | null, theirIntent: string | null): numbe
 }
 const NEW_THRESHOLD = 7 * 24 * 60 * 60 * 1000;
 const PAGE_SIZE     = 20;
-const SELECT_FIELDS = "id, username, full_name, bio, city, fitness_level, age, gender, sports, current_streak, last_active, avatar_url, is_at_gym, availability, training_intent, lat, lng, created_at, sessions_completed, reliability_score, phone_verified";
+// SELECT_FIELDS excludes lat/lng — peer coords must never reach the client.
+// Discover queries route through get_nearby_users RPC which returns
+// distance_km (server-computed) without exposing raw partner coords.
+// SELECT_FIELDS is used only for the pending-profiles fetch (already-liked
+// users by id), where distance is irrelevant.
+const SELECT_FIELDS = "id, username, full_name, bio, city, fitness_level, age, gender, sports, current_streak, last_active, avatar_url, is_at_gym, availability, training_intent, created_at, sessions_completed, reliability_score, phone_verified";
 
 function mapUser(u: any): DiscoverUser {
   return {
@@ -122,8 +117,9 @@ function mapUser(u: any): DiscoverUser {
     fitness_level:      u.fitness_level ?? null,
     gender:             u.gender ?? null,
     training_intent:    u.training_intent ?? null,
-    lat:                u.lat ?? null,
-    lng:                u.lng ?? null,
+    lat:                null,                  // peer coords never returned
+    lng:                null,                  // peer coords never returned
+    distance_km:        u.distance_km ?? null, // server-computed, may be null
     age:                u.age ?? null,
     sports:             u.sports ?? null,
     current_streak:     u.current_streak ?? 0,
@@ -182,12 +178,12 @@ function calcMatchScore(me: MyProfile, other: DiscoverUser): number {
   // Intent compatibility (replaces 10pts last_active slot at max)
   score += intentBonus(me.training_intent, other.training_intent);
 
-  // Proximity bonus (if both have coordinates)
-  if (me.lat && me.lng && other.lat && other.lng) {
-    const km = haversineKm(me.lat, me.lng, other.lat, other.lng);
-    if (km <= 5)  score += 10;
-    else if (km <= 15) score += 6;
-    else if (km <= 30) score += 3;
+  // Proximity bonus from server-supplied distance (null when either side
+  // has no coords — proximity simply doesn't contribute then)
+  if (other.distance_km != null) {
+    if (other.distance_km <= 5)       score += 10;
+    else if (other.distance_km <= 15) score += 6;
+    else if (other.distance_km <= 30) score += 3;
   }
 
   return Math.min(score, 100);
@@ -212,10 +208,9 @@ function buildReasons(me: MyProfile, other: DiscoverUser): string[] {
 
   if (me.city && other.city?.toLowerCase() === me.city.toLowerCase()) reasons.push("Same city");
 
-  // Proximity
-  if (me.lat && me.lng && other.lat && other.lng) {
-    const km = Math.round(haversineKm(me.lat, me.lng, other.lat, other.lng));
-    if (km <= 30) reasons.push(`${km} km away`);
+  // Proximity from server-supplied distance
+  if (other.distance_km != null && other.distance_km <= 30) {
+    reasons.push(`${Math.round(other.distance_km)} km away`);
   }
 
   // Trust signal
@@ -260,9 +255,10 @@ function applyFilters(
       const genderMatch = f.showMe === "men" ? u.gender === "male" : u.gender === "female";
       if (!genderMatch) return false;
     }
-    if (f.maxKm && myProfile?.lat && myProfile?.lng && u.lat && u.lng) {
-      if (haversineKm(myProfile.lat, myProfile.lng, u.lat, u.lng) > f.maxKm) return false;
-    }
+    // maxKm filter: server-supplied distance_km. If null (caller or peer
+    // has no coords), the user passes the filter — we don't have signal to
+    // exclude them.
+    if (f.maxKm && u.distance_km != null && u.distance_km > f.maxKm) return false;
     if (query.trim()) {
       if (!(u.full_name ?? u.username ?? "").toLowerCase().includes(query.toLowerCase())) return false;
     }
@@ -416,10 +412,19 @@ export default function DiscoverScreen() {
       .filter((m: any) => m.status === "pending" && m.sender_id === user.id)
       .map((m: any) => m.receiver_id);
 
+    // Candidate fetch via privacy-preserving RPC: server returns distance_km
+    // and never raw peer lat/lng. Excluded set = matched + passed + blocked +
+    // pending-sent (don't show users we already acted on).
+    const excludedArray = Array.from(excluded);
     const [{ data: candidates }, { data: pendingProfiles }] = await Promise.all([
-      supabase.from("users").select(SELECT_FIELDS).neq("id", user.id).is("banned_at", null)
-        .order("created_at", { ascending: false })
-        .range(0, PAGE_SIZE - 1),
+      supabase.rpc("get_nearby_users", {
+        p_caller_lat:  me.lat,
+        p_caller_lng:  me.lng,
+        p_radius_km:   null,
+        p_limit:       PAGE_SIZE,
+        p_exclude_ids: excludedArray,
+        p_offset:      0,
+      }),
       pendingSentIds.length > 0
         ? supabase.from("users").select(SELECT_FIELDS).in("id", pendingSentIds).is("banned_at", null)
         : Promise.resolve({ data: [] }),
@@ -428,7 +433,7 @@ export default function DiscoverScreen() {
     // Pending users for list view (already liked, awaiting response)
     setPendingUsers((pendingProfiles ?? []).map(mapUser));
 
-    const scored: DiscoverUser[] = (candidates ?? [])
+    const scored: DiscoverUser[] = ((candidates ?? []) as any[])
       .filter((u: any) => !excluded.has(u.id))
       .map((u: any): DiscoverUser => {
         const partial = mapUser(u);
@@ -436,7 +441,7 @@ export default function DiscoverScreen() {
         partial.reasons    = buildReasons(me, partial);
         return partial;
       })
-      .sort((a, b) => {
+      .sort((a: DiscoverUser, b: DiscoverUser) => {
         if (a.is_at_gym !== b.is_at_gym) return a.is_at_gym ? -1 : 1;
         return b.matchScore - a.matchScore;
       });
@@ -465,17 +470,18 @@ export default function DiscoverScreen() {
     if (loadingMore || !hasMore) return;
     setLoadingMore(true);
     try {
-      const { data: nextPage } = await supabase
-        .from("users")
-        .select(SELECT_FIELDS)
-        .neq("id", currentUserIdRef.current)
-        .is("banned_at", null)
-        .order("created_at", { ascending: false })
-        .range(rawOffset, rawOffset + PAGE_SIZE - 1);
+      const me = myProfileRef.current;
+      const { data: nextPage } = await supabase.rpc("get_nearby_users", {
+        p_caller_lat:  me?.lat ?? null,
+        p_caller_lng:  me?.lng ?? null,
+        p_radius_km:   null,
+        p_limit:       PAGE_SIZE,
+        p_exclude_ids: Array.from(excludedRef.current),
+        p_offset:      rawOffset,
+      });
 
       if (!nextPage || nextPage.length === 0) { setHasMore(false); return; }
 
-      const me = myProfileRef.current;
       const newUsers: DiscoverUser[] = nextPage
         .filter((u: any) => !excludedRef.current.has(u.id))
         .map((u: any) => {

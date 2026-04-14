@@ -492,9 +492,13 @@ export default function HomeScreen() {
 
   async function openMatchProfile(suggested: SuggestedUser) {
     if (!profile) return;
+    // Peer profile fetch — lat/lng intentionally excluded.
+    // If distance to this partner is needed in future, use the
+    // get_nearby_users RPC with p_only_id, which returns server-
+    // computed distance_km without exposing raw coords.
     const { data } = await supabase
       .from("users")
-      .select("id, username, full_name, avatar_url, bio, city, fitness_level, age, gender, sports, current_streak, last_active, is_at_gym, availability, training_intent, lat, lng")
+      .select("id, username, full_name, avatar_url, bio, city, fitness_level, age, gender, sports, current_streak, last_active, is_at_gym, availability, training_intent")
       .eq("id", suggested.id)
       .single();
     if (!data) return;

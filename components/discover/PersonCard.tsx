@@ -46,8 +46,15 @@ export type DiscoverUser = {
   is_at_gym:       boolean;
   availability:    Record<string, boolean> | null;
   training_intent: string | null;
-  lat:                number | null;
-  lng:                number | null;
+  // lat/lng intentionally omitted for peer users — DiscoverUser is the peer
+  // shape and exact peer coords must never reach the client. Caller's own
+  // coords live separately on MyProfile (see app/(tabs)/discover.tsx).
+  lat:                null;
+  lng:                null;
+  // Server-supplied distance (via get_nearby_users RPC). NULL when caller
+  // has no coords or peer has no coords. Use this for distance UX instead
+  // of computing client-side from raw coords.
+  distance_km:        number | null;
   sessions_completed: number;
   reliability_score:  number;
   phone_verified:     boolean;
@@ -94,8 +101,9 @@ export function toDiscoverUser(
     is_at_gym:          row.is_at_gym ?? false,
     availability:       row.availability ?? null,
     training_intent:    row.training_intent ?? null,
-    lat:                row.lat ?? null,
-    lng:                row.lng ?? null,
+    lat:                null,
+    lng:                null,
+    distance_km:        row.distance_km ?? null,
     sessions_completed: row.sessions_completed ?? 0,
     reliability_score:  row.reliability_score ?? 100,
     phone_verified:     row.phone_verified ?? false,
