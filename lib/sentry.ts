@@ -22,13 +22,6 @@ export function initSentry() {
       }
       return event;
     },
-
-    integrations: [
-      Sentry.mobileReplayIntegration({
-        maskAllText: false,
-        maskAllImages: false,
-      }),
-    ],
   });
 }
 
