@@ -11,6 +11,10 @@ import { NotificationProvider } from "../lib/notificationContext";
 import { AppDataProvider } from "../lib/appDataContext";
 import { registerPushToken } from "../lib/push";
 import { Button } from "../components/ui/Button";
+import { initSentry } from "../lib/sentry";
+
+// Init Sentry before anything else renders
+initSentry();
 
 const ONBOARDING_DONE_KEY    = "onboarding_done_v1";
 const READY_CACHE_KEY        = "auth_ready_uid_v1"; // stores userId when user is confirmed ready
