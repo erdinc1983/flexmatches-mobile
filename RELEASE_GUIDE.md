@@ -38,8 +38,8 @@ Before ANY release, PO must verify:
 
 ### Current Version
 - **app.json version:** `1.0.0`
-- **iOS buildNumber:** `8` (auto-increments via EAS)
-- **Android versionCode:** `1` (auto-increments via EAS)
+- **iOS buildNumber:** `24` (auto-increments via EAS)
+- **Android versionCode:** `7` (auto-increments via EAS)
 
 ### Version History
 

@@ -33,7 +33,7 @@ import { Avatar } from "../../components/Avatar";
 import { SessionBanner } from "../../components/chat/SessionBanner";
 import type { BuddySession } from "../../components/chat/SessionBanner";
 import { ProfileSheet } from "../../components/discover/ProfileSheet";
-import type { DiscoverUser } from "../../components/discover/PersonCard";
+import { toDiscoverUser, DISCOVER_USER_COLUMNS, type DiscoverUser } from "../../components/discover/PersonCard";
 import { BlurOverlay } from "../../components/ui/BlurOverlay";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -562,17 +562,10 @@ export default function ChatScreen() {
   async function openProfile() {
     if (!other) return;
     const { data } = await supabase.from("users")
-      .select("id, username, full_name, avatar_url, bio, city, fitness_level, age, sports, current_streak, last_active, is_at_gym, availability")
+      .select(DISCOVER_USER_COLUMNS)
       .eq("id", other.id).single();
     if (!data) return;
-    setSheetUser({
-      id: data.id, username: data.username, full_name: data.full_name ?? null,
-      avatar_url: data.avatar_url ?? null, bio: data.bio ?? null, city: data.city ?? null,
-      fitness_level: data.fitness_level ?? null, age: data.age ?? null, sports: data.sports ?? [],
-      current_streak: data.current_streak ?? 0, last_active: data.last_active ?? null,
-      is_at_gym: data.is_at_gym ?? false, availability: data.availability ?? null,
-      matchScore: 0, reasons: [], isNew: false,
-    });
+    setSheetUser(toDiscoverUser(data));
   }
 
   // ── Messaging ────────────────────────────────────────────────────────────
@@ -1101,7 +1094,7 @@ export default function ChatScreen() {
                   </View>
 
                   {/* Existing session warning */}
-                  {session && session.status !== "declined" && session.status !== "confirmed" && (
+                  {session && session.status !== "declined" && session.status !== "completed" && session.status !== "cancelled" && (
                     <View style={[wz.existingNote, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}>
                       <Icon name="clock" size={13} color={c.textMuted} />
                       <Text style={[wz.existingNoteText, { color: c.textMuted }]}>

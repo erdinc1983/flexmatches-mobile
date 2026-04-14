@@ -24,7 +24,7 @@ import { useAppData } from "../../lib/appDataContext";
 import { Icon } from "../../components/Icon";
 import { Avatar } from "../../components/Avatar";
 import { ProfileSheet } from "../../components/discover/ProfileSheet";
-import type { DiscoverUser } from "../../components/discover/PersonCard";
+import { toDiscoverUser, DISCOVER_USER_COLUMNS, type DiscoverUser } from "../../components/discover/PersonCard";
 
 const SPORTS = ["Gym", "Running", "Cycling", "Swimming", "Soccer", "Basketball", "Tennis", "Boxing", "Yoga", "CrossFit", "Hiking", "Other"];
 
@@ -262,18 +262,11 @@ export default function MatchesScreen() {
   async function openProfile(userId: string) {
     const { data } = await supabase
       .from("users")
-      .select("id, username, full_name, avatar_url, bio, city, fitness_level, age, gender, sports, current_streak, last_active, is_at_gym, availability, training_intent, lat, lng, sessions_completed, reliability_score")
+      .select(DISCOVER_USER_COLUMNS)
       .eq("id", userId)
       .single();
     if (!data) return;
-    setSheetUser({
-      ...data,
-      matchScore:         0,
-      reasons:            [],
-      isNew:              false,
-      sessions_completed: data.sessions_completed ?? 0,
-      reliability_score:  data.reliability_score ?? 100,
-    } as DiscoverUser);
+    setSheetUser(toDiscoverUser(data));
   }
 
   function getSessionForMatch(matchId: string) {

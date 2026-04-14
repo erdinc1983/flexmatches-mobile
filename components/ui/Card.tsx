@@ -31,9 +31,9 @@ export function Card({ children, variant = "default", onPress, style, padding = 
   const containerStyle: ViewStyle[] = [
     styles.base,
     { backgroundColor: c.bgCard, padding },
-    variant === "elevated"  && { ...SHADOW.md, backgroundColor: c.bgCard },
-    variant === "outlined"  && { borderWidth: 1, borderColor: c.border },
-    variant === "accent"    && { borderWidth: 1, borderColor: c.brandBorder, backgroundColor: c.bgCard },
+    ...(variant === "elevated" ? [{ ...SHADOW.md, backgroundColor: c.bgCard }] : []),
+    ...(variant === "outlined" ? [{ borderWidth: 1, borderColor: c.border }] : []),
+    ...(variant === "accent"   ? [{ borderWidth: 1, borderColor: c.brandBorder, backgroundColor: c.bgCard }] : []),
     style ?? {},
   ];
 

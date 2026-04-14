@@ -591,7 +591,7 @@ export default function ChallengesScreen() {
 const s = StyleSheet.create({
   container:        { flex: 1 },
   header:           { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: SPACE[20], paddingVertical: SPACE[14], borderBottomWidth: 1 },
-  headerTitle:      { fontSize: FONT.size["2xl"], fontWeight: FONT.weight.black },
+  headerTitle:      { fontSize: FONT.size.xxl, fontWeight: FONT.weight.black },
   createBtn:        { borderRadius: RADIUS.md, paddingHorizontal: SPACE[16], paddingVertical: SPACE[8] },
   createBtnText:    { color: "#fff", fontWeight: FONT.weight.bold, fontSize: FONT.size.sm },
   list:             { padding: SPACE[16], gap: SPACE[12], paddingBottom: 80 },

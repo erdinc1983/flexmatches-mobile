@@ -67,18 +67,20 @@ export function ProfileSheet({ user, status, onConnect, onClose, onBlock }: Prop
   const [reported,    setReported]    = useState(false);
 
   if (!user) return null;
+  // Capture in a narrowed local so closures don't lose the null check
+  const u = user;
 
-  const scheduleSlots = Object.entries((user.availability as Record<string, boolean>) ?? {})
+  const scheduleSlots = Object.entries((u.availability as Record<string, boolean>) ?? {})
     .filter(([, v]) => v).map(([k]) => SLOT_LABEL[k] ?? k);
 
   async function handleBlock() {
     setActioning(true);
     const { data: { user: me } } = await supabase.auth.getUser();
     if (!me) { setActioning(false); return; }
-    await supabase.from("blocks").insert({ blocker_id: me.id, blocked_id: user.id });
+    await supabase.from("blocks").insert({ blocker_id: me.id, blocked_id: u.id });
     setActioning(false);
     setMenuOpen(false);
-    onBlock?.(user.id);
+    onBlock?.(u.id);
     onClose();
   }
 
@@ -86,7 +88,7 @@ export function ProfileSheet({ user, status, onConnect, onClose, onBlock }: Prop
     setActioning(true);
     const { data: { user: me } } = await supabase.auth.getUser();
     if (!me) { setActioning(false); return; }
-    await supabase.from("reports").insert({ reporter_id: me.id, reported_id: user.id, reason });
+    await supabase.from("reports").insert({ reporter_id: me.id, reported_id: u.id, reason });
     setActioning(false);
     setShowReport(false);
     setMenuOpen(false);
@@ -97,7 +99,7 @@ export function ProfileSheet({ user, status, onConnect, onClose, onBlock }: Prop
     setMenuOpen(false);
     Alert.alert(
       "Block user?",
-      `${user.full_name ?? user.username} will no longer appear in your Discover or contact you.`,
+      `${u.full_name ?? u.username} will no longer appear in your Discover or contact you.`,
       [
         { text: "Cancel", style: "cancel" },
         { text: "Block", style: "destructive", onPress: handleBlock },
@@ -381,7 +383,7 @@ const s = StyleSheet.create({
   dropDivider: { height: 1 },
 
   // Report
-  reportCard:    { position: "absolute", top: SPACE[52], left: SPACE[14], right: SPACE[14], zIndex: 20, borderRadius: RADIUS.xl, borderWidth: 1, padding: SPACE[14], gap: SPACE[4], elevation: 10 },
+  reportCard:    { position: "absolute", top: SPACE[48], left: SPACE[14], right: SPACE[14], zIndex: 20, borderRadius: RADIUS.xl, borderWidth: 1, padding: SPACE[14], gap: SPACE[4], elevation: 10 },
   reportHeader:  { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: SPACE[8] },
   reportTitle:   { fontSize: FONT.size.sm, fontWeight: FONT.weight.bold },
   reportReason:  { paddingVertical: SPACE[10], borderBottomWidth: 1 },

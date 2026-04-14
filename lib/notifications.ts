@@ -21,7 +21,9 @@ import { Platform } from "react-native";
 // All other push types (match_request, session, etc.) are shown normally.
 Notifications.setNotificationHandler({
   handleNotification: async (notification) => {
-    const isRemotePush = notification.request.trigger?.type === "push";
+    // Trigger union includes push/calendar/timeInterval/etc. Only push triggers have type "push".
+    const trigger = notification.request.trigger as { type?: string } | null;
+    const isRemotePush = trigger?.type === "push";
     const data = notification.request.content.data ?? {};
     const isChatMessagePush = data?.type === "message";
 

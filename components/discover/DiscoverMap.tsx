@@ -27,7 +27,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "../../lib/supabase";
 import { useTheme, SPACE, FONT, RADIUS, PALETTE } from "../../lib/theme";
 import { Avatar } from "../Avatar";
-import type { DiscoverUser, RequestStatus } from "./PersonCard";
+import { toDiscoverUser, DISCOVER_USER_COLUMNS, type DiscoverUser, type RequestStatus } from "./PersonCard";
 
 // ─── Venue cache ──────────────────────────────────────────────────────────────
 // In-memory: survives view-mode switches within the session (instant re-open)
@@ -206,7 +206,7 @@ export function DiscoverMap({ users, statuses, onUserPress }: Props) {
     // Fetch users who have shared coordinates (after migration)
     const { data } = await supabase
       .from("users")
-      .select("id, username, full_name, avatar_url, city, fitness_level, sports, current_streak, is_at_gym, last_active, availability, bio, age, latitude, longitude")
+      .select(DISCOVER_USER_COLUMNS + ", latitude, longitude")
       .not("latitude", "is", null)
       .not("longitude", "is", null)
       .limit(50);
@@ -216,24 +216,9 @@ export function DiscoverMap({ users, statuses, onUserPress }: Props) {
       const dist = haversine(lat, lon, u.latitude, u.longitude);
       return dist <= KM;
     }).map((u: any): NearbyUser => ({
-      id:             u.id,
-      username:       u.username,
-      full_name:      u.full_name ?? null,
-      avatar_url:     u.avatar_url ?? null,
-      bio:            u.bio ?? null,
-      city:           u.city ?? null,
-      fitness_level:  u.fitness_level ?? null,
-      age:            u.age ?? null,
-      sports:         u.sports ?? [],
-      current_streak: u.current_streak ?? 0,
-      last_active:    u.last_active ?? null,
-      is_at_gym:      u.is_at_gym ?? false,
-      availability:   u.availability ?? null,
-      matchScore:     0,
-      reasons:        [],
-      isNew:          false,
-      latitude:       u.latitude,
-      longitude:      u.longitude,
+      ...toDiscoverUser(u),
+      latitude:  u.latitude,
+      longitude: u.longitude,
     }));
 
     setNearbyUsers(nearby);

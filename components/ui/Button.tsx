@@ -50,8 +50,8 @@ export function Button({
     styles.base,
     sizeStyles[size],
     getVariantStyle(variant, c),
-    fullWidth && { alignSelf: "stretch" as const },
-    (disabled || loading) && { opacity: 0.5 },
+    ...(fullWidth ? [{ alignSelf: "stretch" as const }] : []),
+    ...(disabled || loading ? [{ opacity: 0.5 }] : []),
     style ?? {},
   ];
 

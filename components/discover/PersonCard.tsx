@@ -56,6 +56,49 @@ export type DiscoverUser = {
   isNew:              boolean;
 };
 
+/**
+ * Supabase column list for selecting a full DiscoverUser row.
+ * Keep in sync with DiscoverUser fields. Use with .select(DISCOVER_USER_COLUMNS).
+ */
+export const DISCOVER_USER_COLUMNS =
+  "id, username, full_name, avatar_url, bio, city, fitness_level, age, gender, sports, current_streak, last_active, is_at_gym, availability, training_intent, lat, lng, sessions_completed, reliability_score, phone_verified";
+
+/**
+ * Build a DiscoverUser from a raw Supabase row. Fills required numeric/
+ * boolean fields with safe defaults so callers never produce partial types.
+ * Callers should spread their match-specific fields after: { ...toDiscoverUser(row), matchScore: 85, reasons: [...], isNew: true }
+ */
+export function toDiscoverUser(
+  row: Record<string, any>,
+  extras?: Partial<Pick<DiscoverUser, "matchScore" | "reasons" | "isNew">>
+): DiscoverUser {
+  return {
+    id:                 row.id,
+    username:           row.username,
+    full_name:          row.full_name ?? null,
+    avatar_url:         row.avatar_url ?? null,
+    bio:                row.bio ?? null,
+    city:               row.city ?? null,
+    fitness_level:      row.fitness_level ?? null,
+    age:                row.age ?? null,
+    gender:             row.gender ?? null,
+    sports:             row.sports ?? null,
+    current_streak:     row.current_streak ?? 0,
+    last_active:        row.last_active ?? null,
+    is_at_gym:          row.is_at_gym ?? false,
+    availability:       row.availability ?? null,
+    training_intent:    row.training_intent ?? null,
+    lat:                row.lat ?? null,
+    lng:                row.lng ?? null,
+    sessions_completed: row.sessions_completed ?? 0,
+    reliability_score:  row.reliability_score ?? 100,
+    phone_verified:     row.phone_verified ?? false,
+    matchScore:         extras?.matchScore ?? 0,
+    reasons:            extras?.reasons ?? [],
+    isNew:              extras?.isNew ?? false,
+  };
+}
+
 type Props = {
   user:             DiscoverUser;
   status:           RequestStatus;

@@ -288,7 +288,7 @@ const s = StyleSheet.create({
 
   codeRow:         { flexDirection: "row", alignItems: "center", gap: SPACE[10] },
   codeBox:         { flex: 1, borderRadius: RADIUS.lg, paddingHorizontal: SPACE[16], paddingVertical: SPACE[14], borderWidth: 1 },
-  codeText:        { fontSize: FONT.size["2xl"], fontWeight: FONT.weight.black, letterSpacing: 4 },
+  codeText:        { fontSize: FONT.size.xxl, fontWeight: FONT.weight.black, letterSpacing: 4 },
   copyBtn:         { paddingHorizontal: SPACE[14], paddingVertical: SPACE[14], borderRadius: RADIUS.lg, borderWidth: 1 },
   copyBtnText:     { fontSize: FONT.size.sm, fontWeight: FONT.weight.bold },
 

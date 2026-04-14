@@ -446,7 +446,7 @@ const s = StyleSheet.create({
   tabsWrap:    { flexGrow: 0, borderBottomWidth: 1 },
   tabsRow:     { paddingHorizontal: SPACE[16], paddingVertical: SPACE[10], gap: SPACE[8] },
   tab:         { flexDirection: "row", alignItems: "center", gap: SPACE[4],
-                 paddingHorizontal: SPACE[14], paddingVertical: SPACE[7],
+                 paddingHorizontal: SPACE[14], paddingVertical: SPACE[8],
                  borderRadius: RADIUS.pill, borderWidth: 1 },
   tabText:     { fontSize: FONT.size.sm, fontWeight: FONT.weight.semibold },
   tabBadge:    { borderRadius: RADIUS.pill, paddingHorizontal: SPACE[6], paddingVertical: 1, minWidth: 18, alignItems: "center" },

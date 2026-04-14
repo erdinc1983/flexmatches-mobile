@@ -30,7 +30,7 @@ By using FlexMatches, you consent to the data practices described in this policy
 - **Device information:** Device type, operating system, app version
 - **Usage data:** Screens visited, features used, time spent (when analytics are enabled)
 - **Push notification tokens:** Expo push token for sending notifications to your device
-- **Location data:** City-level location for matching nearby partners (only when you grant permission)
+- **Location data:** Precise GPS coordinates (latitude/longitude) — collected only when you grant "While Using the App" permission. Used to show nearby partners and sports venues on the Discover map, and to calculate distance-based match relevance. You can deny location and still use the app with city-level matching based on the City field in your profile. Coordinates are never shared with other users — only derived relative distance is visible on the map.
 
 ### 2.3 Information from Third Parties
 

@@ -33,7 +33,7 @@ export function Chip({ label, selected = false, onPress, variant = "filter", sty
     selected
       ? { backgroundColor: c.brand, borderColor: c.brand }
       : { backgroundColor: c.bgCardAlt, borderColor: c.border },
-    variant === "tag" && { borderRadius: RADIUS.sm },
+    ...(variant === "tag" ? [{ borderRadius: RADIUS.sm }] : []),
     style ?? {},
   ];
 

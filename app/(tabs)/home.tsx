@@ -45,7 +45,7 @@ import { SectionHeader }          from "../../components/ui/SectionHeader";
 import { CirclesPreviewSection }  from "../../components/home/CirclesPreviewSection";
 import { MomentumStrip }          from "../../components/home/MomentumStrip";
 import { ProfileSheet }           from "../../components/discover/ProfileSheet";
-import type { DiscoverUser, RequestStatus } from "../../components/discover/PersonCard";
+import { toDiscoverUser, type DiscoverUser, type RequestStatus } from "../../components/discover/PersonCard";
 
 import {
   HomeProfile, PendingRequest, SuggestedUser, SessionInfo, CirclePreview,
@@ -536,30 +536,7 @@ export default function HomeScreen() {
     computedScore = Math.min(computedScore, 100);
 
     setSheetStatus(status);
-    setSheetUser({
-      id:              data.id,
-      username:        data.username,
-      full_name:       data.full_name ?? null,
-      avatar_url:      data.avatar_url ?? null,
-      bio:             data.bio ?? null,
-      city:            data.city ?? null,
-      fitness_level:   data.fitness_level ?? null,
-      age:             data.age ?? null,
-      gender:          data.gender ?? null,
-      sports:          data.sports ?? [],
-      current_streak:  data.current_streak ?? 0,
-      last_active:     data.last_active ?? null,
-      is_at_gym:       data.is_at_gym ?? false,
-      availability:    data.availability ?? null,
-      training_intent: data.training_intent ?? null,
-      lat:             data.lat ?? null,
-      lng:             data.lng ?? null,
-      matchScore:          computedScore,
-      reasons:             suggested.reasons,
-      isNew:               false,
-      sessions_completed:  0,
-      reliability_score:   0,
-    });
+    setSheetUser(toDiscoverUser(data, { matchScore: computedScore, reasons: suggested.reasons, isNew: false }));
   }
 
   async function sendRequestFromSheet() {

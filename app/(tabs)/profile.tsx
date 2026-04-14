@@ -220,17 +220,30 @@ export default function ProfileScreen() {
 
     const rTotal     = receivedTotal ?? 0;
     const rResponded = receivedResponded ?? 0;
+    const d = data as any;
     const full: Profile = {
       ...data,
+      fitness_level:       (["beginner", "intermediate", "advanced"].includes(data.fitness_level ?? "") ? data.fitness_level : null) as Profile["fitness_level"],
       sports:              data.sports ?? [],
-      certifications:      (data as any).certifications ?? [],
+      certifications:      d.certifications ?? [],
       avatar_url:          data.avatar_url ?? null,
       current_streak:      data.current_streak ?? 0,
-      longest_streak:      (data as any).longest_streak ?? 0,
+      longest_streak:      d.longest_streak ?? 0,
       total_workouts:      totalWorkouts ?? 0,
       match_count:         matchCount ?? 0,
       sessions_completed:  sessionsCompleted ?? 0,
       response_rate:       rTotal > 0 ? Math.round((rResponded / rTotal) * 100) : null,
+      // Optional fields not in AppUser — fall back to null so Profile type is satisfied
+      occupation:          d.occupation ?? null,
+      company:             d.company ?? null,
+      industry:            d.industry ?? null,
+      education_level:     d.education_level ?? null,
+      career_goals:        d.career_goals ?? null,
+      is_pro:              d.is_pro ?? null,
+      training_intent:     d.training_intent ?? null,
+      show_me:             d.show_me ?? null,
+      weight:              d.weight ?? null,
+      target_weight:       d.target_weight ?? null,
     };
     setProfile(full);
     setForm(full);
