@@ -284,6 +284,11 @@ export default function ChatScreen() {
       supabase.removeChannel(msgChannel);
       supabase.removeChannel(sessionChannel);
     };
+    // init() is defined inside the component — not wrapped in useCallback —
+    // so it's a new reference every render. Adding it to deps would re-fire
+    // this effect (and re-subscribe realtime channels) on every render.
+    // Effect correctly re-runs only when the route param matchId changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchId]);
 
   async function init() {

@@ -35,7 +35,13 @@ export default function LeaderboardScreen() {
   const [error, setError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => { load(); }, [tab]);
+  useEffect(() => {
+    // `load` reads `tab` — re-running on tab change is the correct behaviour.
+    // Intentionally not adding `load` to deps (it's a new function every render
+    // and not wrapped in useCallback, so including it would fire every render).
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
 
   useEffect(() => {
     if (!loading) return;

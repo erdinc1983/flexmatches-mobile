@@ -121,7 +121,7 @@ export function MapLocationPicker({ onSelect, onClose, colors }: Props) {
 
   function toggleKey(key: MapVenueKey) {
     const next = new Set(activeKeys);
-    next.has(key) ? next.delete(key) : next.add(key);
+    if (next.has(key)) next.delete(key); else next.add(key);
     setActiveKeys(next);
     const loc = userLocRef.current;
     if (loc && next.size > 0) fetchVenues(loc.lat, loc.lon, next);

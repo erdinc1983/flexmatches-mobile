@@ -83,7 +83,10 @@ export default function AdminScreen() {
 
   // ── Auth guard ──────────────────────────────────────────────────────────────
   useEffect(() => {
+    // Mount-once check. checkAdmin closes over the current router + supabase
+    // client (both stable), so there's no stale-closure risk.
     checkAdmin();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function checkAdmin() {

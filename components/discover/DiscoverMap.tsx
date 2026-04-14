@@ -123,7 +123,12 @@ export function DiscoverMap({ users, statuses, onUserPress }: Props) {
 
   // ── Location + initial data ────────────────────────────────────────────────
   useEffect(() => {
+    // Mount-once: request permission, fetch caller coords, kick off venue +
+    // nearby-user queries. initLocation is defined below (regular async fn,
+    // new every render) — adding it to deps would re-run the whole thing
+    // every render, triggering a permission prompt loop.
     initLocation();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function initLocation() {
@@ -255,7 +260,7 @@ export function DiscoverMap({ users, statuses, onUserPress }: Props) {
   function toggleCategory(cat: VenueCategory) {
     setActiveCategories((prev) => {
       const next = new Set(prev);
-      next.has(cat) ? next.delete(cat) : next.add(cat);
+      if (next.has(cat)) next.delete(cat); else next.add(cat);
       return next;
     });
   }

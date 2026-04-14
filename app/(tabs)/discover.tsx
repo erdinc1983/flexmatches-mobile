@@ -964,7 +964,13 @@ function FilterModal({
   const { theme } = useTheme();
   const c = theme.colors;
   const [draft, setDraft] = useState<Filters>(filters);
-  useEffect(() => { if (visible) setDraft(filters); }, [visible]);
+  useEffect(() => {
+    // Intentionally re-seeds draft only when the modal opens. Including
+    // `filters` as a dep would clobber the user's in-progress edits every
+    // time the parent recomputes filters.
+    if (visible) setDraft(filters);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
 
   const activeCount  = activeFilterCount(draft);
   const previewCount = applyFilters(allUsers, draft, myProfile, "").length;

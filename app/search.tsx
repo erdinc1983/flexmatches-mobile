@@ -59,11 +59,15 @@ export default function SearchScreen() {
   }, []);
 
   useEffect(() => {
+    // Debounced search. Intentionally only depends on `query` — including
+    // `search` (a regular fn, new every render) would reset the debounce
+    // timer on every render and defeat the debounce entirely.
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!query.trim()) { setResults([]); setStatuses({}); return; }
 
     debounceRef.current = setTimeout(() => search(query.trim()), 350);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
 
   async function search(q: string) {
