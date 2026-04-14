@@ -166,7 +166,6 @@ export default function NotificationsScreen() {
         .order("created_at", { ascending: false })
         .limit(100);
       if (queryError) throw queryError;
-      console.log("[Notifications] loaded", (data ?? []).length, "rows");
       setNotifs(data ?? []);
     } catch (err) {
       console.error("[Notifications] load failed:", err);
