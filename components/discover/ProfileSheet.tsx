@@ -323,6 +323,29 @@ export function ProfileSheet({ user, status, onConnect, onClose, onBlock }: Prop
               </View>
             )}
 
+            {/* ── Sparse-profile empty state ──────────────────────── */}
+            {/* Every body section above is conditional. When a member is
+                brand new and hasn't filled anything in (no bio, no sports,
+                no schedule, no streak, no reasons), the body collapses to
+                nothing and the sheet looks like "just a picture". Show a
+                friendly fallback so the user knows there IS a person here. */}
+            {!user.bio
+              && (user.sports ?? []).length === 0
+              && scheduleSlots.length === 0
+              && user.reasons.length === 0
+              && !user.training_intent
+              && user.current_streak < 1
+              && user.matchScore < 1
+              && (
+              <View style={[s.section, { borderColor: c.border }]}>
+                <Text style={[s.sectionTitle, { color: c.textMuted }]}>About</Text>
+                <Text style={[s.bio, { color: c.textMuted, fontStyle: "italic" }]}>
+                  This member is new — they haven't filled out their profile yet.
+                  Send a request to start a conversation.
+                </Text>
+              </View>
+            )}
+
             {/* ── CTA ─────────────────────────────────────────────── */}
             <View style={s.cta}>
               {status === "none" && (
