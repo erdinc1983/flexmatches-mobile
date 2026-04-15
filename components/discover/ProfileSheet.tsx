@@ -226,11 +226,15 @@ export function ProfileSheet({ user, status, onConnect, onClose, onBlock }: Prop
             );
           })()}
 
-          {/* flex: 1 is required — without it the ScrollView measures to its
-              content size and silently bypasses the card's maxHeight, so the
-              profile appears "frozen" and un-scrollable. */}
+          {/* The ScrollView sizes itself: maxHeight caps it (so dense
+              profiles scroll within the card) but it shrinks to its content
+              when there's little to show (so sparse profiles don't waste
+              space). The earlier `flex: 1` only works when the parent has
+              a constrained height — the card here only has maxHeight, so
+              flex:1 measured to 0 and the body collapsed to nothing,
+              which is what made the sheet look like "just a picture." */}
           <ScrollView
-            style={{ flex: 1 }}
+            style={{ maxHeight: H * 0.55 }}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={s.content}
             nestedScrollEnabled
