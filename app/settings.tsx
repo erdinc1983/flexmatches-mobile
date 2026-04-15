@@ -14,7 +14,7 @@
 import { useEffect, useState } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  ActivityIndicator, TextInput, Alert, Switch, Linking,
+  ActivityIndicator, TextInput, Alert, Switch, Linking, Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -432,7 +432,7 @@ export default function SettingsScreen() {
         {/* ── About ── */}
         <SettingCard title="About" c={c}>
           <InfoRow label="Version"  value="1.0.0 (MVP 9)" c={c} />
-          <InfoRow label="Platform" value="FlexMatches iOS" c={c} />
+          <InfoRow label="Platform" value={`FlexMatches ${Platform.OS === "ios" ? "iOS" : Platform.OS === "android" ? "Android" : "Mobile"}`} c={c} />
           <InfoRow label="Build"    value="2026 · Beta" c={c} />
           <ActionRow label="📄  Terms of Service"  onPress={() => Linking.openURL("https://www.flexmatches.com/terms")} c={c} />
           <ActionRow label="🔒  Privacy Policy"    onPress={() => Linking.openURL("https://www.flexmatches.com/privacy-policy")} c={c} />

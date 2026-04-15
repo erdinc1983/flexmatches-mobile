@@ -56,6 +56,13 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       "android.permission.CAMERA",
       "android.permission.READ_MEDIA_IMAGES",
     ],
+    // Strip permissions that expo-image-picker (and other libs) pull in
+    // by default but we don't actually use. We launch ImagePicker with
+    // mediaTypes: ["images"] only — no audio capture, no video. Without
+    // this block, Google Play Console asks "why microphone?" at review.
+    blockedPermissions: [
+      "android.permission.RECORD_AUDIO",
+    ],
     // Google Maps API key — injected into AndroidManifest.xml at build time.
     // Enable "Maps SDK for Android" on this key in Google Cloud Console.
     config: {
@@ -63,6 +70,24 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         apiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? "",
       },
     },
+    // Android App Links — let "Open with FlexMatches" handle these URLs
+    // tapped in browser/SMS. autoVerify=true requires a matching
+    // assetlinks.json hosted at https://flexmatches.com/.well-known/
+    // assetlinks.json (see apps/web/public/.well-known/assetlinks.json).
+    // The web fallback still works for users without the app installed.
+    intentFilters: [
+      {
+        action: "VIEW",
+        autoVerify: true,
+        data: [
+          { scheme: "https", host: "flexmatches.com", pathPrefix: "/register" },
+          { scheme: "https", host: "www.flexmatches.com", pathPrefix: "/register" },
+          { scheme: "https", host: "flexmatches.com", pathPrefix: "/reset-password" },
+          { scheme: "https", host: "www.flexmatches.com", pathPrefix: "/reset-password" },
+        ],
+        category: ["BROWSABLE", "DEFAULT"],
+      },
+    ],
   },
 
   web: {
