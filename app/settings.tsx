@@ -230,29 +230,46 @@ export default function SettingsScreen() {
     if (!token || phoneSaving || !userId) return;
     setPhoneSaving(true);
     setPhoneMsg("");
-    const { error } = await supabase.auth.verifyOtp({ phone, token, type: "phone_change" });
-    if (error) {
-      setPhoneMsg(`Incorrect code. Try again.`);
+    // Server-side verify: the verify-phone Edge Function does the OTP check
+    // AND the trusted phone_verified write under service-role. The client
+    // never writes phone_verified directly — DB also revokes that column
+    // UPDATE from authenticated as defense in depth.
+    const { data: session } = await supabase.auth.getSession();
+    const accessToken = session?.session?.access_token;
+    if (!accessToken) {
+      setPhoneMsg("Session expired. Please log in again.");
       setPhoneSaving(false);
       return;
     }
-    // Phone is unique-indexed in users.phone (ref: 10_referral_rewards.sql).
-    // If another account already claimed this number, the update fails with
-    // a unique-constraint error — must surface it instead of silently
-    // marking verified and letting the user think referral rewards will
-    // accrue from a phone that doesn't actually count.
-    const { error: updateErr } = await supabase
-      .from("users")
-      .update({ phone_verified: true, phone })
-      .eq("id", userId);
-    setPhoneSaving(false);
-    if (updateErr) {
-      const dup = /duplicate|unique/i.test(updateErr.message);
-      setPhoneMsg(dup
-        ? "This phone number is already in use by another account."
-        : `Could not save: ${updateErr.message}`);
+    const url = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/verify-phone`;
+    let resBody: { ok?: boolean; error?: string; detail?: string } = {};
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization:  `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ phone, token }),
+      });
+      resBody = await res.json().catch(() => ({}));
+      if (!res.ok || !resBody.ok) {
+        const code = resBody.error ?? "unknown";
+        setPhoneMsg(
+          code === "phone_in_use"     ? "This phone number is already in use by another account." :
+          code === "otp_invalid"      ? "Incorrect code. Try again." :
+          code === "bad_phone_format" ? "Phone number format is invalid." :
+                                        "Could not verify. Please try again."
+        );
+        setPhoneSaving(false);
+        return;
+      }
+    } catch {
+      setPhoneMsg("Network error. Check your connection and try again.");
+      setPhoneSaving(false);
       return;
     }
+    setPhoneSaving(false);
     setPhoneVerified(true);
     setPhoneModal(false);
     Alert.alert("Verified!", "Your phone number has been verified. Your profile now shows a verified badge.");

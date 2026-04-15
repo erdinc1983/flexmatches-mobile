@@ -90,8 +90,10 @@ export default function ReferralScreen() {
 
     // Apply any milestone rewards the user has newly earned (idempotent).
     // Covers the case where a referral validated between sessions and the
-    // grant didn't fire on the validate path.
-    supabase.rpc("apply_referral_rewards", { p_referrer_id: user.id }).then(() => {});
+    // grant didn't fire on the validate path. Uses the no-arg variant so
+    // the server derives the referrer from auth.uid() — never trust a
+    // user-supplied id for a grant call.
+    supabase.rpc("apply_my_referral_rewards").then(() => {});
 
     if (refs && refs.length > 0) {
       const ids = refs.map((r: any) => r.referred_user_id);
