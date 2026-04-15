@@ -8,6 +8,7 @@ import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTheme, SPACE, FONT, RADIUS, PALETTE } from "../../lib/theme";
 import { resolveUrl } from "../Avatar";
+import { cartoonAvatar } from "../../lib/avatarFallback";
 import type { DiscoverUser, RequestStatus } from "./PersonCard";
 
 const { width: W } = Dimensions.get("window");
@@ -16,13 +17,7 @@ const COL_GAP = 10;
 const CARD_W  = (W - H_PAD * 2 - COL_GAP) / 2;
 const PHOTO_H = Math.round(CARD_W * 1.1);
 
-// Cartoon fallback
-const WEB_BASE       = "https://flexmatches.com";
-const MALE_AVATARS   = Array.from({ length: 12 }, (_, i) => `${WEB_BASE}/avatars/male/m${i + 1}.jpeg`);
-const FEMALE_AVATARS = Array.from({ length: 12 }, (_, i) => `${WEB_BASE}/avatars/female/f${i + 1}.jpeg`);
-const ALL_AVATARS    = [...MALE_AVATARS, ...FEMALE_AVATARS];
-function nameHash(n: string) { let h = 0; for (let i = 0; i < n.length; i++) h = n.charCodeAt(i) + ((h << 5) - h); return Math.abs(h); }
-function cartoonAvatar(name: string) { return ALL_AVATARS[nameHash(name?.trim() || "user") % ALL_AVATARS.length]; }
+// cartoonAvatar lives in lib/avatarFallback.ts (shared, gender-aware)
 
 function formatActive(iso: string | null): string {
   if (!iso) return "";
@@ -64,7 +59,7 @@ export function GridCard({ user, status, onPress, onConnect, matchId }: Props) {
   const displayName = isUUID ? "Member" : rawName;
 
   const resolvedUrl = resolveUrl(user.avatar_url);
-  const fallbackUrl = cartoonAvatar(displayName);
+  const fallbackUrl = cartoonAvatar(displayName, user.gender);
   const photoUrl    = resolvedUrl ?? fallbackUrl;
 
   const activeStr  = formatActive(user.last_active);

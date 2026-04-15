@@ -1,35 +1,13 @@
 import { Image } from "expo-image";
+// cartoonAvatar lives in lib/avatarFallback.ts (single source of truth,
+// shared with the Discover card components).
+import { cartoonAvatar } from "../lib/avatarFallback";
 
 // Warm neutral blurhash — shows while image loads
 const BLURHASH = "LKHBBd~q9F%M%MIUofRj00M{D%of";
 
 const WEB_BASE      = "https://flexmatches.com";
 const SUPABASE_BASE = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "";
-
-// 12 male + 12 female cartoon avatars on the web server
-const MALE_AVATARS   = Array.from({ length: 12 }, (_, i) => `${WEB_BASE}/avatars/male/m${i + 1}.jpeg`);
-const FEMALE_AVATARS = Array.from({ length: 12 }, (_, i) => `${WEB_BASE}/avatars/female/f${i + 1}.jpeg`);
-const ALL_AVATARS    = [...MALE_AVATARS, ...FEMALE_AVATARS]; // 24 total
-
-function nameHash(name: string): number {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
-  return Math.abs(h);
-}
-
-function cartoonAvatar(name: string, gender?: string | null): string {
-  // Ensure a non-empty seed so hash is stable
-  const seed = name?.trim() || "user";
-  // Pick from the matching-gender pool when known. Unknown/other falls back
-  // to the full 24-avatar pool (50/50 outcome — worse than matched but
-  // better than no avatar at all). Bug before this change: a male user
-  // could land on a female avatar because we always hashed into ALL.
-  const pool =
-    gender === "male"   ? MALE_AVATARS   :
-    gender === "female" ? FEMALE_AVATARS :
-                          ALL_AVATARS;
-  return pool[nameHash(seed) % pool.length];
-}
 
 export function resolveUrl(url: string | null | undefined): string | null {
   if (!url || !url.trim()) return null;

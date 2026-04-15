@@ -142,6 +142,9 @@ export default function ActivityScreen() {
       const newStreak = streakResult?.streak ?? streak;
 
       setStreak(newStreak);
+      // Keep AppDataContext in sync so Home and Profile reflect the new
+      // streak immediately without waiting for the next focus refresh.
+      updateAppUser({ current_streak: newStreak, last_checkin_date: localDate });
 
       const feedContent = notes.trim()
         ? `${sport} · ${notes.trim()}${duration ? ` · ${duration}min` : ""}`

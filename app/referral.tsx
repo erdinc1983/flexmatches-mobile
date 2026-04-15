@@ -88,6 +88,11 @@ export default function ReferralScreen() {
     }
     setReferralCode(code);
 
+    // Apply any milestone rewards the user has newly earned (idempotent).
+    // Covers the case where a referral validated between sessions and the
+    // grant didn't fire on the validate path.
+    supabase.rpc("apply_referral_rewards", { p_referrer_id: user.id }).then(() => {});
+
     if (refs && refs.length > 0) {
       const ids = refs.map((r: any) => r.referred_user_id);
       const { data: users } = await supabase
@@ -280,18 +285,23 @@ export default function ReferralScreen() {
             <Text style={[s.emptyText, { color: c.textMuted }]}>No referrals yet. Share your link above!</Text>
           </View>
         ) : (
-          referrals.map((r) => (
-            <View key={r.id} style={[s.refRow, { backgroundColor: c.bgCard, borderColor: c.border }]}>
-              <Avatar url={r.avatar_url} name={r.username} size={40} />
-              <View style={{ flex: 1 }}>
-                <Text style={[s.refUsername, { color: c.text }]}>@{r.username}</Text>
-                <Text style={[s.refDate, { color: c.textFaint }]}>
-                  Joined {new Date(r.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+          referrals.map((r) => {
+            const counted = !!r.validated_at;
+            return (
+              <View key={r.id} style={[s.refRow, { backgroundColor: c.bgCard, borderColor: c.border }]}>
+                <Avatar url={r.avatar_url} name={r.username} size={40} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.refUsername, { color: c.text }]}>@{r.username}</Text>
+                  <Text style={[s.refDate, { color: c.textFaint }]}>
+                    {counted ? "Counted" : "Joined"} {new Date(counted ? r.validated_at! : r.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                  </Text>
+                </View>
+                <Text style={[s.joinedText, { color: counted ? PALETTE.success : "#F59E0B" }]}>
+                  {counted ? "✓ Counted" : "Pending"}
                 </Text>
               </View>
-              <Text style={[s.joinedText, { color: PALETTE.success }]}>✓ Joined</Text>
-            </View>
-          ))
+            );
+          })
         )}
       </ScrollView>
     </SafeAreaView>

@@ -50,9 +50,12 @@ BEGIN
     RETURN NEW;
   END IF;
 
+  -- BEFORE INSERT — the new row isn't counted yet, so we grant when the
+  -- existing count is < 1000 (this signup will become the (count + 1)th
+  -- member, ≤ 1000 inclusive). Using <= here would let a 1001st user in.
   SELECT COUNT(*) INTO v_count FROM public.users;
 
-  IF v_count <= 1000 THEN
+  IF v_count < 1000 THEN
     NEW.is_pro         := true;
     NEW.pro_source     := 'founding_member';
     NEW.pro_granted_at := now();

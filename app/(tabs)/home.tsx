@@ -464,6 +464,11 @@ export default function HomeScreen() {
         current_streak:      newStreak,
         workout_count_month: p.workout_count_month + 1,
       } : p);
+      // Mirror into AppDataContext so any reader that prefers `appUser`
+      // (Home header streak badge, Activity tab, etc) sees the new value
+      // immediately. Without this, users tap Check In and the streak
+      // indicator stays at the old value until the next refresh.
+      updateAppUser({ current_streak: newStreak, last_checkin_date: today });
     } catch (err) {
       console.error("[logWorkout] failed:", err);
       Alert.alert("Error", "Could not log your workout. Please try again.");

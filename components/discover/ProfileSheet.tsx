@@ -18,16 +18,11 @@ import { BlurView } from "expo-blur";
 import { useTheme, SPACE, FONT, RADIUS, PALETTE } from "../../lib/theme";
 import { Icon } from "../Icon";
 import { resolveUrl } from "../Avatar";
+import { cartoonAvatar } from "../../lib/avatarFallback";
 import { supabase } from "../../lib/supabase";
 import { RequestStatus, DiscoverUser } from "./PersonCard";
 
-// Cartoon fallback
-const WEB_BASE       = "https://flexmatches.com";
-const MALE_AVATARS   = Array.from({ length: 12 }, (_, i) => `${WEB_BASE}/avatars/male/m${i + 1}.jpeg`);
-const FEMALE_AVATARS = Array.from({ length: 12 }, (_, i) => `${WEB_BASE}/avatars/female/f${i + 1}.jpeg`);
-const ALL_AVATARS    = [...MALE_AVATARS, ...FEMALE_AVATARS];
-function nameHash(n: string) { let h = 0; for (let i = 0; i < n.length; i++) h = n.charCodeAt(i) + ((h << 5) - h); return Math.abs(h); }
-function cartoonAvatar(name: string) { return ALL_AVATARS[nameHash(name?.trim() || "user") % ALL_AVATARS.length]; }
+// cartoonAvatar lives in lib/avatarFallback.ts (shared, gender-aware)
 
 const { height: H, width: W } = Dimensions.get("window");
 
@@ -184,7 +179,7 @@ export function ProfileSheet({ user, status, onConnect, onClose, onBlock }: Prop
             const rawName     = user.full_name ?? user.username;
             const isUUID      = /^[0-9a-f-]{20,}$/i.test(rawName);
             const displayName = isUUID ? "Member" : rawName;
-            const photoUrl    = resolveUrl(user.avatar_url) ?? cartoonAvatar(displayName);
+            const photoUrl    = resolveUrl(user.avatar_url) ?? cartoonAvatar(displayName, user.gender);
             const levelColor  = user.fitness_level ? LEVEL_COLOR[user.fitness_level] : "#9CA3AF";
             return (
               <View style={s.photoHeader}>

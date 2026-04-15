@@ -813,6 +813,9 @@ export default function CirclesScreen() {
                 <TextInput style={[s.editInput, { backgroundColor: c.bgCardAlt, borderColor: c.border, color: c.text }]} value={editTime} onChangeText={setEditTime} placeholder="09:00" placeholderTextColor={c.textFaint} keyboardType="numbers-and-punctuation" />
 
                 <Text style={[s.editLabel, { color: c.textMuted }]}>Repeats</Text>
+                <Text style={{ color: c.textFaint, fontSize: FONT.size.xs, marginBottom: SPACE[6] }}>
+                  Label only — after each meeting, update the date manually for the next one.
+                </Text>
                 <View style={{ flexDirection: "row", gap: SPACE[6], marginBottom: SPACE[4] }}>
                   {([
                     { v: "none",     l: "One-off" },
