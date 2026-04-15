@@ -4,7 +4,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, LayoutChangeEvent } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, LayoutChangeEvent, TextInput } from "react-native";
 import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
 import * as Location from "expo-location";
 import { useTheme, SPACE, FONT, RADIUS } from "../lib/theme";
@@ -49,6 +49,8 @@ export function MapLocationPicker({ onSelect, onClose, colors }: Props) {
   const [venues,     setVenues]     = useState<MapVenue[]>([]);
   const [activeKeys, setActiveKeys] = useState<Set<MapVenueKey>>(new Set(["gym"]));
   const [loadingV,   setLoadingV]   = useState(false);
+  const [placeQuery, setPlaceQuery] = useState("");
+  const [searching,  setSearching]  = useState(false);
   // Measured dimensions of the map container
   const [mapSize,    setMapSize]    = useState<{ w: number; h: number } | null>(null);
   const userLocRef = useRef<{ lat: number; lon: number } | null>(null);
@@ -152,6 +154,31 @@ export function MapLocationPicker({ onSelect, onClose, colors }: Props) {
     if (width > 0 && height > 0) setMapSize({ w: width, h: height });
   }
 
+  /** Forward-geocode a place name (city, park, gym, etc) via Nominatim and
+   *  pan the map there. Keeps venue chips active so they re-fetch around the
+   *  new location. User's tested complaint: "I should be able to search city
+   *  from the map, so I might do event somewhere special, like hiking, running,
+   *  visiting a park." */
+  async function searchPlace() {
+    const q = placeQuery.trim();
+    if (!q || searching) return;
+    setSearching(true);
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`;
+      const res = await fetch(url, { headers: { "Accept-Language": "en" } });
+      const json = await res.json();
+      if (Array.isArray(json) && json.length > 0) {
+        const lat = parseFloat(json[0].lat);
+        const lon = parseFloat(json[0].lon);
+        if (!isNaN(lat) && !isNaN(lon)) {
+          mapRef.current?.animateToRegion({ latitude: lat, longitude: lon, latitudeDelta: 0.05, longitudeDelta: 0.05 }, 500);
+          fetchVenues(lat, lon, activeKeys);
+        }
+      }
+    } catch { /* silent */ }
+    setSearching(false);
+  }
+
   return (
     <View style={[mp.root, { backgroundColor: colors.bg }]}>
 
@@ -165,6 +192,30 @@ export function MapLocationPicker({ onSelect, onClose, colors }: Props) {
           ? <ActivityIndicator size="small" color={colors.brand} />
           : <View style={{ width: 22 }} />
         }
+      </View>
+
+      {/* ── Place search (city / park / venue name) ── */}
+      <View style={[mp.searchRow, { backgroundColor: colors.bgCard, borderBottomColor: colors.border }]}>
+        <TextInput
+          value={placeQuery}
+          onChangeText={setPlaceQuery}
+          onSubmitEditing={searchPlace}
+          placeholder="Search city, park, gym…"
+          placeholderTextColor={colors.textFaint}
+          returnKeyType="search"
+          style={[mp.searchInput, { color: colors.text, backgroundColor: colors.bg, borderColor: colors.border }]}
+        />
+        <TouchableOpacity
+          onPress={searchPlace}
+          style={[mp.searchBtn, { backgroundColor: colors.brand, opacity: placeQuery.trim() ? 1 : 0.4 }]}
+          disabled={!placeQuery.trim() || searching}
+          activeOpacity={0.75}
+        >
+          {searching
+            ? <ActivityIndicator size="small" color="#fff" />
+            : <Icon name="search" size={16} color="#fff" />
+          }
+        </TouchableOpacity>
       </View>
 
       {/* ── Category chips ── */}
@@ -253,6 +304,9 @@ const mp = StyleSheet.create({
   header:       { flexDirection: "row", alignItems: "center", paddingHorizontal: SPACE[16], paddingVertical: 0, gap: SPACE[10], borderBottomWidth: 1, height: 52 },
   backBtn:      { width: 36, height: 52, alignItems: "flex-start", justifyContent: "center" },
   title:        { fontSize: FONT.size.lg, fontWeight: FONT.weight.extrabold, flex: 1 },
+  searchRow:    { flexDirection: "row", alignItems: "center", gap: SPACE[8], paddingHorizontal: SPACE[12], paddingVertical: SPACE[8], borderBottomWidth: StyleSheet.hairlineWidth },
+  searchInput:  { flex: 1, height: 40, paddingHorizontal: SPACE[12], borderRadius: RADIUS.lg, borderWidth: 1, fontSize: FONT.size.sm },
+  searchBtn:    { width: 40, height: 40, borderRadius: RADIUS.lg, alignItems: "center", justifyContent: "center" },
   chipWrap:     { height: 48, borderBottomWidth: StyleSheet.hairlineWidth },
   chipRow:      { flexDirection: "row", alignItems: "center", paddingHorizontal: SPACE[12], gap: SPACE[8], height: 48 },
   chip:         { flexDirection: "row", alignItems: "center", gap: SPACE[4], paddingHorizontal: SPACE[10], paddingVertical: SPACE[6], borderRadius: RADIUS.pill, borderWidth: 1.5 },

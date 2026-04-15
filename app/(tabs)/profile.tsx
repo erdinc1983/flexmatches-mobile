@@ -106,6 +106,7 @@ type Profile = {
   certifications:  string[] | null;
   avatar_url:      string | null;
   is_pro:              boolean | null;
+  pro_source:          string | null;
   training_intent:     string | null;
   show_me:             string | null;
   current_streak:      number;
@@ -239,6 +240,7 @@ export default function ProfileScreen() {
       education_level:     d.education_level ?? null,
       career_goals:        d.career_goals ?? null,
       is_pro:              d.is_pro ?? null,
+      pro_source:          d.pro_source ?? null,
       training_intent:     d.training_intent ?? null,
       show_me:             d.show_me ?? null,
       weight:              d.weight ?? null,
@@ -505,7 +507,7 @@ export default function ProfileScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity style={s.avatarWrap} onPress={pickAndUploadPhoto} activeOpacity={0.8}>
-            <Avatar url={profile?.avatar_url} name={profile?.username ?? "?"} size={96} />
+            <Avatar url={profile?.avatar_url} name={profile?.username ?? "?"} gender={profile?.gender} size={96} />
             <View style={[s.cameraBtn, { backgroundColor: c.brand, borderColor: c.bg }]}>
               {uploadingPhoto
                 ? <ActivityIndicator color="#fff" size="small" />
@@ -521,7 +523,9 @@ export default function ProfileScreen() {
             <Text style={[s.name, { color: c.text }]}>{profile?.full_name ?? `@${profile?.username}`}</Text>
             {profile?.is_pro && (
               <View style={[s.proBadge, { backgroundColor: "#f59e0b22", borderColor: "#f59e0b55" }]}>
-                <Text style={[s.proBadgeText, { color: "#f59e0b" }]}>PRO</Text>
+                <Text style={[s.proBadgeText, { color: "#f59e0b" }]}>
+                  {profile.pro_source === "founding_member" ? "FOUNDING" : "PRO"}
+                </Text>
               </View>
             )}
           </View>

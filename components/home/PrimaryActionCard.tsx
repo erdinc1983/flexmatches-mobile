@@ -59,10 +59,10 @@ export function PrimaryActionCard({ action, onLogWorkout, checkingIn }: Props) {
         <View style={s.content}>
           <View style={s.pill}>
             <Icon name="checkActive" size={12} color="#22C55E" />
-            <Text style={[s.pillText, { color: "#22C55E" }]}>Workout Logged</Text>
+            <Text style={[s.pillText, { color: "#22C55E" }]}>Checked in today</Text>
           </View>
           <Text style={s.title}>
-            {action.streak > 0 ? `${action.streak}-day streak` : "First workout done"}
+            {action.streak > 0 ? `${action.streak}-day streak` : "First check-in done"}
           </Text>
           <Text style={s.sub}>Come back tomorrow to keep it going.</Text>
         </View>
@@ -196,10 +196,10 @@ function getPhotoConfig(action: PrimaryAction, onLogWorkout: () => void): PhotoC
         pillBg:    "rgba(34,197,94,0.85)",
         eyebrow:   "YOU'RE AT THE GYM",
         title:     action.streak > 0
-          ? `${action.streak}-day streak — log this session`
-          : "Log this gym session",
-        subtitle:  "Quick tap keeps your streak alive",
-        ctaLabel:  "Log Workout",
+          ? `${action.streak}-day streak — check in for today`
+          : "Check in for today",
+        subtitle:  "One tap keeps your streak alive. Log workout details in the Activity tab.",
+        ctaLabel:  "Check In",
         ctaAction: onLogWorkout,
         ctaBg:     "#16A34A",
         iconName:  "gymActive",
@@ -214,11 +214,11 @@ function getPhotoConfig(action: PrimaryAction, onLogWorkout: () => void): PhotoC
         eyebrow:   (action as any).streak > 0 ? "KEEP YOUR STREAK" : "START TODAY",
         title:     (action as any).streak > 0
           ? `Day ${(action as any).streak} — don't stop now`
-          : "Log your first workout",
+          : "Check in to start your streak",
         subtitle:  (action as any).streak > 0
-          ? "Every session builds the habit. You've got this."
-          : "Start your streak today — even 20 minutes counts.",
-        ctaLabel:  "Log Workout",
+          ? "One tap counts today's session. Add details in the Activity tab."
+          : "Check in daily to build your streak. Add workout details in the Activity tab.",
+        ctaLabel:  "Check In",
         ctaAction: onLogWorkout,
         ctaBg:     "#CC3700",
         iconName:  "streakActive",

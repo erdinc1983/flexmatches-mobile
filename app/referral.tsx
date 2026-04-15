@@ -23,6 +23,7 @@ import { Avatar } from "../components/Avatar";
 type ReferralEntry = {
   id:               string;
   created_at:       string;
+  validated_at:     string | null;
   referred_user_id: string;
   username:         string;
   avatar_url:       string | null;
@@ -30,11 +31,13 @@ type ReferralEntry = {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
+// Mara's tiered reward model — reachable rewards early, so the loop
+// actually activates in a sparse network. Previously the only real Pro
+// reward was at 10 invites, which sits past the churn cliff.
 const MILESTONES = [
-  { count: 1,  label: "First Invite",    emoji: "📣", reward: "First Referral badge",   color: "#a855f7" },
-  { count: 3,  label: "3 Friends",       emoji: "🎯", reward: "3-Friend Milestone",      color: "#3b82f6" },
-  { count: 5,  label: "Referral Master", emoji: "🌟", reward: "Referral Master badge",   color: "#FF4500" },
-  { count: 10, label: "10 Invites",      emoji: "💎", reward: "1 month Pro free",         color: "#60a5fa" },
+  { count: 1, label: "First Invite", emoji: "📣", reward: "Founder badge",         color: "#a855f7" },
+  { count: 3, label: "3 Friends",    emoji: "🎯", reward: "3 months Pro free",     color: "#3b82f6" },
+  { count: 6, label: "6 Friends",    emoji: "💎", reward: "6 months Pro free",     color: "#60a5fa" },
 ];
 
 const BASE_URL = "https://flexmatches.com";
@@ -59,13 +62,31 @@ export default function ReferralScreen() {
 
     const [{ data: userData }, { data: refs }] = await Promise.all([
       supabase.from("users").select("username, referral_code").eq("id", user.id).single(),
+      // Include validated_at so we can distinguish pending (signed up) from
+      // counted (onboarding + phone verified). Only validated referrals
+      // count toward milestone rewards.
       supabase.from("referrals")
-        .select("id, created_at, referred_user_id")
+        .select("id, created_at, validated_at, referred_user_id")
         .eq("referrer_id", user.id)
         .order("created_at", { ascending: false }),
     ]);
 
-    setReferralCode(userData?.referral_code ?? "");
+    // Every user gets a referral code — no profile-completion gate. If the
+    // row doesn't have one yet (pre-trigger signup), mint one on the spot.
+    // Format: 6-char upper-case alphanumeric, readable over voice.
+    let code = userData?.referral_code ?? "";
+    if (!code) {
+      const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O/1/I
+      for (let attempt = 0; attempt < 5 && !code; attempt++) {
+        const candidate = Array.from({ length: 6 }, () =>
+          ALPHABET[Math.floor(Math.random() * ALPHABET.length)]
+        ).join("");
+        const { error } = await supabase
+          .from("users").update({ referral_code: candidate }).eq("id", user.id);
+        if (!error) code = candidate; // unique-constraint hits retry
+      }
+    }
+    setReferralCode(code);
 
     if (refs && refs.length > 0) {
       const ids = refs.map((r: any) => r.referred_user_id);
@@ -110,9 +131,14 @@ export default function ReferralScreen() {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
-  const total     = referrals.length;
-  const nextMile  = MILESTONES.find((m) => m.count > total);
-  const toNext    = nextMile ? nextMile.count - total : 0;
+  // Only validated referrals count toward milestones (Mara's spec:
+  // phone-verified + onboarding-complete). Pending-invitees still show
+  // up in the "invited" list with a "pending" pill.
+  const totalValidated = referrals.filter((r) => r.validated_at).length;
+  const totalPending   = referrals.length - totalValidated;
+  const total          = totalValidated;
+  const nextMile       = MILESTONES.find((m) => m.count > total);
+  const toNext         = nextMile ? nextMile.count - total : 0;
 
   if (loading) {
     return (
@@ -140,11 +166,14 @@ export default function ReferralScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor="#FF4500" />
         }
       >
-        {/* Hero */}
+        {/* Hero — background is always dark brown so text is pinned to light
+            colors regardless of the user's theme. Previously used c.text /
+            c.textMuted, which rendered near-black on dark brown in light
+            mode and was unreadable. */}
         <View style={[s.hero, { backgroundColor: "#1a0800", borderColor: "#FF450033" }]}>
           <Text style={s.heroEmoji}>📣</Text>
-          <Text style={[s.heroTitle, { color: c.text }]}>Invite & Earn Rewards</Text>
-          <Text style={[s.heroSub, { color: c.textMuted }]}>
+          <Text style={[s.heroTitle, { color: "#FFFFFF" }]}>Invite & Earn Rewards</Text>
+          <Text style={[s.heroSub, { color: "rgba(255,255,255,0.78)" }]}>
             Share your link — when a friend joins, you both unlock rewards.{"\n"}The more you invite, the bigger the prizes.
           </Text>
         </View>
@@ -183,19 +212,19 @@ export default function ReferralScreen() {
           </View>
         ) : (
           <View style={[s.card, { backgroundColor: c.bgCard, borderColor: c.border, alignItems: "center" }]}>
-            <Text style={[s.noCodeText, { color: c.textMuted }]}>Complete your profile to get your referral code.</Text>
+            <Text style={[s.noCodeText, { color: c.textMuted }]}>Generating your invite code…</Text>
             <TouchableOpacity
               style={[s.shareBtn, { backgroundColor: "#FF4500", marginTop: SPACE[12] }]}
-              onPress={() => router.push("/(tabs)/profile")}
+              onPress={() => load()}
               activeOpacity={0.85}
             >
-              <Text style={s.shareBtnText}>Complete Profile →</Text>
+              <Text style={s.shareBtnText}>Retry</Text>
             </TouchableOpacity>
           </View>
         )}
 
         {/* Progress to next reward */}
-        {nextMile && total < 10 && (
+        {nextMile && total < 6 && (
           <View style={[s.card, { backgroundColor: c.bgCard, borderColor: c.border }]}>
             <View style={s.progressHeader}>
               <Text style={[s.progressTitle, { color: c.text }]}>
@@ -242,7 +271,7 @@ export default function ReferralScreen() {
 
         {/* Invited people */}
         <Text style={[s.sectionLabel, { color: c.textFaint }]}>
-          PEOPLE YOU'VE INVITED ({total})
+          PEOPLE YOU'VE INVITED ({totalValidated}{totalPending > 0 ? ` · ${totalPending} pending` : ""})
         </Text>
 
         {referrals.length === 0 ? (

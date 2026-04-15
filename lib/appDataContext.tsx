@@ -36,8 +36,12 @@ export type AppUser = {
   gender:           string | null;
   age:              number | null;
   is_pro:           boolean;
+  /** "founding_member" for the first 1,000 users, "paid" for Stripe
+   *  subscriptions, null when not Pro. Drives the Pro badge copy. */
+  pro_source:       string | null;
   is_admin:         boolean;
   phone_verified:   boolean;
+  units:            "imperial" | "metric";
 };
 
 type AppDataContextValue = {
@@ -62,8 +66,26 @@ const SELECT = [
   "fitness_level", "sports", "current_streak", "last_checkin_date",
   "is_at_gym", "gym_checkin_at", "gym_name", "availability",
   "lat", "lng", "training_intent", "show_me", "gender", "age",
-  "is_pro", "is_admin", "phone_verified",
+  "is_pro", "pro_source", "is_admin", "phone_verified", "units",
 ].join(", ");
+
+/**
+ * Defensive coerce: early versions of onboarding wrote `availability`
+ * as a string[] (e.g. ["morning", "evening"]) but every reader in the
+ * app expects Record<string, boolean>. Normalize on read so legacy
+ * accounts don't render as "availability: not set".
+ */
+function normalizeAvailability(v: any): Record<string, boolean> | null {
+  if (v == null) return null;
+  if (Array.isArray(v)) {
+    return v.reduce<Record<string, boolean>>((acc, k) => {
+      if (typeof k === "string") acc[k] = true;
+      return acc;
+    }, {});
+  }
+  if (typeof v === "object") return v as Record<string, boolean>;
+  return null;
+}
 
 export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [appUser,        setAppUser]        = useState<AppUser | null>(null);
@@ -104,7 +126,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       is_at_gym:        d.is_at_gym ?? false,
       gym_checkin_at:   d.gym_checkin_at ?? null,
       gym_name:         d.gym_name ?? null,
-      availability:     d.availability ?? null,
+      availability:     normalizeAvailability(d.availability),
       lat:              d.lat ?? null,
       lng:              d.lng ?? null,
       training_intent:  d.training_intent ?? null,
@@ -112,8 +134,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       gender:           d.gender ?? null,
       age:              d.age ?? null,
       is_pro:           d.is_pro ?? false,
+      pro_source:       d.pro_source ?? null,
       is_admin:         d.is_admin ?? false,
       phone_verified:   d.phone_verified ?? false,
+      units:            (d.units === "metric" ? "metric" : "imperial") as "imperial" | "metric",
     });
   }, []);
 
@@ -196,7 +220,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         is_at_gym:        d.is_at_gym ?? false,
         gym_checkin_at:   d.gym_checkin_at ?? null,
         gym_name:         d.gym_name ?? null,
-        availability:     d.availability ?? null,
+        availability:     normalizeAvailability(d.availability),
         lat:              d.lat ?? null,
         lng:              d.lng ?? null,
         training_intent:  d.training_intent ?? null,
@@ -204,8 +228,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         gender:           d.gender ?? null,
         age:              d.age ?? null,
         is_pro:           d.is_pro ?? false,
+      pro_source:       d.pro_source ?? null,
         is_admin:         d.is_admin ?? false,
         phone_verified:   d.phone_verified ?? false,
+      units:            (d.units === "metric" ? "metric" : "imperial") as "imperial" | "metric",
       };
       setAppUser(profile); // cache it for other consumers
       return profile;

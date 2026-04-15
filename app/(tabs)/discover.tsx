@@ -29,6 +29,7 @@ import { supabase } from "../../lib/supabase";
 import { notifyUser } from "../../lib/push";
 import { useTheme, SPACE, FONT, RADIUS, PALETTE } from "../../lib/theme";
 import { useAppData } from "../../lib/appDataContext";
+import { formatDistance, distanceOptions } from "../../lib/units";
 import { Icon } from "../../components/Icon";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { DiscoverSkeleton } from "../../components/ui/Skeleton";
@@ -86,7 +87,6 @@ const SHOW_ME_OPTIONS = [
   { value: "women",    label: "Women" },
 ];
 
-const DISTANCE_OPTIONS = [5, 10, 25, 50];
 
 // Intent compatibility bonus (0–15 pts)
 function intentBonus(myIntent: string | null, theirIntent: string | null): number {
@@ -189,7 +189,7 @@ function calcMatchScore(me: MyProfile, other: DiscoverUser): number {
   return Math.min(score, 100);
 }
 
-function buildReasons(me: MyProfile, other: DiscoverUser): string[] {
+function buildReasons(me: MyProfile, other: DiscoverUser, units: "imperial" | "metric" = "imperial"): string[] {
   const reasons: string[] = [];
   const shared = (me.sports ?? []).filter((s) => (other.sports ?? []).includes(s));
   if (shared.length === 1)    reasons.push(shared[0]);
@@ -208,9 +208,9 @@ function buildReasons(me: MyProfile, other: DiscoverUser): string[] {
 
   if (me.city && other.city?.toLowerCase() === me.city.toLowerCase()) reasons.push("Same city");
 
-  // Proximity from server-supplied distance
+  // Proximity from server-supplied distance, rendered in the caller's unit
   if (other.distance_km != null && other.distance_km <= 30) {
-    reasons.push(`${Math.round(other.distance_km)} km away`);
+    reasons.push(`${formatDistance(other.distance_km, units)} away`);
   }
 
   // Trust signal
@@ -433,12 +433,13 @@ export default function DiscoverScreen() {
     // Pending users for list view (already liked, awaiting response)
     setPendingUsers((pendingProfiles ?? []).map(mapUser));
 
+    const units = meData.units ?? "imperial";
     const scored: DiscoverUser[] = ((candidates ?? []) as any[])
       .filter((u: any) => !excluded.has(u.id))
       .map((u: any): DiscoverUser => {
         const partial = mapUser(u);
         partial.matchScore = calcMatchScore(me, partial);
-        partial.reasons    = buildReasons(me, partial);
+        partial.reasons    = buildReasons(me, partial, units);
         return partial;
       })
       .sort((a: DiscoverUser, b: DiscoverUser) => {
@@ -482,13 +483,14 @@ export default function DiscoverScreen() {
 
       if (!nextPage || nextPage.length === 0) { setHasMore(false); return; }
 
+      const units = appUser?.units ?? "imperial";
       const newUsers: DiscoverUser[] = nextPage
         .filter((u: any) => !excludedRef.current.has(u.id))
         .map((u: any) => {
           const partial = mapUser(u);
           if (me) {
             partial.matchScore = calcMatchScore(me, partial);
-            partial.reasons    = buildReasons(me, partial);
+            partial.reasons    = buildReasons(me, partial, units);
           }
           return partial;
         });
@@ -501,7 +503,7 @@ export default function DiscoverScreen() {
     } finally {
       setLoadingMore(false);
     }
-  }, [loadingMore, hasMore, rawOffset]);
+  }, [loadingMore, hasMore, rawOffset, appUser?.units]);
 
   // Trigger load immediately on mount — load() handles fetchAppUser() fallback internally
   useEffect(() => {
@@ -892,6 +894,7 @@ export default function DiscoverScreen() {
         atGymCount={atGymUsers.length}
         allUsers={[...pendingUsers, ...users]}
         myProfile={myProfile}
+        units={appUser?.units ?? "imperial"}
         onApply={(f) => { setFilters(f); setShowFilter(false); }}
         onClose={() => setShowFilter(false)}
       />
@@ -950,7 +953,7 @@ function DiscoverEmptyState({ onInvite, onJoinCircle, onCompleteProfile }: {
 
 // ─── Filter Modal ─────────────────────────────────────────────────────────────
 function FilterModal({
-  visible, filters, sportOptions, atGymCount, allUsers, myProfile, onApply, onClose,
+  visible, filters, sportOptions, atGymCount, allUsers, myProfile, units, onApply, onClose,
 }: {
   visible:      boolean;
   filters:      Filters;
@@ -958,6 +961,7 @@ function FilterModal({
   atGymCount:   number;
   allUsers:     DiscoverUser[];
   myProfile:    MyProfile | null;
+  units:        "imperial" | "metric";
   onApply:      (f: Filters) => void;
   onClose:      () => void;
 }) {
@@ -1103,10 +1107,10 @@ function FilterModal({
             <View style={fm.section}>
               <Text style={[fm.sectionTitle, { color: c.textMuted }]}>MAX DISTANCE</Text>
               <View style={fm.options}>
-                {DISTANCE_OPTIONS.map((km) => (
+                {distanceOptions(units).map(({ km, label }) => (
                   <OptionChip
                     key={km}
-                    label={`${km} km`}
+                    label={label}
                     active={draft.maxKm === km}
                     onPress={() => setDraft((d) => ({ ...d, maxKm: d.maxKm === km ? null : km }))}
                   />

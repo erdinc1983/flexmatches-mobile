@@ -263,13 +263,29 @@ export default function HomeScreen() {
       partner_name: s.partner_name ?? "Partner",
     })));
 
-    // My circles (active only, not dismissed)
+    // My circles (active only, not dismissed).
+    // Circles with an upcoming event (within the next 7 days) sort first so
+    // "scheduled for Sunday" style info is visible above the fold — previously
+    // events could sit in the 3rd or 4th grid slot and get missed.
     const todayStr = today;
+    const sevenDaysOut = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+    const rankCircle = (cc: any): number => {
+      if (!cc.event_date) return 2;
+      if (cc.event_date >= todayStr && cc.event_date <= sevenDaysOut) return 0; // this week
+      if (cc.event_date >= todayStr) return 1; // later this month+
+      return 3;
+    };
     setCircles((hd.my_circles ?? [])
       .filter((cc: any) =>
         (!cc.event_date || cc.event_date >= todayStr) &&
         !dismissedMyCircleIdsRef.current.has(cc.id)
       )
+      .sort((a: any, b: any) => {
+        const r = rankCircle(a) - rankCircle(b);
+        if (r !== 0) return r;
+        if (a.event_date && b.event_date) return a.event_date.localeCompare(b.event_date);
+        return 0;
+      })
       .map((cc: any) => ({
         id:           cc.id,
         name:         cc.name,

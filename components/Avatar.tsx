@@ -17,10 +17,18 @@ function nameHash(name: string): number {
   return Math.abs(h);
 }
 
-function cartoonAvatar(name: string): string {
+function cartoonAvatar(name: string, gender?: string | null): string {
   // Ensure a non-empty seed so hash is stable
   const seed = name?.trim() || "user";
-  return ALL_AVATARS[nameHash(seed) % ALL_AVATARS.length];
+  // Pick from the matching-gender pool when known. Unknown/other falls back
+  // to the full 24-avatar pool (50/50 outcome — worse than matched but
+  // better than no avatar at all). Bug before this change: a male user
+  // could land on a female avatar because we always hashed into ALL.
+  const pool =
+    gender === "male"   ? MALE_AVATARS   :
+    gender === "female" ? FEMALE_AVATARS :
+                          ALL_AVATARS;
+  return pool[nameHash(seed) % pool.length];
 }
 
 export function resolveUrl(url: string | null | undefined): string | null {
@@ -35,12 +43,15 @@ export function resolveUrl(url: string | null | undefined): string | null {
 type Props = {
   url?: string | null;
   name: string;
+  /** When provided, the fallback cartoon avatar is picked from the matching-
+   * gender pool. Without it the hash picks from all 24 and can mismatch. */
+  gender?: string | null;
   size?: number;
 };
 
-export function Avatar({ url, name, size = 48 }: Props) {
+export function Avatar({ url, name, gender, size = 48 }: Props) {
   const radius = size / 2;
-  const src    = resolveUrl(url) ?? cartoonAvatar(name);
+  const src    = resolveUrl(url) ?? cartoonAvatar(name, gender);
 
   return (
     <Image

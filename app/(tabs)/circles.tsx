@@ -66,6 +66,10 @@ type Community = {
   field:        string | null;
   event_date:   string | null;
   event_time:   string | null;
+  /** Label only — 'weekly' | 'biweekly' | 'monthly' | null. event_date
+   *  still stores the next concrete occurrence; creator manually advances
+   *  it after each meeting (same as a recurring calendar invite). */
+  recurrence:   "weekly" | "biweekly" | "monthly" | null;
   avatar_emoji: string;
   creator_id:   string;
   member_count: number;
@@ -81,6 +85,12 @@ type CircleMember = {
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+function recurrenceLabel(r: "weekly" | "biweekly" | "monthly"): string {
+  if (r === "weekly")   return "Repeats weekly";
+  if (r === "biweekly") return "Repeats every 2 weeks";
+  return "Repeats monthly";
+}
+
 function formatCircleDate(dateStr: string): string {
   const [y, m, d] = dateStr.split("-").map(Number);
   const date = new Date(y, m - 1, d);
@@ -193,6 +203,7 @@ export default function CirclesScreen() {
   const [editField,      setEditField]      = useState("");
   const [editDate,       setEditDate]       = useState("");
   const [editTime,       setEditTime]       = useState("");
+  const [editRecurrence, setEditRecurrence] = useState<"none" | "weekly" | "biweekly" | "monthly">("none");
   const [editSaving,     setEditSaving]     = useState(false);
 
   // Create form state
@@ -207,6 +218,7 @@ export default function CirclesScreen() {
   const [formEventHour,  setFormEventHour]  = useState(9);
   const [formEventMin,   setFormEventMin]   = useState(0);
   const [formUseTime,    setFormUseTime]    = useState(false);
+  const [formRecurrence, setFormRecurrence] = useState<"none" | "weekly" | "biweekly" | "monthly">("none");
   const [formEmoji,      setFormEmoji]      = useState("🏋️");
   const [saving,         setSaving]         = useState(false);
   const [showMapPicker,  setShowMapPicker]  = useState(false);
@@ -227,7 +239,7 @@ export default function CirclesScreen() {
 
     const [{ data: comms }, { data: memberships }] = await Promise.all([
       supabase.from("communities")
-        .select("id, name, description, sport, city, field, event_date, event_time, max_members, avatar_emoji, creator_id")
+        .select("id, name, description, sport, city, field, event_date, event_time, max_members, avatar_emoji, creator_id, recurrence")
         .order("created_at", { ascending: false }),
       supabase.from("community_members")
         .select("community_id")
@@ -253,6 +265,7 @@ export default function CirclesScreen() {
       field:        cc.field ?? null,
       event_date:   cc.event_date ?? null,
       event_time:   cc.event_time ?? null,
+      recurrence:   (cc.recurrence as Community["recurrence"]) ?? null,
       max_members:  cc.max_members ?? null,
       member_count: countMap[cc.id] ?? 0,
       is_member:    joinedIds.has(cc.id),
@@ -298,6 +311,7 @@ export default function CirclesScreen() {
     setEditDesc(circle.description ?? "");
     setEditField(circle.field ?? "");
     setEditDate(circle.event_date ?? "");
+    setEditRecurrence(circle.recurrence ?? "none");
     setEditTime(circle.event_time ?? "");
     setLoadingMembers(true);
     try {
@@ -319,6 +333,7 @@ export default function CirclesScreen() {
     if (!selectedCircle || !editName.trim()) return;
     setEditSaving(true);
     const newEventDate = editDate || null;
+    const newRecurrence = editRecurrence === "none" ? null : editRecurrence;
     const eventAdded = newEventDate && newEventDate !== selectedCircle.event_date;
     await supabase.from("communities").update({
       name:        editName.trim(),
@@ -326,13 +341,14 @@ export default function CirclesScreen() {
       field:       editField.trim() || null,
       event_date:  newEventDate,
       event_time:  editTime.trim() || null,
+      recurrence:  newRecurrence,
     }).eq("id", selectedCircle.id);
     setCommunities((prev) => prev.map((c) =>
       c.id === selectedCircle.id
-        ? { ...c, name: editName.trim(), description: editDesc.trim() || null, field: editField.trim() || null, event_date: newEventDate, event_time: editTime.trim() || null }
+        ? { ...c, name: editName.trim(), description: editDesc.trim() || null, field: editField.trim() || null, event_date: newEventDate, event_time: editTime.trim() || null, recurrence: newRecurrence }
         : c
     ));
-    setSelectedCircle((prev) => prev ? { ...prev, name: editName.trim(), description: editDesc.trim() || null, field: editField.trim() || null, event_date: newEventDate, event_time: editTime.trim() || null } : prev);
+    setSelectedCircle((prev) => prev ? { ...prev, name: editName.trim(), description: editDesc.trim() || null, field: editField.trim() || null, event_date: newEventDate, event_time: editTime.trim() || null, recurrence: newRecurrence } : prev);
 
     // Notify all members when a new event date is set
     if (eventAdded && circleMembers.length > 0) {
@@ -422,6 +438,7 @@ export default function CirclesScreen() {
       max_members:  formMaxMembers.trim() ? parseInt(formMaxMembers, 10) : null,
       event_date:   formEventDate.trim() || null,
       event_time:   formUseTime ? `${String(formEventHour).padStart(2,"0")}:${String(formEventMin).padStart(2,"0")}` : null,
+      recurrence:   formRecurrence === "none" ? null : formRecurrence,
       avatar_emoji: formEmoji,
       creator_id:   userId,
     }).select("id").single();
@@ -441,6 +458,7 @@ export default function CirclesScreen() {
     setFormName(""); setFormDesc(""); setFormActivity("Gym");
     setFormCatTab("fitness"); setFormCity(""); setFormField(""); setFormMaxMembers("");
     setFormEventDate(""); setFormEventHour(9); setFormEventMin(0); setFormUseTime(false); setFormEmoji("🏋️");
+    setFormRecurrence("none");
   }
 
   // ── Active vs Past split ────────────────────────────────────────────────────
@@ -697,6 +715,7 @@ export default function CirclesScreen() {
                     <Text style={[s.popupFieldText, { color: c.textSecondary }]}>
                       {formatCircleDate(selectedCircle.event_date)}
                       {selectedCircle.event_time ? `  ·  ${selectedCircle.event_time}` : ""}
+                      {selectedCircle.recurrence ? `  ·  ${recurrenceLabel(selectedCircle.recurrence)}` : ""}
                     </Text>
                   </View>
                 )}
@@ -792,6 +811,28 @@ export default function CirclesScreen() {
 
                 <Text style={[s.editLabel, { color: c.textMuted }]}>Event Time (HH:MM)</Text>
                 <TextInput style={[s.editInput, { backgroundColor: c.bgCardAlt, borderColor: c.border, color: c.text }]} value={editTime} onChangeText={setEditTime} placeholder="09:00" placeholderTextColor={c.textFaint} keyboardType="numbers-and-punctuation" />
+
+                <Text style={[s.editLabel, { color: c.textMuted }]}>Repeats</Text>
+                <View style={{ flexDirection: "row", gap: SPACE[6], marginBottom: SPACE[4] }}>
+                  {([
+                    { v: "none",     l: "One-off" },
+                    { v: "weekly",   l: "Weekly" },
+                    { v: "biweekly", l: "Every 2 wks" },
+                    { v: "monthly",  l: "Monthly" },
+                  ] as const).map((opt) => {
+                    const active = editRecurrence === opt.v;
+                    return (
+                      <TouchableOpacity
+                        key={opt.v}
+                        onPress={() => setEditRecurrence(opt.v)}
+                        style={{ flex: 1, paddingVertical: SPACE[8], borderRadius: RADIUS.lg, borderWidth: 1, borderColor: active ? c.brand : c.border, backgroundColor: active ? c.brand + "18" : c.bgCardAlt, alignItems: "center" }}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={{ color: active ? c.brand : c.textMuted, fontSize: FONT.size.xs, fontWeight: FONT.weight.semibold }}>{opt.l}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
 
                 <TouchableOpacity
                   style={[s.popupJoinBtn, { backgroundColor: editSaving || !editName.trim() ? c.bgCardAlt : c.brand, marginTop: SPACE[12] }]}

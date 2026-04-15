@@ -115,19 +115,48 @@ function sectionLabel(iso: string): string {
   return "Earlier";
 }
 
-function deepLink(notif: Notif) {
+/**
+ * Route a notification tap. For notifications that point at a specific
+ * entity (message → match), validate the target still exists before
+ * navigating. If the match was deleted (e.g. the other user deleted their
+ * account or the user unmatched), self-heal by deleting the orphan and
+ * falling back to the Matches tab so the user isn't stranded on an empty
+ * chat screen. Returns a short toast message if an orphan was cleaned.
+ */
+async function deepLink(notif: Notif): Promise<string | null> {
   const t = notif.type ?? "";
-  if ((t === "message" || t === "new_message") && notif.related_id) return router.push(`/chat/${notif.related_id}` as any);
-  if (t === "match_request"     || t === "match_accepted" || t === "match_rejected" || t === "discover_suggestion")
-    return router.push("/(tabs)/discover" as any);
-  if (t === "session_proposed"  || t === "session_accepted" || t === "session_confirmed" || t === "session_declined" || t === "session_reminder" || t === "workout_invite")
-    return router.push("/(tabs)/home" as any);
-  if (t === "circle_invite"     || t === "circle_joined" || t === "circle_new_member" || t === "circle_event")
-    return router.push("/(tabs)/circles" as any);
-  if (t === "badge_unlocked"    || t === "kudos" || t === "leaderboard_moved" || t === "tier_promoted")
-    return router.push("/(tabs)/profile" as any);
-  if (t === "goal_completed"    || t === "goal_milestone" || t === "streak_reminder" || t === "streak_milestone")
-    return router.push("/(tabs)/goals" as any);
+
+  if ((t === "message" || t === "new_message") && notif.related_id) {
+    const { data: match } = await supabase
+      .from("matches").select("id").eq("id", notif.related_id).maybeSingle();
+    if (match) { router.push(`/chat/${notif.related_id}` as any); return null; }
+    // Orphan: match was deleted. Remove the dead notification + bounce to Matches.
+    await supabase.from("notifications").delete().eq("id", notif.id);
+    router.push("/(tabs)/matches" as any);
+    return "That conversation has been removed.";
+  }
+
+  if (t === "match_request" || t === "match_accepted" || t === "match_rejected" || t === "discover_suggestion") {
+    router.push("/(tabs)/discover" as any);
+    return null;
+  }
+  if (t === "session_proposed" || t === "session_accepted" || t === "session_confirmed" || t === "session_declined" || t === "session_reminder" || t === "workout_invite") {
+    router.push("/(tabs)/home" as any);
+    return null;
+  }
+  if (t === "circle_invite" || t === "circle_joined" || t === "circle_new_member" || t === "circle_event") {
+    router.push("/(tabs)/circles" as any);
+    return null;
+  }
+  if (t === "badge_unlocked" || t === "kudos" || t === "leaderboard_moved" || t === "tier_promoted") {
+    router.push("/(tabs)/profile" as any);
+    return null;
+  }
+  if (t === "goal_completed" || t === "goal_milestone" || t === "streak_reminder" || t === "streak_milestone") {
+    router.push("/(tabs)/goals" as any);
+    return null;
+  }
+  return null;
 }
 
 const EMPTY: Record<Category, { iconName: string; title: string; sub: string }> = {
@@ -239,9 +268,15 @@ export default function NotificationsScreen() {
     await markRead(notifId);
   }
 
-  function handlePress(notif: Notif) {
+  async function handlePress(notif: Notif) {
     if (!notif.read) markRead(notif.id);
-    deepLink(notif);
+    const toastMsg = await deepLink(notif);
+    if (toastMsg) {
+      // Orphan cleaned — remove from local state + let the user know why.
+      setNotifs((prev) => prev.filter((n) => n.id !== notif.id));
+      refreshBadge();
+      Alert.alert(toastMsg);
+    }
   }
 
   function handleLongPress(notif: Notif) {

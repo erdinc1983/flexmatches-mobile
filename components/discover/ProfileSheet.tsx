@@ -231,7 +231,15 @@ export function ProfileSheet({ user, status, onConnect, onClose, onBlock }: Prop
             );
           })()}
 
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.content}>
+          {/* flex: 1 is required — without it the ScrollView measures to its
+              content size and silently bypasses the card's maxHeight, so the
+              profile appears "frozen" and un-scrollable. */}
+          <ScrollView
+            style={{ flex: 1 }}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={s.content}
+            nestedScrollEnabled
+          >
 
             {/* ── Stats row ───────────────────────────────────────── */}
             {(user.current_streak >= 1 || user.matchScore > 0 || user.sessions_completed > 0) && (

@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { supabase } from "../../lib/supabase";
+import { useAppData } from "../../lib/appDataContext";
 import { CityAutocomplete } from "../../components/CityAutocomplete";
 
 const { width: _width } = Dimensions.get("window");
@@ -40,6 +41,7 @@ const TIME_OPTIONS = [
 ];
 
 export default function OnboardingScreen() {
+  const { refreshAppUser } = useAppData();
   const [step,        setStep]        = useState(1);
   const [saving,      setSaving]      = useState(false);
   const [nameBlurred, setNameBlurred] = useState(false);
@@ -48,14 +50,33 @@ export default function OnboardingScreen() {
   const [fullName, setFullName] = useState("");
   const [bio, setBio] = useState("");
 
-  // On mount: if Apple Sign In already set full_name, skip step 1
+  // On mount: populate full_name from best-available source.
+  //   1. If users.full_name already set (Apple Sign In), skip step 1.
+  //   2. Otherwise prefill from the email prefix (e.g. "erdinc.emur@…"
+  //      → "Erdinc Emur") so the user rarely has to type — but DON'T
+  //      skip the step. Email prefix is a guess, not a real name.
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return;
       supabase.from("users").select("full_name").eq("id", user.id).single().then(({ data }) => {
         if (data?.full_name) {
           setFullName(data.full_name);
-          setStep(2); // skip name step — already provided by Apple
+          setStep(2); // Apple / Sign-in-with-Apple already provided a real name
+          return;
+        }
+        // Fallback: title-case the email prefix as a default guess.
+        const email = user.email ?? "";
+        const prefix = email.split("@")[0] ?? "";
+        if (prefix) {
+          const guess = prefix
+            .replace(/[._+-]+/g, " ")
+            .replace(/[0-9]+$/g, "")
+            .trim()
+            .split(/\s+/)
+            .map((w) => w ? w[0].toUpperCase() + w.slice(1).toLowerCase() : "")
+            .join(" ")
+            .trim();
+          if (guess.length >= 2) setFullName(guess);
         }
       });
     });
@@ -82,6 +103,18 @@ export default function OnboardingScreen() {
     setPreferredTimes((prev) => prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]);
   }
 
+  // The users.availability column is jsonb, but every reader (Profile,
+  // Discover, Home) expects the "Record<string, boolean>" shape. Onboarding
+  // collects preferredTimes as a string[] for UX — convert on save so the
+  // persisted shape matches what the rest of the app reads.
+  function availabilityObject(): Record<string, boolean> | null {
+    if (preferredTimes.length === 0) return null;
+    return preferredTimes.reduce<Record<string, boolean>>((acc, k) => {
+      acc[k] = true;
+      return acc;
+    }, {});
+  }
+
   async function finish() {
     setSaving(true);
     try {
@@ -93,12 +126,15 @@ export default function OnboardingScreen() {
         bio:             bio.trim() || null,
         sports:          sports.length > 0 ? sports : null,
         fitness_level:   fitnessLevel || null,
-        availability:    preferredTimes.length > 0 ? preferredTimes : null,
+        availability:    availabilityObject(),
         city:            city.trim() || null,
         training_intent: trainingIntent || null,
       }).eq("id", user.id);
 
       if (error) throw error;
+      // Invalidate the cached AppUser so Profile/Home/Discover read the
+      // values we just saved instead of the pre-onboarding snapshot.
+      await refreshAppUser();
       router.replace("/(tabs)/home");
     } catch {
       Alert.alert("Couldn't save your profile. Please check your connection and try again.");
@@ -116,7 +152,7 @@ export default function OnboardingScreen() {
       bio:             bio.trim() || null,
       sports:          sports.length > 0 ? sports : null,
       fitness_level:   fitnessLevel || null,
-      availability:    preferredTimes.length > 0 ? preferredTimes : null,
+      availability:    availabilityObject(),
       city:            city.trim() || null,
       training_intent: trainingIntent || null,
     }).eq("id", user.id);
