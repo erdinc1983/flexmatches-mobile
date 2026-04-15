@@ -131,13 +131,23 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
           "FlexMatches uses your location to show nearby training partners and sports venues.",
       },
     ],
-    [
-      "@sentry/react-native/expo",
-      {
-        organization: process.env.SENTRY_ORG ?? "flexmatches",
-        project: process.env.SENTRY_PROJECT ?? "flexmatches-mobile",
-      },
-    ],
+    // Sentry plugin only loads when an auth token is available. Without
+    // SENTRY_AUTH_TOKEN the plugin's gradle hook attempts a sourcemap
+    // upload that hard-fails the Android build (no escape-hatch like the
+    // web @sentry/nextjs `dryRun` flag). Runtime crash capture still works
+    // via lib/sentry.ts → Sentry.init(); the plugin only adds sourcemap
+    // upload + native init helpers, both of which require the token.
+    ...(process.env.SENTRY_AUTH_TOKEN
+      ? [
+          [
+            "@sentry/react-native/expo",
+            {
+              organization: process.env.SENTRY_ORG ?? "flexmatches",
+              project:      process.env.SENTRY_PROJECT ?? "flexmatches-mobile",
+            },
+          ] as [string, Record<string, unknown>],
+        ]
+      : []),
   ],
 
   experiments: {
