@@ -67,12 +67,18 @@ Deno.serve(async (req) => {
   } catch {
     return json({ error: "invalid_json" }, 400);
   }
-  const phone = (body.phone ?? "").trim();
-  const otp   = (body.token ?? "").trim();
-  if (!phone || !otp) return json({ error: "missing_fields" }, 400);
+  const rawPhone = (body.phone ?? "").trim();
+  const otp      = (body.token ?? "").trim();
+  if (!rawPhone || !otp) return json({ error: "missing_fields" }, 400);
 
-  // Tight phone format check — E.164-ish, leaves room for + and 7–15 digits.
-  if (!/^\+?[0-9]{7,15}$/.test(phone)) {
+  // Canonicalize to strict E.164 BEFORE either OTP verification or DB write
+  // so the unique-phone constraint catches "+14155551234" === "1-415-555-1234"
+  // and the row stored in users.phone is always in one canonical shape.
+  // Strip whitespace, dashes, parens, dots; preserve a leading + only.
+  const stripped = rawPhone.replace(/[\s\-().]/g, "");
+  const phone = stripped.startsWith("+") ? stripped : "+" + stripped;
+  // E.164 = '+' then 1–15 digits, leading digit 1–9 (no leading 0 country code).
+  if (!/^\+[1-9][0-9]{6,14}$/.test(phone)) {
     return json({ error: "bad_phone_format" }, 400);
   }
 
