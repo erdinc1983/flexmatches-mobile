@@ -230,12 +230,15 @@ Edge Functions deployed: `health-check`, `send-push`, `verify-phone`, `delete-ac
 | 12 | **EAS build (when limit resets in May)**: `eas build --platform ios --profile production` | Real APNs push, killed-state taps, Apple Sign In, IAP all need this | Per-build |
 | 13 | **TestFlight fresh-install pass** | Final pre-submission validation | After EAS build |
 
-### Twilio path decision (today's call)
+### Decision (2026-04-14): wait for company
 
-Two options for the SMS provider, given company isn't formed yet:
+Erdinç has decided to defer ALL 13 manual tasks above until after company formation (planned late April 2026). Reason: cleaner paper trail, single consistent entity attached to every external service (Twilio, Sentry, Stripe, Apple Developer, Google Play, A2P brand) from day one — no Individual → Organization migration headaches.
 
-- **Personal Twilio + sole-prop A2P now:** test today, switch brand to company in May. Twilio allows brand re-registration without losing the number.
-- **Wait ~2 weeks for the company:** cleaner paper trail, no SMS testing in interim. To exercise the rest of the referral chain without SMS, Claude can manually flip `phone_verified=true` on a test row.
+**Implication for future sessions:**
+- Don't push Erdinç to set up Twilio / Sentry / Vercel uptime / etc. before the company forms.
+- Mara's device UAT (10 items) is on hold until SMS provider is wired post-company.
+- The architecture is ready and waiting; this is a quiet period by choice, not a missing-piece blocker.
+- If Erdinç asks "what can we do in the meantime?", the answer is the deferred code-only items above (Founding Pro race, BestMatches empty-profile penalty, recurring event expansion) — anything that doesn't depend on external accounts.
 
 ---
 
