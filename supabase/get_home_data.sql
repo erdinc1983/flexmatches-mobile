@@ -187,6 +187,7 @@ BEGIN
       u.city,
       u.sports,
       u.fitness_level,
+      u.gender,
       u.availability
     FROM users u
     WHERE u.id <> p_user_id

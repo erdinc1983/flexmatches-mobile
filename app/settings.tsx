@@ -236,9 +236,24 @@ export default function SettingsScreen() {
       setPhoneSaving(false);
       return;
     }
-    await supabase.from("users").update({ phone_verified: true, phone }).eq("id", userId);
-    setPhoneVerified(true);
+    // Phone is unique-indexed in users.phone (ref: 10_referral_rewards.sql).
+    // If another account already claimed this number, the update fails with
+    // a unique-constraint error — must surface it instead of silently
+    // marking verified and letting the user think referral rewards will
+    // accrue from a phone that doesn't actually count.
+    const { error: updateErr } = await supabase
+      .from("users")
+      .update({ phone_verified: true, phone })
+      .eq("id", userId);
     setPhoneSaving(false);
+    if (updateErr) {
+      const dup = /duplicate|unique/i.test(updateErr.message);
+      setPhoneMsg(dup
+        ? "This phone number is already in use by another account."
+        : `Could not save: ${updateErr.message}`);
+      return;
+    }
+    setPhoneVerified(true);
     setPhoneModal(false);
     Alert.alert("Verified!", "Your phone number has been verified. Your profile now shows a verified badge.");
   }

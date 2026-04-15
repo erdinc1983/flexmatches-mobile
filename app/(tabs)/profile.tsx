@@ -25,6 +25,7 @@ import { Icon } from "../../components/Icon";
 import { Avatar } from "../../components/Avatar";
 import { ProfileSkeleton } from "../../components/ui/Skeleton";
 import { TIERS, BADGE_MAP, calcTier, calcUserPoints, type BadgeKey, type Tier } from "../../lib/badges";
+import { isProActive } from "../../lib/pro";
 import { useNotifications } from "../../lib/notificationContext";
 import { unregisterPushToken } from "../../lib/push";
 import { AppModal } from "../../components/ui/AppModal";
@@ -107,6 +108,7 @@ type Profile = {
   avatar_url:      string | null;
   is_pro:              boolean | null;
   pro_source:          string | null;
+  pro_expires_at:      string | null;
   training_intent:     string | null;
   show_me:             string | null;
   current_streak:      number;
@@ -241,6 +243,7 @@ export default function ProfileScreen() {
       career_goals:        d.career_goals ?? null,
       is_pro:              d.is_pro ?? null,
       pro_source:          d.pro_source ?? null,
+      pro_expires_at:      d.pro_expires_at ?? null,
       training_intent:     d.training_intent ?? null,
       show_me:             d.show_me ?? null,
       weight:              d.weight ?? null,
@@ -476,9 +479,24 @@ export default function ProfileScreen() {
     setPhoneSaving(true); setPhoneMsg("");
     const { error } = await supabase.auth.verifyOtp({ phone, token, type: "phone_change" });
     if (error) { setPhoneMsg("Incorrect code. Try again."); setPhoneSaving(false); return; }
-    await supabase.from("users").update({ phone_verified: true, phone }).eq("id", userId);
+    // Phone column is unique-indexed (ref: 10_referral_rewards.sql). If
+    // another account already claimed this number, the update fails — must
+    // surface that instead of marking verified locally and letting the
+    // user think referral rewards will count.
+    const { error: updateErr } = await supabase
+      .from("users")
+      .update({ phone_verified: true, phone })
+      .eq("id", userId);
+    setPhoneSaving(false);
+    if (updateErr) {
+      const dup = /duplicate|unique/i.test(updateErr.message);
+      setPhoneMsg(dup
+        ? "This phone number is already in use by another account."
+        : `Could not save: ${updateErr.message}`);
+      return;
+    }
     updateAppUser({ phone_verified: true });
-    setPhoneSaving(false); setPhoneModal(false);
+    setPhoneModal(false);
     Alert.alert("Verified!", "Your phone is verified. Your profile now shows a trusted badge.");
   }
 
@@ -521,10 +539,10 @@ export default function ProfileScreen() {
 
           <View style={s.nameRow}>
             <Text style={[s.name, { color: c.text }]}>{profile?.full_name ?? `@${profile?.username}`}</Text>
-            {profile?.is_pro && (
+            {isProActive(profile) && (
               <View style={[s.proBadge, { backgroundColor: "#f59e0b22", borderColor: "#f59e0b55" }]}>
                 <Text style={[s.proBadgeText, { color: "#f59e0b" }]}>
-                  {profile.pro_source === "founding_member" ? "FOUNDING" : "PRO"}
+                  {profile?.pro_source === "founding_member" ? "FOUNDING" : "PRO"}
                 </Text>
               </View>
             )}
@@ -587,7 +605,7 @@ export default function ProfileScreen() {
 
         {/* ── Pro upgrade / manage ────────────────────────────────────────── */}
         {!editing && (
-          profile?.is_pro ? (
+          isProActive(profile) ? (
             <TouchableOpacity
               style={[s.proManageBtn, { borderColor: "#60a5fa55", backgroundColor: "#60a5fa11" }]}
               onPress={() => router.push("/pro")}

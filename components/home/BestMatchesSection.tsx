@@ -12,6 +12,8 @@ import { router } from "expo-router";
 import { useTheme, SPACE, FONT, RADIUS, SHADOW, TYPE } from "../../lib/theme";
 import { SectionHeader } from "../ui/SectionHeader";
 import { resolveUrl } from "../Avatar";
+// cartoonAvatar lives in lib/avatarFallback.ts (shared, gender-aware).
+import { cartoonAvatar } from "../../lib/avatarFallback";
 import type { SuggestedUser } from "./types";
 
 const SCREEN_W = Dimensions.get("window").width;
@@ -19,20 +21,6 @@ const H_PAD    = 20; // home screen's paddingHorizontal SPACE[20]
 const CARD_GAP = 12; // gap in contentContainerStyle SPACE[12]
 const CARD_W   = (SCREEN_W - H_PAD * 2 - CARD_GAP) / 2;
 const CARD_H   = 280;
-
-// Cartoon fallback — same logic as Avatar.tsx
-const WEB_BASE = "https://flexmatches.com";
-const MALE_AVATARS   = Array.from({ length: 12 }, (_, i) => `${WEB_BASE}/avatars/male/m${i + 1}.jpeg`);
-const FEMALE_AVATARS = Array.from({ length: 12 }, (_, i) => `${WEB_BASE}/avatars/female/f${i + 1}.jpeg`);
-const ALL_AVATARS    = [...MALE_AVATARS, ...FEMALE_AVATARS];
-function nameHash(name: string): number {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
-  return Math.abs(h);
-}
-function cartoonAvatar(name: string): string {
-  return ALL_AVATARS[nameHash(name?.trim() || "user") % ALL_AVATARS.length];
-}
 
 type Props = {
   users:   SuggestedUser[];
@@ -74,7 +62,7 @@ function MatchPhotoCard({ user, onPress }: { user: SuggestedUser; onPress: () =>
 
   // Resolve URL — same logic as Avatar component
   const resolvedUrl = resolveUrl(user.avatar_url);
-  const fallbackUrl = cartoonAvatar(hashName);
+  const fallbackUrl = cartoonAvatar(hashName, user.gender);
   const photoUrl    = resolvedUrl ?? fallbackUrl;
 
   const tags = [

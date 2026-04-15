@@ -335,6 +335,7 @@ export default function HomeScreen() {
         full_name:     u.full_name ?? null,
         avatar_url:    u.avatar_url ?? null,
         fitness_level: u.fitness_level ?? null,
+        gender:        u.gender ?? null,
         city:          u.city ?? null,
         shared_sports: u.shared_sports,
         reasons:       u.reasons,
