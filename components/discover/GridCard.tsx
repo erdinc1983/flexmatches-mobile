@@ -9,6 +9,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useTheme, SPACE, FONT, RADIUS, PALETTE } from "../../lib/theme";
 import { resolveUrl } from "../Avatar";
 import { cartoonAvatar } from "../../lib/avatarFallback";
+import { TrustTierBadge } from "../TrustTierBadge";
 import type { DiscoverUser, RequestStatus } from "./PersonCard";
 
 const { width: W } = Dimensions.get("window");
@@ -127,6 +128,7 @@ export function GridCard({ user, status, onPress, onConnect, matchId }: Props) {
               <Text style={[s.levelText, { color: levelColor }]}>{user.fitness_level}</Text>
             </View>
           )}
+          <TrustTierBadge tier={user.trust_tier} size="sm" hideNew />
           {user.phone_verified && (
             <View style={s.verifiedBadge}>
               <Text style={s.verifiedText}>✓ ID</Text>

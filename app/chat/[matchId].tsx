@@ -30,6 +30,7 @@ import { useTheme, SPACE, FONT, RADIUS } from "../../lib/theme";
 import { useNotifications } from "../../lib/notificationContext";
 import { Icon } from "../../components/Icon";
 import { Avatar } from "../../components/Avatar";
+import { TrustTierBadge } from "../../components/TrustTierBadge";
 import { SessionBanner } from "../../components/chat/SessionBanner";
 import type { BuddySession } from "../../components/chat/SessionBanner";
 import { ProfileSheet } from "../../components/discover/ProfileSheet";
@@ -51,6 +52,7 @@ type OtherUser = {
   full_name:     string | null;
   fitness_level: string | null;
   avatar_url:    string | null;
+  trust_tier:    "new" | "active" | "trusted" | "vouched" | null;
 };
 
 type ListItem =
@@ -307,7 +309,7 @@ export default function ChatScreen() {
       const otherId = (match as any).sender_id === user.id
         ? (match as any).receiver_id : (match as any).sender_id;
       const { data: otherUser } = await supabase
-        .from("users").select("id, username, full_name, fitness_level, avatar_url")
+        .from("users").select("id, username, full_name, fitness_level, avatar_url, trust_tier")
         .eq("id", otherId).single();
       if (otherUser) setOther(otherUser as OtherUser);
     }
@@ -663,6 +665,7 @@ export default function ChatScreen() {
                   <Text style={[s.levelText, { color: levelColor }]}>{other!.fitness_level}</Text>
                 </View>
               )}
+              <TrustTierBadge tier={(other as any)?.trust_tier} size="sm" hideNew />
             </View>
             {sessionCount > 0 && (
               <Text style={{ fontSize: 11, color: c.textMuted, marginTop: 1 }}>

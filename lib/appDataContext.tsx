@@ -44,6 +44,8 @@ export type AppUser = {
    *  founding_member ignores this field. The hourly cron expires
    *  is_pro server-side; isProActive() also guards instantly client-side. */
   pro_expires_at:   string | null;
+  /** Server-computed trust tier from users.trust_tier generated column. */
+  trust_tier:       "new" | "active" | "trusted" | "vouched";
   is_admin:         boolean;
   phone_verified:   boolean;
   units:            "imperial" | "metric";
@@ -71,7 +73,8 @@ const SELECT = [
   "fitness_level", "sports", "current_streak", "last_checkin_date",
   "is_at_gym", "gym_checkin_at", "gym_name", "availability",
   "lat", "lng", "training_intent", "show_me", "gender", "age",
-  "is_pro", "pro_source", "pro_expires_at", "is_admin", "phone_verified", "units",
+  "is_pro", "pro_source", "pro_expires_at", "trust_tier",
+  "is_admin", "phone_verified", "units",
 ].join(", ");
 
 /**
@@ -141,6 +144,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       is_pro:           d.is_pro ?? false,
       pro_source:       d.pro_source ?? null,
       pro_expires_at:   d.pro_expires_at ?? null,
+      trust_tier:       (d.trust_tier === "vouched" || d.trust_tier === "trusted" || d.trust_tier === "active" ? d.trust_tier : "new"),
       is_admin:         d.is_admin ?? false,
       phone_verified:   d.phone_verified ?? false,
       units:            (d.units === "metric" ? "metric" : "imperial") as "imperial" | "metric",
@@ -236,6 +240,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         is_pro:           d.is_pro ?? false,
       pro_source:       d.pro_source ?? null,
       pro_expires_at:   d.pro_expires_at ?? null,
+      trust_tier:       (d.trust_tier === "vouched" || d.trust_tier === "trusted" || d.trust_tier === "active" ? d.trust_tier : "new"),
         is_admin:         d.is_admin ?? false,
         phone_verified:   d.phone_verified ?? false,
       units:            (d.units === "metric" ? "metric" : "imperial") as "imperial" | "metric",

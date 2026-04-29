@@ -26,6 +26,7 @@ import { Avatar } from "../../components/Avatar";
 import { ProfileSkeleton } from "../../components/ui/Skeleton";
 import { TIERS, BADGE_MAP, calcTier, calcUserPoints, type BadgeKey, type Tier } from "../../lib/badges";
 import { isProActive } from "../../lib/pro";
+import { TrustTierBadge } from "../../components/TrustTierBadge";
 import { useNotifications } from "../../lib/notificationContext";
 import { unregisterPushToken } from "../../lib/push";
 import { AppModal } from "../../components/ui/AppModal";
@@ -109,6 +110,7 @@ type Profile = {
   is_pro:              boolean | null;
   pro_source:          string | null;
   pro_expires_at:      string | null;
+  trust_tier:          "new" | "active" | "trusted" | "vouched";
   training_intent:     string | null;
   show_me:             string | null;
   current_streak:      number;
@@ -244,6 +246,7 @@ export default function ProfileScreen() {
       is_pro:              d.is_pro ?? null,
       pro_source:          d.pro_source ?? null,
       pro_expires_at:      d.pro_expires_at ?? null,
+      trust_tier:          (d.trust_tier === "vouched" || d.trust_tier === "trusted" || d.trust_tier === "active" ? d.trust_tier : "new"),
       training_intent:     d.training_intent ?? null,
       show_me:             d.show_me ?? null,
       weight:              d.weight ?? null,
@@ -568,6 +571,7 @@ export default function ProfileScreen() {
                 </Text>
               </View>
             )}
+            <TrustTierBadge tier={profile?.trust_tier} size="md" />
           </View>
           <Text style={[s.username, { color: c.textMuted }]}>@{profile?.username}</Text>
 

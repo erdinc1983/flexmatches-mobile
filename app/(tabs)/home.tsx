@@ -336,6 +336,7 @@ export default function HomeScreen() {
         avatar_url:    u.avatar_url ?? null,
         fitness_level: u.fitness_level ?? null,
         gender:        u.gender ?? null,
+        trust_tier:    (u.trust_tier === "vouched" || u.trust_tier === "trusted" || u.trust_tier === "active" ? u.trust_tier : "new"),
         city:          u.city ?? null,
         shared_sports: u.shared_sports,
         reasons:       u.reasons,

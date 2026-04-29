@@ -14,6 +14,7 @@ import { SectionHeader } from "../ui/SectionHeader";
 import { resolveUrl } from "../Avatar";
 // cartoonAvatar lives in lib/avatarFallback.ts (shared, gender-aware).
 import { cartoonAvatar } from "../../lib/avatarFallback";
+import { TrustTierBadge } from "../TrustTierBadge";
 import type { SuggestedUser } from "./types";
 
 const SCREEN_W = Dimensions.get("window").width;
@@ -92,7 +93,10 @@ function MatchPhotoCard({ user, onPress }: { user: SuggestedUser; onPress: () =>
 
       {/* Content */}
       <View style={s.info}>
-        <Text style={s.labelName} numberOfLines={1}>{displayName}</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <Text style={s.labelName} numberOfLines={1}>{displayName}</Text>
+          <TrustTierBadge tier={user.trust_tier} size="sm" hideNew />
+        </View>
         {tags.length > 0 && (
           <View style={s.tagsRow}>
             {tags.map((tag) => (

@@ -19,6 +19,7 @@ import { useTheme, SPACE, FONT, RADIUS, PALETTE } from "../../lib/theme";
 import { Icon } from "../Icon";
 import { resolveUrl } from "../Avatar";
 import { cartoonAvatar } from "../../lib/avatarFallback";
+import { TrustTierBadge } from "../TrustTierBadge";
 import { supabase } from "../../lib/supabase";
 import { RequestStatus, DiscoverUser } from "./PersonCard";
 
@@ -217,6 +218,7 @@ export function ProfileSheet({ user, status, onConnect, onClose, onBlock }: Prop
                         <Text style={[s.levelText, { color: levelColor }]}>{user.fitness_level}</Text>
                       </View>
                     )}
+                    <TrustTierBadge tier={user.trust_tier} size="md" />
                     {user.city && (
                       <Text style={s.photoMeta}>📍 {user.city}</Text>
                     )}

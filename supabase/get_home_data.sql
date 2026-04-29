@@ -188,6 +188,7 @@ BEGIN
       u.sports,
       u.fitness_level,
       u.gender,
+      u.trust_tier,
       u.availability
     FROM users u
     WHERE u.id <> p_user_id

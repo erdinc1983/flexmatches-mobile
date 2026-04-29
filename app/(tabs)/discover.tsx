@@ -104,7 +104,7 @@ const PAGE_SIZE     = 20;
 // distance_km (server-computed) without exposing raw partner coords.
 // SELECT_FIELDS is used only for the pending-profiles fetch (already-liked
 // users by id), where distance is irrelevant.
-const SELECT_FIELDS = "id, username, full_name, bio, city, fitness_level, age, gender, sports, current_streak, last_active, avatar_url, is_at_gym, availability, training_intent, created_at, sessions_completed, reliability_score, phone_verified";
+const SELECT_FIELDS = "id, username, full_name, bio, city, fitness_level, age, gender, sports, current_streak, last_active, avatar_url, is_at_gym, availability, training_intent, created_at, sessions_completed, reliability_score, phone_verified, trust_tier";
 
 function mapUser(u: any): DiscoverUser {
   return {
@@ -129,6 +129,7 @@ function mapUser(u: any): DiscoverUser {
     sessions_completed: u.sessions_completed ?? 0,
     reliability_score:  u.reliability_score ?? 100,
     phone_verified:     u.phone_verified ?? false,
+    trust_tier:         (u.trust_tier === "vouched" || u.trust_tier === "trusted" || u.trust_tier === "active" ? u.trust_tier : "new") as DiscoverUser["trust_tier"],
     matchScore:         0,
     reasons:            [],
     isNew:              !!(u.created_at && Date.now() - new Date(u.created_at).getTime() < NEW_THRESHOLD),

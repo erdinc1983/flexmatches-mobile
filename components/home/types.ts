@@ -34,6 +34,8 @@ export type SuggestedUser = {
   /** Drives gender-aware cartoon avatar fallback. Without it the Home
    *  best-matches card can show a male user a female cartoon. */
   gender:        string | null;
+  /** Server-computed via users.trust_tier generated column. */
+  trust_tier:    "new" | "active" | "trusted" | "vouched";
   city:          string | null;
   shared_sports: string[];
   reasons:       string[];

@@ -27,6 +27,7 @@ import { router } from "expo-router";
 import { useTheme, SPACE, FONT, RADIUS, PALETTE } from "../../lib/theme";
 import { resolveUrl } from "../Avatar";
 import { cartoonAvatar } from "../../lib/avatarFallback";
+import { TrustTierBadge } from "../TrustTierBadge";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type RequestStatus = "none" | "pending" | "accepted";
@@ -59,6 +60,10 @@ export type DiscoverUser = {
   sessions_completed: number;
   reliability_score:  number;
   phone_verified:     boolean;
+  /** Server-computed via generated column on users.trust_tier
+   *  (see supabase/sql/16_trust_tier.sql). Falls back to "new" for any
+   *  row that predates the column or returns an unrecognized value. */
+  trust_tier:         "new" | "active" | "trusted" | "vouched";
   matchScore:         number;
   reasons:            string[];
   isNew:              boolean;
@@ -75,7 +80,7 @@ export type DiscoverUser = {
  * the correct default.
  */
 export const DISCOVER_USER_COLUMNS =
-  "id, username, full_name, avatar_url, bio, city, fitness_level, age, gender, sports, current_streak, last_active, is_at_gym, availability, training_intent, sessions_completed, reliability_score, phone_verified";
+  "id, username, full_name, avatar_url, bio, city, fitness_level, age, gender, sports, current_streak, last_active, is_at_gym, availability, training_intent, sessions_completed, reliability_score, phone_verified, trust_tier";
 
 /**
  * Build a DiscoverUser from a raw Supabase row. Fills required numeric/
@@ -108,6 +113,7 @@ export function toDiscoverUser(
     sessions_completed: row.sessions_completed ?? 0,
     reliability_score:  row.reliability_score ?? 100,
     phone_verified:     row.phone_verified ?? false,
+    trust_tier:         (row.trust_tier === "vouched" || row.trust_tier === "trusted" || row.trust_tier === "active" ? row.trust_tier : "new") as DiscoverUser["trust_tier"],
     matchScore:         extras?.matchScore ?? 0,
     reasons:            extras?.reasons ?? [],
     isNew:              extras?.isNew ?? false,
@@ -239,6 +245,7 @@ export function PersonCard({ user, status, onConnect, onCancelRequest, onPress, 
                 <Text style={[s.levelText, { color: levelColor }]}>{user.fitness_level}</Text>
               </View>
             )}
+            <TrustTierBadge tier={user.trust_tier} size="sm" hideNew />
             {user.phone_verified && (
               <View style={s.verifiedBadge}>
                 <Text style={s.verifiedText}>✓ Verified</Text>

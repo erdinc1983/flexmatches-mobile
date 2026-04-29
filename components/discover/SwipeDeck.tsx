@@ -21,6 +21,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useTheme, SPACE, FONT, RADIUS, PALETTE } from "../../lib/theme";
 import { resolveUrl } from "../Avatar";
 import { cartoonAvatar } from "../../lib/avatarFallback";
+import { TrustTierBadge } from "../TrustTierBadge";
 import { Icon } from "../Icon";
 import type { DiscoverUser, RequestStatus } from "./PersonCard";
 
@@ -322,6 +323,7 @@ function SwipeCardContent({ user, status, onInfoPress }: {
                 <Text style={[card.levelText, { color: levelColor }]}>{user.fitness_level}</Text>
               </View>
             )}
+            <TrustTierBadge tier={user.trust_tier} size="sm" hideNew />
             {activeStr !== "" && (
               <Text style={[card.activeTime, { color: activeStr === "Active now" ? "#4ADE80" : "rgba(255,255,255,0.70)" }]}>
                 {activeStr === "Active now" ? "● Active now" : activeStr}
