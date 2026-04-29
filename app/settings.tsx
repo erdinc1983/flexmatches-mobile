@@ -25,11 +25,16 @@ import { AppModal } from "../components/ui/AppModal";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Privacy = {
-  hide_profile:  boolean;
-  hide_activity: boolean;
-  hide_age:      boolean;
-  hide_city:     boolean;
-  hide_weight:   boolean;
+  hide_profile:    boolean;
+  hide_activity:   boolean;
+  hide_age:        boolean;
+  hide_city:       boolean;
+  hide_weight:     boolean;
+  /** Safety feature for users who want a women-only training partner search.
+   *  When true, anyone whose gender is "male" will not see this profile in
+   *  Discover, Best Matches, or any peer-fetch path. Enforced server-side
+   *  via the get_nearby_users RPC (privacy boundary). */
+  hide_from_male:  boolean;
 };
 
 type NotifPrefs = {
@@ -43,7 +48,7 @@ type NotifPrefs = {
 
 const DEFAULT_PRIVACY: Privacy = {
   hide_profile: false, hide_activity: false, hide_age: false,
-  hide_city: false, hide_weight: false,
+  hide_city: false, hide_weight: false, hide_from_male: false,
 };
 
 const DEFAULT_NOTIF: NotifPrefs = {
@@ -368,11 +373,12 @@ export default function SettingsScreen() {
         {/* ── Privacy ── */}
         <SettingCard title="Privacy" description="Control what others see" c={c}>
           {([
-            { key: "hide_profile",  label: "Hide my profile from Discover", desc: "Others won't find you in search" },
-            { key: "hide_activity", label: "Hide my activity from partners", desc: "Workout stats hidden in chat" },
-            { key: "hide_age",      label: "Hide my age",                   desc: "Age hidden on public profile" },
-            { key: "hide_city",     label: "Hide my city",                  desc: "City hidden on public profile" },
-            { key: "hide_weight",   label: "Hide my weight",                desc: "Weight hidden on public profile" },
+            { key: "hide_profile",   label: "Hide my profile from Discover", desc: "Others won't find you in search" },
+            { key: "hide_from_male", label: "Hide my profile from male users", desc: "Only women and non-binary users will see your profile" },
+            { key: "hide_activity",  label: "Hide my activity from partners", desc: "Workout stats hidden in chat" },
+            { key: "hide_age",       label: "Hide my age",                   desc: "Age hidden on public profile" },
+            { key: "hide_city",      label: "Hide my city",                  desc: "City hidden on public profile" },
+            { key: "hide_weight",    label: "Hide my weight",                desc: "Weight hidden on public profile" },
           ] as { key: keyof Privacy; label: string; desc: string }[]).map(({ key, label, desc }, i, arr) => (
             <View key={key} style={[s.toggleRow, i < arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: c.border, paddingBottom: SPACE[12] }]}>
               <View style={{ flex: 1, gap: 2 }}>
