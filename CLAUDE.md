@@ -158,87 +158,73 @@ function sanitizeILike(q: string): string {
 
 ---
 
-## Mevcut Durum (Current Status — 2026-04-14)
+## Mevcut Durum (Current Status — 2026-04-29)
 
 Same status block also lives in the main `flexmatches` repo's `CLAUDE.md`. Mirror updates between repos when status changes.
 
+The full pre-launch backlog and active to-do list now live in the **web repo** at:
+- `flexmatches/docs/2000realuser.md` — Codex's 22-story backlog with status filtering
+- `flexmatches/docs/todolist.md` — code-only work that is unblocked today
+
+Open those after company formation instead of recreating from scratch.
+
 ### Where we are
 
-**Code: ready for hardware UAT.** All P0/P1/P2 from James/Mara reviews shipped and verified. Lint 0/0, tsc 0, expo export clean.
+**Code: ready for hardware UAT.** All P0/P1 from James/Mara/Codex reviews shipped and verified. tsc clean, expo lint clean, **expo-doctor 17/17 green**.
 
-Recent work (all in production):
+#### Sprint work since 2026-04-14 (all in production)
 
-- **Privacy:** `get_nearby_users` RPC server-side fuzzes peer coords to ~1.1km. `DiscoverUser.lat: null` literal type compile-time guards it.
-- **Onboarding → Profile sync:** fixed (availability shape mismatch + missing `refreshAppUser()`).
-- **Workout/streak loop:** Home CTA renamed "Check In", `updateAppUser()` mirrors the new streak instantly.
-- **Notifications:** orphan-cleanup trigger on matches DELETE + client self-heal on tap.
-- **Units:** `lib/units.ts` threads imperial/metric through Discover reasons + maxKm filter.
-- **ProfileSheet scroll:** ScrollView uses `maxHeight: H * 0.55` (not `flex:1`) so sparse profiles don't collapse.
-- **Avatars:** `lib/avatarFallback.ts`, gender-aware. Threaded through every Discover surface + Home BestMatches.
-- **Founding Pro:** first 1,000 users auto-grant via trigger. All 67 existing users backfilled as `pro_source = 'founding_member'`.
-- **Referral rewards engine:** `referral_grants` ledger + `private_apply_referral_rewards()` (locked) + `apply_my_referral_rewards()` (no-arg). Tiers: 1 → badge, 3 → 3 mo Pro, 6 → 6 mo Pro. Idempotent.
-- **Pro expiry:** hourly cron `referral-pro-expiry` flips `is_pro=false` when `pro_expires_at < now()` (founding excluded). Client `isProActive()` agrees.
-- **Phone trust boundary:** `verify-phone` Edge Function owns OTP verify + service-role write. DB trigger `trg_guard_phone_verified` rejects any client UPDATE that touches `phone_verified`. E.164 canonicalized server-side.
-- **Sentry:** wired (`@sentry/react-native@6.22.0`). Inert until `EXPO_PUBLIC_SENTRY_DSN` set.
+**Privacy boundary lockdown (P0 from Codex review):**
+- Migration 17: `reports_received` moved out of `public.users` into `private.user_report_counters` (separate schema, no anon/authenticated SELECT). Trust tier label is the only public surface; raw counts never cross the wire.
+- Migration 18: `get_home_data` candidates section now applies the same gate as Discover (banned + hide_profile + hide_from_male + blocks both directions). Closed the bypass where users hidden from males still appeared on Home Best Matches.
+- Migration 18: `get_nearby_users` gender check switched to `COALESCE(caller, 'male') <> 'male'` so callers with NULL gender no longer bypass `hide_from_male`. Restrictive default applied to every existing account at once with no app change.
 
-13 SQL migrations in `supabase/sql/`, all deployed: 01_indexes, 02_pg_cron, 03_last_active_trigger, 04_rls_admin_fix, 05_get_nearby_users, 06_notifications_cleanup, 07_founding_pro, 08_referral_validity, 09_event_recurrence, 10_referral_rewards, 11_referral_rpc_lockdown, 12_pro_expiry, 13_phone_verify_lockdown.
+**Mobile hardening (P1 from Codex review):**
+- `app/_layout.tsx` `resolveAppState`: synchronous `banned_at` check on every launch. Cache only saves the onboarding-state lookup; banning takes effect immediately on next launch instead of "eventually after the background fetch."
+- `app/(tabs)/home.tsx` `respondToMatch` / `sendRequestFromSheet` / `cancelSession` / `rescheduleSession`: check Supabase `error` before mutating local state. Failed writes show an Alert with retry guidance instead of silently desyncing UI from DB.
+- `components/discover/ProfileSheet.tsx` `handleBlock` / `handleReport`: same pattern. Menu no longer says "reported" if the row was rejected.
+- `app/(auth)/reset-password.tsx`: upgraded to require Strong (8+ chars, one uppercase, one number) with the same live strength meter as register.tsx. The 6-char escape hatch is gone.
+
+**Mobile dependency hygiene:**
+- `@sentry/react-native` 6.22.0 → 7.2.0 (Expo SDK 54 alignment).
+- `expo install --fix` aligned the patch versions of expo, expo-file-system, expo-image-picker, expo-linking, expo-notifications, expo-updates, expo-web-browser, react-native-worklets.
+- `expo-doctor` 17/17 checks pass.
+
+**Web (sister repo):**
+- Privacy toggle for `hide_from_male` exposed in Settings → Privacy and Profile → Privacy Settings.
+- Trust tier badges visible on Discover grid card, detail modal, `/u/[username]` public profile.
+- Olcay/Ashley copy pass: hero rewritten ("Stop training **alone**..."), CTA upgraded, fake testimonials replaced with honest scenario cards, unsupported stats removed, "moderation team / permanently banned" softened across `/safety` + `/privacy-policy` + `/support`.
+- Shared `SiteHeader` (`position: fixed`) across `/`, `/safety`, `/privacy-policy`, `/terms`, `/support`. Sub-page anchors use absolute `/#…`.
+- Pre-launch readiness backlog created in `flexmatches/docs/`.
+
+#### DB has 18 SQL migrations in `supabase/sql/`, all deployed
+
+01_indexes · 02_pg_cron · 03_last_active_trigger · 04_rls_admin_fix · 05_get_nearby_users · 06_notifications_cleanup · 07_founding_pro · 08_referral_validity · 09_event_recurrence · 10_referral_rewards · 11_referral_rpc_lockdown · 12_pro_expiry · 13_phone_verify_lockdown · 14_rls_advisor_fixes · 15_hide_from_male · 16_trust_tier (rewritten — 17 supersedes the public counter design) · 17_lock_reports_extend_nearby · 18_close_home_and_null_gender.
 
 Edge Functions deployed: `health-check`, `send-push`, `verify-phone`, `delete-account`, `admin-action`, `verify-iap`.
 
 ### What's left
 
-**Mara's device UAT — 10 must-prove items:**
-1. Valid OTP sets phone_verified
-2. Wrong OTP shows clean error
-3. Duplicate phone shows "already in use"
-4. Direct client write to `phone_verified` blocked (smoke-tested in shell ✓; needs hardware repro)
-5. Phone change after verified blocked
-6. Referral Pending → Counted on validation
-7. 1 / 3 / 6 referrals grant once each
-8. Re-running reward RPC doesn't double-grant
-9. Pro expires after window
-10. Network-off during referral / check-in / event creation doesn't lose user input
+See `flexmatches/docs/todolist.md` for active work and `flexmatches/docs/2000realuser.md` for the full backlog. Quick categories:
 
-**Deferred to May / EAS push (per "no EAS until May" rule):**
-- Apple Sign In real flow (needs native build)
-- Real APNs push delivery + killed-state taps
-- IAP / StoreKit
-- App Store privacy validation
-- Final fresh-install TestFlight pass
-- Android EAS build
+- **Code-only, ready today:** finish optimistic-write rollback on `discover.tsx` / `matches.tsx` / notifications row actions / settings privacy toggles; add gender to onboarding (UX side of the NULL-gender server fix); A11y pass on Home/Discover/Chat; banned-screen UX verify; rollback playbook doc.
+- **Blocked on company formation:** Twilio + Supabase phone provider, Sentry account + DSN env vars, Vercel uptime alert, A2P 10DLC, Stripe activation, Google Play Console.
+- **Blocked on EAS build (May quota refresh):** iOS/Android prod builds, real APNs push delivery matrix, Apple Sign In real flow, deep link verification on live URLs, real-device QA, App Store privacy labels.
+- **QA-only (engineering complete, needs hardware):** hide-from-male E2E with male/female/null callers; report/block/trust tier E2E; two-account smoke test.
 
-**Deferred code work (not blocking):**
-- Founding Pro boundary race condition (Mara: not urgent at 67 users)
-- Penalize empty profiles in Home BestMatches scoring
-- Server-side recurring event expansion (today: label only)
+### Manual setup checklist (post-company)
 
-### What I (Erdinç) should do manually
+Twilio → Supabase phone provider → Sentry → Vercel uptime → A2P → Stripe → Google Play → EAS build → TestFlight. Full table in `flexmatches/docs/2000realuser.md`.
 
-| # | Task | Why blocking | Effort |
-|---|---|---|---|
-| 1 | **Twilio account** + buy a US phone number with SMS capability | Phone verify flow needs an SMS provider — code is fully built and waiting | 15 min trial, ~$1/mo + ~$0.008/SMS |
-| 2 | **Supabase dashboard → Auth → Phone provider → Twilio** with SID + Auth Token + phone number | Wires the deployed `verify-phone` Edge Function to a real SMS path | 5 min |
-| 3 | **Verified caller IDs in Twilio** for every test phone | Trial accounts only SMS verified numbers | 2 min/number |
-| 4 | **Run Mara's 10-item device UAT** | Architecture is ready; needs hardware to prove SMS + network-off + suspend | ~1 hour |
-| 5 | **Sentry account** at sentry.io → 2 projects (`flexmatches-web`, `flexmatches-mobile`) | Code wired but inert until DSN set | 5 min |
-| 6 | **Set Sentry env vars:** Vercel + FlexMatchesMobile `.env` → `EXPO_PUBLIC_SENTRY_DSN` | Activates error reporting | 2 min |
-| 7 | **Vercel uptime check** on `https://www.flexmatches.com/api/health` | Endpoint live; just wire the alert | 2 min |
-| 8 | **Company formation** (planned late April 2026) | Blocks: Stripe activation, A2P 10DLC vetted brand, trademark | Founder task |
-| 9 | **A2P 10DLC registration** (after company OR sole-prop now) | US carriers may filter SMS without it | $4 brand + $10 campaign one-time, ~1-7 day approval |
-| 10 | **Stripe activation** (after company) | Add `STRIPE_SECRET_KEY` + `STRIPE_*_PRICE_ID` to Vercel. Code already wired | 15 min after company |
-| 11 | **Google Play Console** ($25 one-time) | Android submission later in roadmap | 24h approval |
-| 12 | **EAS build (when limit resets in May)**: `eas build --platform ios --profile production` | Real APNs push, killed-state taps, Apple Sign In, IAP all need this | Per-build |
-| 13 | **TestFlight fresh-install pass** | Final pre-submission validation | After EAS build |
+### Decision (still in force from 2026-04-14): wait for company
 
-### Decision (2026-04-14): wait for company
-
-Erdinç has decided to defer ALL 13 manual tasks above until after company formation (planned late April 2026). Reason: cleaner paper trail, single consistent entity attached to every external service (Twilio, Sentry, Stripe, Apple Developer, Google Play, A2P brand) from day one — no Individual → Organization migration headaches.
+Erdinç deferred ALL external-account setup until after company formation (planned late April 2026). Reason: cleaner paper trail, single entity from day one, no Individual → Organization migration.
 
 **Implication for future sessions:**
 - Don't push Erdinç to set up Twilio / Sentry / Vercel uptime / etc. before the company forms.
 - Mara's device UAT (10 items) is on hold until SMS provider is wired post-company.
 - The architecture is ready and waiting; this is a quiet period by choice, not a missing-piece blocker.
-- If Erdinç asks "what can we do in the meantime?", the answer is the deferred code-only items above (Founding Pro race, BestMatches empty-profile penalty, recurring event expansion) — anything that doesn't depend on external accounts.
+- If Erdinç asks "what can we do in the meantime?", check `flexmatches/docs/todolist.md` first.
 
 ---
 
