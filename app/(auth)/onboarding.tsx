@@ -10,7 +10,27 @@ import { useAppData } from "../../lib/appDataContext";
 import { CityAutocomplete } from "../../components/CityAutocomplete";
 
 const { width: _width } = Dimensions.get("window");
-const TOTAL_STEPS = 5;
+const TOTAL_STEPS = 6;
+
+// Layer 2 of the privacy system. The default 'everyone' lets users
+// finish onboarding without thinking about it; they can sharpen the
+// preference later in Profile → Edit. Non-binary users appear in
+// every filter (inclusive default — see migration 19).
+const SHOW_ME_OPTIONS = [
+  { value: "everyone",    label: "Everyone",    desc: "All training partners" },
+  { value: "women_only",  label: "Women only",  desc: "Only women in your feed" },
+  { value: "men_only",    label: "Men only",    desc: "Only men in your feed" },
+];
+
+// Modern 4-option gender set. "Non-binary" replaces the old "Other"
+// residual bucket; "Prefer not to say" is a real privacy choice and
+// is treated conservatively in the matching RPC (most restrictive).
+const GENDER_OPTIONS = [
+  { value: "male",              label: "Male" },
+  { value: "female",            label: "Female" },
+  { value: "non_binary",        label: "Non-binary" },
+  { value: "prefer_not_to_say", label: "Prefer not to say" },
+];
 
 const INTENT_OPTIONS = [
   { value: "guidance", label: "I want guidance",        emoji: "📚", desc: "Learning from someone more experienced" },
@@ -82,17 +102,21 @@ export default function OnboardingScreen() {
     });
   }, []);
 
-  // Step 2
-  const [sports, setSports] = useState<string[]>([]);
+  // Step 2 — gender (required) + show_me filter (optional, defaults to everyone)
+  const [gender, setGender] = useState("");
+  const [showMe, setShowMe] = useState("everyone");
 
   // Step 3
+  const [sports, setSports] = useState<string[]>([]);
+
+  // Step 4
   const [fitnessLevel, setFitnessLevel] = useState("");
   const [preferredTimes, setPreferredTimes] = useState<string[]>([]);
 
-  // Step 4
+  // Step 5
   const [city, setCity] = useState("");
 
-  // Step 5
+  // Step 6
   const [trainingIntent, setTrainingIntent] = useState("");
 
   function toggleSport(s: string) {
@@ -124,6 +148,8 @@ export default function OnboardingScreen() {
       const { error } = await supabase.from("users").update({
         full_name:       fullName.trim() || null,
         bio:             bio.trim() || null,
+        gender:          gender || null,
+        show_me:         showMe,
         sports:          sports.length > 0 ? sports : null,
         fitness_level:   fitnessLevel || null,
         availability:    availabilityObject(),
@@ -150,6 +176,8 @@ export default function OnboardingScreen() {
     await supabase.from("users").update({
       full_name:       fullName.trim() || null,
       bio:             bio.trim() || null,
+      gender:          gender || null,
+      show_me:         showMe,
       sports:          sports.length > 0 ? sports : null,
       fitness_level:   fitnessLevel || null,
       availability:    availabilityObject(),
@@ -176,9 +204,10 @@ export default function OnboardingScreen() {
 
   const canNext = () => {
     if (step === 1) return fullName.trim().length >= 2;
-    if (step === 2) return sports.length > 0;
-    if (step === 3) return fitnessLevel.length > 0;
-    return true; // steps 4 & 5 are optional
+    if (step === 2) return gender.length > 0; // gender required (matching/privacy filter needs it)
+    if (step === 3) return sports.length > 0;
+    if (step === 4) return fitnessLevel.length > 0;
+    return true; // steps 5 & 6 are optional
   };
 
   return (
@@ -196,7 +225,8 @@ export default function OnboardingScreen() {
           <Text style={s.backText}>←</Text>
         </TouchableOpacity>
         <Text style={s.stepLabel}>{step} of {TOTAL_STEPS}</Text>
-        {step === 1 ? (
+        {step === 1 || step === 2 ? (
+          // Step 1 (name) and step 2 (gender) are required; no skip.
           <View style={{ width: 36 }} />
         ) : (
           <TouchableOpacity onPress={skip} hitSlop={8}>
@@ -246,8 +276,65 @@ export default function OnboardingScreen() {
           </View>
         )}
 
-        {/* Step 2: Sports */}
+        {/* Step 2: Gender + show_me filter (privacy/matching) */}
         {step === 2 && (
+          <View style={s.stepContent}>
+            <View style={s.stepHead}>
+              <Text style={s.stepTitle}>About you</Text>
+              <Text style={s.stepSub}>Used for matching and the privacy controls. Always editable.</Text>
+            </View>
+
+            <Text style={s.fieldLabel}>Gender</Text>
+            <View style={s.optionList}>
+              {GENDER_OPTIONS.map((g) => {
+                const active = gender === g.value;
+                return (
+                  <TouchableOpacity
+                    key={g.value}
+                    style={[s.optionRow, active && s.optionRowActive]}
+                    onPress={() => setGender(g.value)}
+                    activeOpacity={0.8}
+                  >
+                    <View style={s.optionText}>
+                      <Text style={[s.optionTitle, active && { color: "#FF4500" }]}>{g.label}</Text>
+                    </View>
+                    <View style={[s.radioOuter, active && s.radioOuterActive]}>
+                      {active && <View style={s.radioInner} />}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <Text style={[s.fieldLabel, { marginTop: 28 }]}>
+              Who do you want to train with? <Text style={s.optional}>(editable later)</Text>
+            </Text>
+            <View style={s.optionList}>
+              {SHOW_ME_OPTIONS.map((opt) => {
+                const active = showMe === opt.value;
+                return (
+                  <TouchableOpacity
+                    key={opt.value}
+                    style={[s.optionRow, active && s.optionRowActive]}
+                    onPress={() => setShowMe(opt.value)}
+                    activeOpacity={0.8}
+                  >
+                    <View style={s.optionText}>
+                      <Text style={[s.optionTitle, active && { color: "#FF4500" }]}>{opt.label}</Text>
+                      <Text style={s.optionDesc}>{opt.desc}</Text>
+                    </View>
+                    <View style={[s.radioOuter, active && s.radioOuterActive]}>
+                      {active && <View style={s.radioInner} />}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        )}
+
+        {/* Step 3: Sports */}
+        {step === 3 && (
           <View style={s.stepContent}>
             <View style={s.stepHead}>
               <Text style={s.stepTitle}>What do you train?</Text>
@@ -273,8 +360,8 @@ export default function OnboardingScreen() {
           </View>
         )}
 
-        {/* Step 3: Fitness Level + Times */}
-        {step === 3 && (
+        {/* Step 4: Fitness Level + Times */}
+        {step === 4 && (
           <View style={s.stepContent}>
             <View style={s.stepHead}>
               <Text style={s.stepTitle}>Your fitness level</Text>
@@ -324,8 +411,8 @@ export default function OnboardingScreen() {
           </View>
         )}
 
-        {/* Step 4: City */}
-        {step === 4 && (
+        {/* Step 5: City */}
+        {step === 5 && (
           <View style={s.stepContent}>
             <View style={s.stepHead}>
               <Text style={s.stepTitle}>Where do you train?</Text>
@@ -343,8 +430,8 @@ export default function OnboardingScreen() {
           </View>
         )}
 
-        {/* Step 5: Training Intent */}
-        {step === 5 && (
+        {/* Step 6: Training Intent */}
+        {step === 6 && (
           <View style={s.stepContent}>
             <View style={s.stepHead}>
               <Text style={s.stepTitle}>Your training style</Text>

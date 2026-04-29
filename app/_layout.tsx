@@ -8,9 +8,10 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "../lib/supabase";
 import { ThemeProvider, useTheme, FONT, SPACE, PALETTE } from "../lib/theme";
 import { NotificationProvider } from "../lib/notificationContext";
-import { AppDataProvider } from "../lib/appDataContext";
+import { AppDataProvider, useAppData } from "../lib/appDataContext";
 import { registerPushToken } from "../lib/push";
 import { Button } from "../components/ui/Button";
+import { GenderBackfillModal } from "../components/GenderBackfillModal";
 import { initSentry } from "../lib/sentry";
 
 // Init Sentry before anything else renders
@@ -336,9 +337,21 @@ export default function RootLayout() {
             <Stack.Screen name="notifications" options={{ presentation: "card", animation: "slide_from_right" }} />
             <Stack.Screen name="search" options={{ presentation: "card", animation: "slide_from_right" }} />
           </Stack>
+          <GenderBackfillGate />
         </NotificationProvider>
         </AppDataProvider>
       </RawErrorBoundary>
     </ThemeProvider>
   );
+}
+
+// Renders the one-time gender backfill modal over any tab when the
+// user is fully ready but their gender column is still NULL (created
+// before gender became a required onboarding field). Without this,
+// migration 19's restrictive default treats NULL as male and breaks
+// hide_from_male / show_me filters for legitimate non-male accounts.
+function GenderBackfillGate() {
+  const { appUser, appUserLoading } = useAppData();
+  const needsBackfill = !appUserLoading && !!appUser && !appUser.gender;
+  return <GenderBackfillModal visible={needsBackfill} />;
 }

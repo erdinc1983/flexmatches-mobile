@@ -48,9 +48,10 @@ const SPORTS_OPTIONS = [
 ];
 
 const GENDERS = [
-  { label: "Male",   value: "male"   },
-  { label: "Female", value: "female" },
-  { label: "Other",  value: "other"  },
+  { label: "Male",              value: "male"              },
+  { label: "Female",            value: "female"            },
+  { label: "Non-binary",        value: "non_binary"        },
+  { label: "Prefer not to say", value: "prefer_not_to_say" },
 ];
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -1020,7 +1021,7 @@ function ViewMode({ profile, workoutsThisMonth, levelColor, earnedBadges, userTi
             </View>
           )}
           <View style={s.chipsRow}>
-            {profile.gender        && <InfoChip icon="info" label={profile.gender.charAt(0).toUpperCase() + profile.gender.slice(1)} />}
+            {profile.gender        && <InfoChip icon="info" label={GENDERS.find(g => g.value === profile.gender)?.label ?? profile.gender} />}
             {profile.weight        && <InfoChip icon="info" label={`${profile.weight} kg`} />}
             {profile.target_weight && <InfoChip icon="info" label={`Target: ${profile.target_weight} kg`} />}
           </View>
@@ -1353,21 +1354,21 @@ function EditForm({ form, setForm, saving, onSave, onCancel, toggleSport, toggle
         </View>
       </View>
 
-      {/* Who I Want to Meet */}
+      {/* Who I Want to Train With (Layer 2 filter — used by get_nearby_users + get_home_data) */}
       <View style={s.field}>
-        <Text style={[s.fieldLabel, { color: c.textMuted }]}>Who I want to meet</Text>
+        <Text style={[s.fieldLabel, { color: c.textMuted }]}>Who I want to train with</Text>
         <View style={s.sportsWrap}>
           {[
-            { value: "everyone", label: "Everyone" },
-            { value: "men",      label: "Men" },
-            { value: "women",    label: "Women" },
+            { value: "everyone",   label: "Everyone" },
+            { value: "women_only", label: "Women only" },
+            { value: "men_only",   label: "Men only" },
           ].map(opt => {
             const active = form.show_me === opt.value;
             return (
               <TouchableOpacity
                 key={opt.value}
                 style={[s.sportChip, { backgroundColor: active ? c.brandSubtle : c.bgCard, borderColor: active ? c.brand : c.border }]}
-                onPress={() => setForm({ ...form, show_me: active ? null : opt.value })}
+                onPress={() => setForm({ ...form, show_me: opt.value })}
               >
                 <Text style={[s.sportChipText, { color: active ? c.brand : c.textMuted }]}>{opt.label}</Text>
               </TouchableOpacity>
