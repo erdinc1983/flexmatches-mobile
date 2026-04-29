@@ -14,6 +14,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity,
   ActivityIndicator, FlatList, Alert, Modal, TextInput, ScrollView, RefreshControl,
 } from "react-native";
+import * as Haptics from "expo-haptics";
 import { router, useFocusEffect } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "../../lib/supabase";
@@ -214,6 +215,7 @@ export default function MatchesScreen() {
       const match = pending.find((p) => p.id === matchId);
       await supabase.from("matches").update({ status }).eq("id", matchId);
       if (status === "accepted" && match) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         const partnerName = match.other_user.full_name ?? match.other_user.username;
         notifyMatchAccepted(partnerName, matchId);
         notifyUser(match.sender_id, {

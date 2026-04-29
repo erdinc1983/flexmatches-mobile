@@ -15,6 +15,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 // FM-101: ErrorState for load() failure recovery
 import { ErrorState } from "../../components/ui/ErrorState";
+import * as Haptics from "expo-haptics";
 import { useFocusEffect , router } from "expo-router";
 import {
   ScrollView, ActivityIndicator, Alert, RefreshControl,
@@ -404,6 +405,7 @@ export default function HomeScreen() {
   }, [load, profile, refreshNotifs]));
 
   const onRefresh = useCallback(async () => {
+    Haptics.selectionAsync();
     setRefreshing(true);
     await load(true);
     setRefreshing(false);
@@ -502,6 +504,7 @@ export default function HomeScreen() {
     }
     setPendingRequests((prev) => prev.filter((p) => p.id !== matchId));
     if (status === "accepted" && req) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setProfile((p) => p ? { ...p, match_count: p.match_count + 1 } : p);
       const myName = profile?.full_name ?? profile?.username ?? "Someone";
       // Local notification for myself

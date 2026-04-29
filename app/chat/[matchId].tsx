@@ -19,6 +19,7 @@ import {
   FlatList, KeyboardAvoidingView, Platform, ActivityIndicator,
   Modal, ScrollView, Dimensions, Vibration, Alert,
 } from "react-native";
+import * as Haptics from "expo-haptics";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, router } from "expo-router";
@@ -499,6 +500,7 @@ export default function ChatScreen() {
                 p_partner_id:  other.id,
               });
               if (error) throw error;
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
               loadSession();
             } catch {
               Alert.alert("Could not update session. Please try again.");

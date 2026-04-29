@@ -522,6 +522,7 @@ export default function DiscoverScreen() {
   }, [load, users.length, appUser]));
 
   const onRefresh = useCallback(async () => {
+    Haptics.selectionAsync();
     setRefreshing(true);
     await load(true);
     setRefreshing(false);

@@ -13,6 +13,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import * as Haptics from "expo-haptics";
 import { ErrorState } from "../../components/ui/ErrorState";
 import {
   View, Text, StyleSheet, FlatList, RefreshControl, Alert,
@@ -194,6 +195,7 @@ export default function MessagesScreen() {
   }, [load]);
 
   const onRefresh = useCallback(async () => {
+    Haptics.selectionAsync();
     setRefreshing(true);
     await load(true);
     setRefreshing(false);
