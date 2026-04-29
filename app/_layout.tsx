@@ -190,35 +190,35 @@ function extractRoute(response: Notifications.NotificationResponse): string | nu
 async function resolveAppState(session: Session | null): Promise<AppState> {
   if (!session) return "unauthenticated";
 
-  // Fast path: if this user was confirmed ready before, open immediately.
-  // Banned check still runs in background — ban takes effect on next launch.
+  // Always do a synchronous banned_at check before granting any session.
+  // The cache only saves us from re-checking onboarding completion; banning
+  // is a moderation action and must take effect immediately on next launch,
+  // not "eventually after the background fetch finishes".
   const cachedUid = await AsyncStorage.getItem(READY_CACHE_KEY);
-  if (cachedUid === session.user.id) {
-    // Background: refresh banned_at without blocking launch
-    supabase
-      .from("users")
-      .select("banned_at")
-      .eq("id", session.user.id)
-      .single()
-      .then(({ data }) => {
-        if (data?.banned_at) {
-          AsyncStorage.removeItem(READY_CACHE_KEY);
-          AsyncStorage.removeItem(ONBOARDING_DONE_KEY);
-        }
-      });
-    return "ready";
-  }
+  const cachedReady = cachedUid === session.user.id;
 
-  // Slow path: first launch or cache miss — hit DB to check onboarding + banned
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("users")
     .select("full_name, banned_at")
     .eq("id", session.user.id)
     .single();
 
-  if (data?.banned_at) return "banned";
+  // Network failure on launch: trust the cache for ready state, but never
+  // grant ready to a brand-new uncached account because we cannot verify
+  // banned_at. Caller falls through to "loading" retry UI.
+  if (error || !data) {
+    return cachedReady ? "ready" : "auth_error";
+  }
 
-  const state: AppState = data?.full_name ? "ready" : "needs_onboarding";
+  if (data.banned_at) {
+    AsyncStorage.removeItem(READY_CACHE_KEY);
+    AsyncStorage.removeItem(ONBOARDING_DONE_KEY);
+    return "banned";
+  }
+
+  if (cachedReady) return "ready";
+
+  const state: AppState = data.full_name ? "ready" : "needs_onboarding";
   if (state === "ready") {
     AsyncStorage.setItem(READY_CACHE_KEY, session.user.id);
     AsyncStorage.setItem(ONBOARDING_DONE_KEY, "1");

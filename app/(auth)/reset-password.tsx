@@ -8,6 +8,20 @@ import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "../../lib/supabase";
 
+// Mirrors the signup strength rules in app/(auth)/register.tsx so a
+// reset can never weaken account security below the bar new accounts
+// must clear. Two definitions intentionally — keep them in sync.
+function getStrength(pw: string): { label: string; color: string; bars: number } {
+  if (pw.length < 6) return { label: "Too short", color: "#E53E3E", bars: 1 };
+  const has8     = pw.length >= 8;
+  const hasUpper = /[A-Z]/.test(pw);
+  const hasNum   = /[0-9]/.test(pw);
+  const score = [has8, hasUpper, hasNum].filter(Boolean).length;
+  if (score <= 1) return { label: "Weak",   color: "#E53E3E", bars: 1 };
+  if (score === 2) return { label: "Medium", color: "#F59E0B", bars: 2 };
+  return              { label: "Strong", color: "#22C55E", bars: 3 };
+}
+
 export default function ResetPasswordScreen() {
   const [password,  setPassword]  = useState("");
   const [confirm,   setConfirm]   = useState("");
@@ -15,9 +29,15 @@ export default function ResetPasswordScreen() {
   const [done,      setDone]      = useState(false);
   const [error,     setError]     = useState<string | null>(null);
 
+  const strength = password.length > 0 ? getStrength(password) : null;
+
   async function handleReset() {
     if (!password) { setError("Please enter a new password."); return; }
-    if (password.length < 6) { setError("Password must be at least 6 characters."); return; }
+    const s = getStrength(password);
+    if (s.label !== "Strong") {
+      setError("Use at least 8 characters with one uppercase letter and one number.");
+      return;
+    }
     if (password !== confirm) { setError("Passwords don't match."); return; }
     setLoading(true);
     setError(null);
@@ -61,13 +81,24 @@ export default function ResetPasswordScreen() {
                 <Text style={s.label}>New Password</Text>
                 <TextInput
                   style={s.input}
-                  placeholder="Min. 6 characters"
+                  placeholder="8+ chars, upper, number"
                   placeholderTextColor="#333"
                   value={password}
                   onChangeText={(t) => { setPassword(t); setError(null); }}
                   secureTextEntry
                   autoFocus
                 />
+                {strength && (
+                  <View style={s.strengthRow}>
+                    {[1, 2, 3].map((i) => (
+                      <View
+                        key={i}
+                        style={[s.strengthBar, { backgroundColor: i <= strength.bars ? strength.color : "#222" }]}
+                      />
+                    ))}
+                    <Text style={[s.strengthLabel, { color: strength.color }]}>{strength.label}</Text>
+                  </View>
+                )}
               </View>
 
               <View style={s.field}>
@@ -125,4 +156,7 @@ const s = StyleSheet.create({
   successSub:     { fontSize: 14, color: "#666", textAlign: "center", lineHeight: 21 },
   signInBtn:      { marginTop: 8, backgroundColor: "#FF4500", borderRadius: 14, paddingVertical: 14, paddingHorizontal: 32, alignItems: "center" },
   signInBtnText:  { color: "#fff", fontSize: 15, fontWeight: "700" },
+  strengthRow:    { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 },
+  strengthBar:    { flex: 1, height: 3, borderRadius: 2 },
+  strengthLabel:  { fontSize: 12, fontWeight: "700", minWidth: 50 },
 });

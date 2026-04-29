@@ -73,8 +73,12 @@ export function ProfileSheet({ user, status, onConnect, onClose, onBlock }: Prop
     setActioning(true);
     const { data: { user: me } } = await supabase.auth.getUser();
     if (!me) { setActioning(false); return; }
-    await supabase.from("blocks").insert({ blocker_id: me.id, blocked_id: u.id });
+    const { error } = await supabase.from("blocks").insert({ blocker_id: me.id, blocked_id: u.id });
     setActioning(false);
+    if (error) {
+      Alert.alert("Couldn't block", "Please try again. If the issue persists, contact support@flexmatches.com.");
+      return;
+    }
     setMenuOpen(false);
     onBlock?.(u.id);
     onClose();
@@ -84,8 +88,12 @@ export function ProfileSheet({ user, status, onConnect, onClose, onBlock }: Prop
     setActioning(true);
     const { data: { user: me } } = await supabase.auth.getUser();
     if (!me) { setActioning(false); return; }
-    await supabase.from("reports").insert({ reporter_id: me.id, reported_id: u.id, reason });
+    const { error } = await supabase.from("reports").insert({ reporter_id: me.id, reported_id: u.id, reason });
     setActioning(false);
+    if (error) {
+      Alert.alert("Couldn't submit report", "Please try again in a moment.");
+      return;
+    }
     setShowReport(false);
     setMenuOpen(false);
     setReported(true);

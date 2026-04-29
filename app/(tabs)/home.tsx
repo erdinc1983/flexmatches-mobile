@@ -495,7 +495,11 @@ export default function HomeScreen() {
 
   async function respondToMatch(matchId: string, status: "accepted" | "declined") {
     const req = pendingRequests.find((p) => p.id === matchId);
-    await supabase.from("matches").update({ status }).eq("id", matchId);
+    const { error } = await supabase.from("matches").update({ status }).eq("id", matchId);
+    if (error) {
+      Alert.alert("Couldn't respond", "Network hiccup. Please try again.");
+      return;
+    }
     setPendingRequests((prev) => prev.filter((p) => p.id !== matchId));
     if (status === "accepted" && req) {
       setProfile((p) => p ? { ...p, match_count: p.match_count + 1 } : p);
@@ -567,11 +571,15 @@ export default function HomeScreen() {
 
   async function sendRequestFromSheet() {
     if (!profile || !sheetUser) return;
-    await supabase.from("matches").insert({
+    const { error } = await supabase.from("matches").insert({
       sender_id:   profile.id,
       receiver_id: sheetUser.id,
       status:      "pending",
     });
+    if (error) {
+      Alert.alert("Couldn't send request", "Please try again in a moment.");
+      return;
+    }
     setSheetStatus("pending");
   }
 
@@ -614,17 +622,25 @@ export default function HomeScreen() {
   }
 
   async function cancelSession(sessionId: string) {
-    await supabase.from("buddy_sessions").update({ status: "cancelled" }).eq("id", sessionId);
+    const { error } = await supabase.from("buddy_sessions").update({ status: "cancelled" }).eq("id", sessionId);
+    if (error) {
+      Alert.alert("Couldn't cancel", "Please try again. The session is still active until you do.");
+      return;
+    }
     setUpcomingSessions((prev) => prev.filter((s) => s.id !== sessionId));
     setSelectedSession(null);
   }
 
   async function rescheduleSession(sessionId: string, newDate: string, newTime: string | null) {
-    await supabase.from("buddy_sessions").update({
+    const { error } = await supabase.from("buddy_sessions").update({
       session_date: newDate,
       session_time: newTime,
       status: "pending",
     }).eq("id", sessionId);
+    if (error) {
+      Alert.alert("Couldn't reschedule", "The new time wasn't saved. Please try again.");
+      return;
+    }
     setUpcomingSessions((prev) => prev.map((s) =>
       s.id === sessionId ? { ...s, session_date: newDate, session_time: newTime, status: "pending" } : s
     ));
