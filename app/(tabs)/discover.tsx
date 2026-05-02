@@ -534,13 +534,20 @@ export default function DiscoverScreen() {
     const a = lastSwipe;
     setLastSwipe(null);
     Haptics.selectionAsync();
-    if (a.action === "pass") {
-      await supabase.from("passes").delete().eq("id", a.dbId);
-    } else {
-      await supabase.from("matches").delete().eq("id", a.dbId);
+    const { error } = a.action === "pass"
+      ? await supabase.from("passes").delete().eq("id", a.dbId)
+      : await supabase.from("matches").delete().eq("id", a.dbId);
+    if (error) {
+      // DB delete failed; restore the lastSwipe state so the user can retry
+      setLastSwipe(a);
+      Alert.alert("Couldn't undo", "The previous swipe is still saved. Please try again.");
+      return;
+    }
+    if (a.action === "like") {
       setStatuses((prev) => { const n = { ...prev }; delete n[a.userId]; return n; });
       setMatchIds((prev) => { const n = { ...prev }; delete n[a.userId]; return n; });
     }
+    excludedRef.current.delete(a.userId);
     swipeDeckRef.current?.undoLast();
   }
 
@@ -548,35 +555,48 @@ export default function DiscoverScreen() {
   async function onLike(userId: string) {
     const uid = currentUserIdRef.current;
     if (!uid) return;
+    // Optimistic update — local state flips before the network round-trip
     excludedRef.current.add(userId);
     setStatuses((prev) => ({ ...prev, [userId]: "pending" }));
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const { data } = await supabase.from("matches")
+    const { data, error } = await supabase.from("matches")
       .insert({ sender_id: uid, receiver_id: userId, status: "pending" })
       .select("id").single();
-    if (data) {
-      setLastSwipe({ userId, dbId: data.id, action: "like" });
-      const senderName = appUser?.full_name ?? appUser?.username ?? "Someone";
-      notifyUser(userId, {
-        type: "match_request",
-        title: "New Match Request 🤝",
-        body: `${senderName} wants to connect with you!`,
-        relatedId: data.id,
-        data: { type: "match_request", relatedId: data.id },
-      });
+    if (error || !data) {
+      // Roll back: clear pending status and re-include in deck
+      excludedRef.current.delete(userId);
+      setStatuses((prev) => { const n = { ...prev }; delete n[userId]; return n; });
+      Alert.alert("Couldn't send request", "Please try again. Your swipe wasn't saved.");
+      return;
     }
+    setLastSwipe({ userId, dbId: data.id, action: "like" });
+    const senderName = appUser?.full_name ?? appUser?.username ?? "Someone";
+    notifyUser(userId, {
+      type: "match_request",
+      title: "New Match Request 🤝",
+      body: `${senderName} wants to connect with you!`,
+      relatedId: data.id,
+      data: { type: "match_request", relatedId: data.id },
+    });
   }
 
   // ── Pass (swipe left) ──────────────────────────────────────────────────────
   async function onPass(userId: string) {
     const uid = currentUserIdRef.current;
     if (!uid) return;
+    // Optimistic — exclude immediately so the deck doesn't re-show this card
     excludedRef.current.add(userId);
     Haptics.selectionAsync();
-    const { data } = await supabase.from("passes")
+    const { data, error } = await supabase.from("passes")
       .insert({ user_id: uid, passed_id: userId })
       .select("id").single();
-    if (data) setLastSwipe({ userId, dbId: data.id, action: "pass" });
+    if (error || !data) {
+      // Roll back so the card can be seen again on next refresh
+      excludedRef.current.delete(userId);
+      Alert.alert("Couldn't save your swipe", "Network hiccup. The card may reappear next refresh.");
+      return;
+    }
+    setLastSwipe({ userId, dbId: data.id, action: "pass" });
   }
 
   // ── Connect (list view Send Request) — time-limited toast ───────────────────
@@ -585,24 +605,28 @@ export default function DiscoverScreen() {
     if (!uid) return;
     setStatuses((prev) => ({ ...prev, [userId]: "pending" }));
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    const { data } = await supabase.from("matches")
+    const { data, error } = await supabase.from("matches")
       .insert({ sender_id: uid, receiver_id: userId, status: "pending" })
       .select("id").single();
-    if (data) {
-      const u = users.find((u) => u.id === userId);
-      if (connectTimerRef.current) clearTimeout(connectTimerRef.current);
-      setConnectUndo({ userId, dbId: data.id, name: u?.full_name ?? u?.username ?? "" });
-      connectTimerRef.current = setTimeout(() => setConnectUndo(null), 4000);
-      // Notify the receiver
-      const { data: me } = await supabase.from("users").select("full_name, username").eq("id", uid).single();
-      notifyUser(userId, {
-        type: "match_request",
-        title: "New Match Request 🤝",
-        body: `${me?.full_name ?? me?.username ?? "Someone"} wants to train with you!`,
-        relatedId: data.id,
-        data: { type: "match_request", relatedId: data.id },
-      });
+    if (error || !data) {
+      // Roll back the optimistic "pending" badge
+      setStatuses((prev) => { const n = { ...prev }; delete n[userId]; return n; });
+      Alert.alert("Couldn't send request", "Please try again in a moment.");
+      return;
     }
+    const u = users.find((u) => u.id === userId);
+    if (connectTimerRef.current) clearTimeout(connectTimerRef.current);
+    setConnectUndo({ userId, dbId: data.id, name: u?.full_name ?? u?.username ?? "" });
+    connectTimerRef.current = setTimeout(() => setConnectUndo(null), 4000);
+    // Notify the receiver
+    const { data: me } = await supabase.from("users").select("full_name, username").eq("id", uid).single();
+    notifyUser(userId, {
+      type: "match_request",
+      title: "New Match Request 🤝",
+      body: `${me?.full_name ?? me?.username ?? "Someone"} wants to train with you!`,
+      relatedId: data.id,
+      data: { type: "match_request", relatedId: data.id },
+    });
   }
 
   // ── Connect undo (list view, time-limited toast) ────────────────────────────
@@ -611,7 +635,13 @@ export default function DiscoverScreen() {
     if (connectTimerRef.current) clearTimeout(connectTimerRef.current);
     const a = connectUndo;
     setConnectUndo(null);
-    await supabase.from("matches").delete().eq("id", a.dbId);
+    const { error } = await supabase.from("matches").delete().eq("id", a.dbId);
+    if (error) {
+      // Restore so the user knows the request still exists
+      Alert.alert("Couldn't undo", "Your request is still pending. Open Connections to cancel it.");
+      setStatuses((prev) => ({ ...prev, [a.userId]: "pending" }));
+      return;
+    }
     setStatuses((prev) => { const n = { ...prev }; delete n[a.userId]; return n; });
   }
 
@@ -619,15 +649,23 @@ export default function DiscoverScreen() {
   async function _cancelRequest(userId: string) {
     const uid = currentUserIdRef.current;
     if (!uid) return;
+    // Snapshot for rollback in case the delete fails
+    const previouslyPending = pendingUsers.find((u) => u.id === userId);
     // Optimistic update — remove from pending list and statuses
     setStatuses((prev) => { const n = { ...prev }; delete n[userId]; return n; });
     setPendingUsers((prev) => prev.filter((u) => u.id !== userId));
     Haptics.selectionAsync();
-    await supabase.from("matches")
+    const { error } = await supabase.from("matches")
       .delete()
       .eq("sender_id", uid)
       .eq("receiver_id", userId)
       .eq("status", "pending");
+    if (error) {
+      // Roll back: restore pending status and re-add to list
+      setStatuses((prev) => ({ ...prev, [userId]: "pending" }));
+      if (previouslyPending) setPendingUsers((prev) => [...prev, previouslyPending]);
+      Alert.alert("Couldn't cancel request", "The request is still pending. Please try again.");
+    }
   }
 
   // ── Derived ─────────────────────────────────────────────────────────────────

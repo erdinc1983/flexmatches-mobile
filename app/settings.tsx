@@ -22,6 +22,7 @@ import { supabase } from "../lib/supabase";
 import { unregisterPushToken } from "../lib/push";
 import { useTheme, SPACE, FONT, RADIUS, PALETTE } from "../lib/theme";
 import { AppModal } from "../components/ui/AppModal";
+import { Avatar } from "../components/Avatar";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Privacy = {
@@ -106,6 +107,11 @@ export default function SettingsScreen() {
   const [phoneSaving,   setPhoneSaving]   = useState(false);
   const [phoneMsg,      setPhoneMsg]      = useState("");
 
+  // Blocked users (Layer 1 — Apple App Review requires unblock UI)
+  type BlockedUser = { blockId: string; userId: string; username: string; full_name: string | null; avatar_url: string | null };
+  const [blocked,        setBlocked]        = useState<BlockedUser[]>([]);
+  const [unblockingId,   setUnblockingId]   = useState<string | null>(null);
+
   // ── Load ──────────────────────────────────────────────────────────────────
   useEffect(() => { loadSettings(); }, []);
 
@@ -127,7 +133,59 @@ export default function SettingsScreen() {
       setPrivacyState({ ...DEFAULT_PRIVACY, ...(data.privacy_settings ?? {}) });
       setPhoneVerified(data.phone_verified ?? false);
     }
+
+    // Load blocked-user list. Apple App Review (Guideline 1.2) requires
+    // an in-app way to undo a block; this populates the Settings list.
+    const { data: blockRows } = await supabase
+      .from("blocks")
+      .select("id, blocked_id, blocked:users!blocks_blocked_id_fkey(username, full_name, avatar_url)")
+      .eq("blocker_id", user.id);
+    // Supabase types the embedded join as an array (cardinality not inferable
+    // from the schema), so coerce to unknown first then to our shape and
+    // grab the first element.
+    type BlockRow = {
+      id: string;
+      blocked_id: string;
+      blocked: Array<{ username: string; full_name: string | null; avatar_url: string | null }> | null;
+    };
+    setBlocked(((blockRows ?? []) as unknown as BlockRow[]).map((r) => {
+      const peer = Array.isArray(r.blocked) ? r.blocked[0] : null;
+      return {
+        blockId:    r.id,
+        userId:     r.blocked_id,
+        username:   peer?.username   ?? "user",
+        full_name:  peer?.full_name  ?? null,
+        avatar_url: peer?.avatar_url ?? null,
+      };
+    }));
+
     setLoading(false);
+  }
+
+  async function unblockUser(blockId: string, userId: string, displayName: string) {
+    if (unblockingId) return;
+    Alert.alert(
+      "Unblock user?",
+      `${displayName} will be able to see your profile in Discover and contact you again.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Unblock",
+          style: "destructive",
+          onPress: async () => {
+            setUnblockingId(blockId);
+            const { error } = await supabase.from("blocks").delete().eq("id", blockId);
+            setUnblockingId(null);
+            if (error) {
+              Alert.alert("Couldn't unblock", "Please try again. The block is still active.");
+              return;
+            }
+            // Optimistic UI: remove from local list
+            setBlocked((prev) => prev.filter((b) => b.blockId !== blockId));
+          },
+        },
+      ],
+    );
   }
 
   // ── Savers ────────────────────────────────────────────────────────────────
@@ -397,6 +455,68 @@ export default function SettingsScreen() {
               />
             </View>
           ))}
+        </SettingCard>
+
+        {/* ── Blocked users (Apple App Review Guideline 1.2 — block must be reversible) ── */}
+        <SettingCard
+          title="Blocked Users"
+          description={
+            blocked.length === 0
+              ? "When you block someone, they appear here. Tap Unblock to reverse it."
+              : `${blocked.length} ${blocked.length === 1 ? "person" : "people"} blocked. Tap Unblock to make them visible to you again.`
+          }
+          c={c}
+        >
+          {blocked.length === 0 ? (
+            <Text style={[s.toggleDesc, { color: c.textFaint, paddingVertical: SPACE[8] }]}>
+              No blocked users.
+            </Text>
+          ) : (
+            blocked.map((b, i) => {
+              const display = b.full_name ?? `@${b.username}`;
+              const isUnblocking = unblockingId === b.blockId;
+              return (
+                <View
+                  key={b.blockId}
+                  style={[
+                    s.toggleRow,
+                    i < blocked.length - 1 && { borderBottomWidth: 1, borderBottomColor: c.border, paddingBottom: SPACE[12] },
+                  ]}
+                >
+                  <Avatar url={b.avatar_url} name={display} size={36} />
+                  <View style={{ flex: 1, marginLeft: SPACE[12] }}>
+                    <Text style={[s.toggleLabel, { color: c.textSecondary }]} numberOfLines={1}>
+                      {display}
+                    </Text>
+                    {b.full_name && (
+                      <Text style={[s.toggleDesc, { color: c.textMuted }]} numberOfLines={1}>
+                        @{b.username}
+                      </Text>
+                    )}
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => unblockUser(b.blockId, b.userId, display)}
+                    disabled={isUnblocking}
+                    style={{
+                      paddingVertical: SPACE[6],
+                      paddingHorizontal: SPACE[14],
+                      borderRadius: RADIUS.md,
+                      borderWidth: 1,
+                      borderColor: c.border,
+                      backgroundColor: isUnblocking ? c.bgCardAlt : "transparent",
+                      opacity: isUnblocking ? 0.6 : 1,
+                    }}
+                    accessibilityLabel={`Unblock ${display}`}
+                  >
+                    {isUnblocking
+                      ? <ActivityIndicator size="small" color={c.brand} />
+                      : <Text style={{ fontSize: FONT.size.sm, fontWeight: FONT.weight.semibold, color: c.brand }}>Unblock</Text>
+                    }
+                  </TouchableOpacity>
+                </View>
+              );
+            })
+          )}
         </SettingCard>
 
         {/* ── Notifications ── */}
