@@ -43,3 +43,6 @@ app-example
 # generated native folders
 /ios
 /android
+
+# Supabase CLI auto-managed state (touched on every CLI command)
+supabase/.temp/

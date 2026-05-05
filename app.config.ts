@@ -14,7 +14,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ios: {
     supportsTablet: true,
     bundleIdentifier: "com.flexmatches.app",
-    buildNumber: "24",
+    buildNumber: "25",
     infoPlist: {
       UIBackgroundModes: ["remote-notification"],
       NSCameraUsageDescription: "FlexMatches needs camera access to take profile photos.",
