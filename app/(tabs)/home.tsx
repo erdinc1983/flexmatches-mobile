@@ -370,6 +370,13 @@ export default function HomeScreen() {
     lastLoadRef.current = Date.now();
     } catch (err) {
       console.error("[Home] load failed:", err);
+      if (err instanceof Error && err.message === "No authenticated user") {
+        // Wedged keychain: tabs mounted but auth lost. Force a clean signout +
+        // welcome redirect so the user has a hatch instead of a stuck error UI.
+        await supabase.auth.signOut().catch(() => {});
+        router.replace("/(auth)/welcome");
+        return;
+      }
       if (!mountedRef.current) return;
       if (isRefresh) {
         Alert.alert("Error", "Could not refresh. Please try again.");

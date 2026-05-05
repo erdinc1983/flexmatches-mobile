@@ -5,7 +5,7 @@ import {
   KeyboardAvoidingView, Platform, ScrollView, Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useFocusEffect } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import { getCurrentUserWithRefresh } from "../../lib/authSession";
 import { ErrorState } from "../../components/ui/ErrorState";
@@ -89,6 +89,11 @@ export default function ActivityScreen() {
     if (mountedRef.current) lastLoadRef.current = Date.now();
     } catch (err) {
       console.error("[Activity] load failed:", err);
+      if (err instanceof Error && err.message === "No authenticated user") {
+        await supabase.auth.signOut().catch(() => {});
+        router.replace("/(auth)/welcome");
+        return;
+      }
       if (!mountedRef.current) return;
       if (isRefresh) {
         Alert.alert("Error", "Could not refresh. Please try again.");

@@ -456,6 +456,11 @@ export default function DiscoverScreen() {
     if (mountedRef.current) lastLoadRef.current = Date.now();
     } catch (err) {
       console.error("[Discover] load failed:", err);
+      if (err instanceof Error && err.message === "No authenticated user") {
+        await supabase.auth.signOut().catch(() => {});
+        router.replace("/(auth)/welcome");
+        return;
+      }
       if (!mountedRef.current) return;
       if (isRefresh) {
         Alert.alert("Error", "Could not refresh. Please try again.");

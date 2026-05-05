@@ -265,6 +265,11 @@ export default function ProfileScreen() {
     lastLoadRef.current = Date.now();
     } catch (err) {
       console.error("[Profile] fetchProfile failed:", err);
+      if (err instanceof Error && err.message === "No authenticated user") {
+        await supabase.auth.signOut().catch(() => {});
+        router.replace("/(auth)/welcome");
+        return;
+      }
       if (isRefresh) {
         Alert.alert("Error", "Could not refresh. Please try again.");
       } else {
