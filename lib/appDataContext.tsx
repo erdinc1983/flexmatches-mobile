@@ -105,17 +105,24 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     // Each attempt races against a 10s timeout to avoid hanging indefinitely.
     let data: any = null;
     for (let attempt = 0; attempt < 3; attempt++) {
-      const fetchPromise = supabase
-        .from("users")
-        .select(SELECT)
-        .eq("id", uid)
-        .single();
-      const timeoutPromise = new Promise<{ data: null; error: Error }>((resolve) =>
-        setTimeout(() => resolve({ data: null, error: new Error("timeout") }), 10_000)
-      );
-      const { data: row, error } = await Promise.race([fetchPromise, timeoutPromise]);
-      if (!error && row) { data = row; break; }
-      console.warn(`[AppData] fetch attempt ${attempt + 1} failed:`, error?.message);
+      try {
+        const fetchPromise = supabase
+          .from("users")
+          .select(SELECT)
+          .eq("id", uid)
+          .single();
+        const timeoutPromise = new Promise<{ data: null; error: Error }>((resolve) =>
+          setTimeout(() => resolve({ data: null, error: new Error("timeout") }), 10_000)
+        );
+        const { data: row, error } = await Promise.race([fetchPromise, timeoutPromise]);
+        if (!error && row) { data = row; break; }
+        console.warn(`[AppData] fetch attempt ${attempt + 1} failed:`, error?.message);
+      } catch (error) {
+        console.warn(
+          `[AppData] fetch attempt ${attempt + 1} threw:`,
+          error instanceof Error ? error.message : error
+        );
+      }
       if (attempt < 2) await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
     }
     if (!data) { console.warn("[AppData] all retries failed — appUser stays null"); return; }
@@ -156,15 +163,24 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false;
 
     const init = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (cancelled) return;
-      if (user) {
-        loadedForRef.current = user.id;
-        await fetchUser(user.id);
-      } else {
-        setAppUser(null);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (cancelled) return;
+        if (user) {
+          loadedForRef.current = user.id;
+          await fetchUser(user.id);
+        } else {
+          setAppUser(null);
+        }
+      } catch (error) {
+        console.warn(
+          "[AppData] initial load failed:",
+          error instanceof Error ? error.message : error
+        );
+        if (!cancelled) setAppUser(null);
+      } finally {
+        if (!cancelled) setAppUserLoading(false);
       }
-      setAppUserLoading(false);
     };
     init();
 
@@ -174,8 +190,17 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         if (loadedForRef.current !== session.user.id) {
           loadedForRef.current = session.user.id;
           setAppUserLoading(true);
-          await fetchUser(session.user.id);
-          setAppUserLoading(false);
+          try {
+            await fetchUser(session.user.id);
+          } catch (error) {
+            console.warn(
+              "[AppData] signed-in load failed:",
+              error instanceof Error ? error.message : error
+            );
+            if (!cancelled) setAppUser(null);
+          } finally {
+            if (!cancelled) setAppUserLoading(false);
+          }
         }
       } else if (event === "SIGNED_OUT") {
         loadedForRef.current = null;

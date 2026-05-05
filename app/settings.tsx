@@ -146,7 +146,7 @@ export default function SettingsScreen() {
     type BlockRow = {
       id: string;
       blocked_id: string;
-      blocked: Array<{ username: string; full_name: string | null; avatar_url: string | null }> | null;
+      blocked: { username: string; full_name: string | null; avatar_url: string | null }[] | null;
     };
     setBlocked(((blockRows ?? []) as unknown as BlockRow[]).map((r) => {
       const peer = Array.isArray(r.blocked) ? r.blocked[0] : null;

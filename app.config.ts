@@ -14,7 +14,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ios: {
     supportsTablet: true,
     bundleIdentifier: "com.flexmatches.app",
-    buildNumber: "25",
+    buildNumber: "26",
     infoPlist: {
       UIBackgroundModes: ["remote-notification"],
       NSCameraUsageDescription: "FlexMatches needs camera access to take profile photos.",
@@ -42,7 +42,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
 
   android: {
     package: "com.flexmatches.app",
-    versionCode: 7,
+    versionCode: 8,
     adaptiveIcon: {
       backgroundColor: "#FF6B00",
       foregroundImage: "./assets/images/android-icon-foreground.png",
