@@ -26,6 +26,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { supabase } from "../../lib/supabase";
+import { getCurrentUserWithRefresh } from "../../lib/authSession";
 import { notifyUser } from "../../lib/push";
 import { useTheme, SPACE, FONT, RADIUS, PALETTE } from "../../lib/theme";
 import { useAppData } from "../../lib/appDataContext";
@@ -343,8 +344,8 @@ export default function DiscoverScreen() {
     try {
     if (mountedRef.current) setError(false);
     if (!isRefresh && mountedRef.current) setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    const user = await getCurrentUserWithRefresh();
+    if (!user) throw new Error("No authenticated user");
     currentUserIdRef.current = user.id;
 
     InteractionManager.runAfterInteractions(() => {

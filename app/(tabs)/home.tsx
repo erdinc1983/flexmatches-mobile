@@ -27,6 +27,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "../../lib/supabase";
+import { getCurrentUserWithRefresh } from "../../lib/authSession";
 import { useNotifications } from "../../lib/notificationContext";
 import { notifyMatchAccepted } from "../../lib/notifications";
 import { notifyUser } from "../../lib/push";
@@ -165,13 +166,8 @@ export default function HomeScreen() {
     try {
     if (mountedRef.current) setError(false);
     if (!isRefresh && mountedRef.current) setLoading(true);
-    let { data: { user } } = await supabase.auth.getUser();
-    // After a crash the session JWT may be stale — refresh once and retry
-    if (!user) {
-      await supabase.auth.refreshSession().catch(() => {});
-      ({ data: { user } } = await supabase.auth.getUser());
-    }
-    if (!user) return;
+    const user = await getCurrentUserWithRefresh();
+    if (!user) throw new Error("No authenticated user");
     const uid = user.id;
 
     // Use global AppDataContext for own profile; fall back to direct fetch if context failed

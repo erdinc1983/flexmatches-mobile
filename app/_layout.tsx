@@ -3,9 +3,9 @@ import { View, Text, StyleSheet, InteractionManager, ActivityIndicator, Linking 
 import { Image } from "expo-image";
 import { Stack, router } from "expo-router";
 import * as Notifications from "expo-notifications";
-import type { Session } from "@supabase/supabase-js";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "../lib/supabase";
+import { getCurrentUserWithRefresh } from "../lib/authSession";
 import { ThemeProvider, useTheme, FONT, SPACE, PALETTE } from "../lib/theme";
 import { NotificationProvider } from "../lib/notificationContext";
 import { AppDataProvider, useAppData } from "../lib/appDataContext";
@@ -188,20 +188,20 @@ function extractRoute(response: Notifications.NotificationResponse): string | nu
   return null; // unknown types → stay on home (graceful fallback)
 }
 
-async function resolveAppState(session: Session | null): Promise<AppState> {
-  if (!session) return "unauthenticated";
+async function resolveAppState(userId: string | null): Promise<AppState> {
+  if (!userId) return "unauthenticated";
 
   // Always do a synchronous banned_at check before granting any session.
   // The cache only saves us from re-checking onboarding completion; banning
   // is a moderation action and must take effect immediately on next launch,
   // not "eventually after the background fetch finishes".
   const cachedUid = await AsyncStorage.getItem(READY_CACHE_KEY);
-  const cachedReady = cachedUid === session.user.id;
+  const cachedReady = cachedUid === userId;
 
   const { data, error } = await supabase
     .from("users")
     .select("full_name, banned_at")
-    .eq("id", session.user.id)
+    .eq("id", userId)
     .single();
 
   // Network failure on launch: trust the cache for ready state, but never
@@ -221,7 +221,7 @@ async function resolveAppState(session: Session | null): Promise<AppState> {
 
   const state: AppState = data.full_name ? "ready" : "needs_onboarding";
   if (state === "ready") {
-    AsyncStorage.setItem(READY_CACHE_KEY, session.user.id);
+    AsyncStorage.setItem(READY_CACHE_KEY, userId);
     AsyncStorage.setItem(ONBOARDING_DONE_KEY, "1");
   }
   return state;
@@ -239,8 +239,12 @@ export default function RootLayout() {
     setAppState("loading");
     const timeoutId = setTimeout(() => setAppState("auth_error"), 20_000);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const newState = await resolveAppState(session); // wait for DB query too
+      const user = await getCurrentUserWithRefresh();
+      if (!user) {
+        await AsyncStorage.removeItem(ONBOARDING_DONE_KEY);
+        await AsyncStorage.removeItem(READY_CACHE_KEY);
+      }
+      const newState = await resolveAppState(user?.id ?? null); // wait for DB query too
       clearTimeout(timeoutId);
       setAppState(newState);
     } catch {
@@ -292,7 +296,7 @@ export default function RootLayout() {
           AsyncStorage.removeItem(READY_CACHE_KEY);
         }
         try {
-          setAppState(await resolveAppState(session));
+          setAppState(await resolveAppState(session?.user.id ?? null));
         } catch {
           setAppState("auth_error");
         }

@@ -19,6 +19,7 @@ import { router, useFocusEffect } from "expo-router";
 import { CityAutocomplete } from "../../components/CityAutocomplete";
 import * as ImagePicker from "expo-image-picker";
 import { supabase } from "../../lib/supabase";
+import { getCurrentUserWithRefresh } from "../../lib/authSession";
 import { useTheme, SPACE, FONT, RADIUS, PALETTE, BRAND } from "../../lib/theme";
 import { useAppData } from "../../lib/appDataContext";
 import { Icon } from "../../components/Icon";
@@ -192,8 +193,8 @@ export default function ProfileScreen() {
     try {
     setError(false);
     if (!isRefresh) setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    const user = await getCurrentUserWithRefresh();
+    if (!user) throw new Error("No authenticated user");
     setUserId(user.id);
 
     // Use AppDataContext for own profile; fall back to direct fetch if context failed

@@ -18,6 +18,7 @@ import * as Haptics from "expo-haptics";
 import { router, useFocusEffect } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "../../lib/supabase";
+import { getCurrentUserWithRefresh } from "../../lib/authSession";
 import { notifyMatchAccepted } from "../../lib/notifications";
 import { notifyUser } from "../../lib/push";
 import { useTheme, SPACE, FONT, RADIUS, PALETTE } from "../../lib/theme";
@@ -104,8 +105,8 @@ export default function MatchesScreen() {
     try {
     if (mountedRef.current) setError(false);
     if (!isRefresh && mountedRef.current) setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    const user = await getCurrentUserWithRefresh();
+    if (!user) throw new Error("No authenticated user");
     if (mountedRef.current) setMyId(user.id);
 
     const [{ data: incomingRows }, { data: acceptedRows }] = await Promise.all([

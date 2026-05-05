@@ -13,6 +13,7 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { supabase } from "./supabase";
+import { getCurrentUserWithRefresh } from "./authSession";
 
 export type AppUser = {
   id:               string;
@@ -164,7 +165,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
     const init = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const user = await getCurrentUserWithRefresh();
         if (cancelled) return;
         if (user) {
           loadedForRef.current = user.id;
@@ -232,7 +233,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const fetchAppUser = useCallback(async (): Promise<AppUser | null> => {
     if (appUser) return appUser;
     try {
-      const { data: { user: authUser } } = await supabase.auth.getUser();
+      const authUser = await getCurrentUserWithRefresh();
       if (!authUser) return null;
       const { data: row, error } = await supabase
         .from("users")
