@@ -216,34 +216,44 @@ export default function MatchesScreen() {
 
   async function respondToMatch(matchId: string, status: "accepted" | "declined") {
     if (respondingId) return;
+    const match = pending.find((p) => p.id === matchId);
+    if (!match) return;
+
     setRespondingId(matchId);
-    try {
-      const match = pending.find((p) => p.id === matchId);
-      await supabase.from("matches").update({ status }).eq("id", matchId);
-      if (status === "accepted" && match) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        const partnerName = match.other_user.full_name ?? match.other_user.username;
-        notifyMatchAccepted(partnerName, matchId);
-        notifyUser(match.sender_id, {
-          type: "match_accepted",
-          title: "Match Accepted! 🎉",
-          body: `${appUser?.full_name ?? appUser?.username ?? "Someone"} accepted your request. Start chatting!`,
-          relatedId: matchId,
-          data: { type: "match_accepted", matchId },
-        });
-      }
-      await load();
-    } catch (err) {
-      console.error("[Matches] respondToMatch failed:", err);
-    } finally {
+    // Optimistic: remove from pending immediately so the UI reacts.
+    const prevPending = pending;
+    setPending((p) => p.filter((m) => m.id !== matchId));
+
+    const { error } = await supabase.from("matches").update({ status }).eq("id", matchId);
+    if (error) {
+      console.error("[Matches] respondToMatch failed:", error);
+      setPending(prevPending);                       // rollback
       setRespondingId(null);
+      Alert.alert("Couldn't respond", "Network or permission issue. The request is still pending — please try again.");
+      return;
     }
+
+    if (status === "accepted") {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      const partnerName = match.other_user.full_name ?? match.other_user.username;
+      notifyMatchAccepted(partnerName, matchId);
+      notifyUser(match.sender_id, {
+        type: "match_accepted",
+        title: "Match Accepted! 🎉",
+        body: `${appUser?.full_name ?? appUser?.username ?? "Someone"} accepted your request. Start chatting!`,
+        relatedId: matchId,
+        data: { type: "match_accepted", matchId },
+      });
+    }
+    await load();
+    setRespondingId(null);
   }
 
   async function proposeSession() {
-    if (!schedulingMatch || !myId || !sessionDate.trim()) return;
+    if (!schedulingMatch || !myId || !sessionDate.trim() || sendingSession) return;
     setSendingSession(true);
-    await supabase.from("buddy_sessions").insert({
+
+    const { error } = await supabase.from("buddy_sessions").insert({
       proposer_id:  myId,
       receiver_id:  schedulingMatch.other_user.id,
       match_id:     schedulingMatch.id,
@@ -254,17 +264,38 @@ export default function MatchesScreen() {
       notes:        sessionNotes.trim() || null,
       status:       "pending",
     });
-    await loadBuddySessions(myId);
     setSendingSession(false);
+
+    if (error) {
+      console.error("[Matches] proposeSession failed:", error);
+      // Don't clear the form — let the user retry without re-typing.
+      Alert.alert("Couldn't send session proposal", "Please try again.");
+      return;
+    }
+
+    await loadBuddySessions(myId);
     setSchedulingMatch(null);
     setSessionSport("Gym"); setSessionDate(""); setSessionTime("");
     setSessionLocation(""); setSessionNotes("");
   }
 
   async function respondToSession(sessionId: string, accept: boolean) {
-    await supabase.from("buddy_sessions")
-      .update({ status: accept ? "accepted" : "declined" })
+    const newStatus = accept ? "accepted" : "declined";
+
+    // Optimistic update so the banner reflects the choice immediately.
+    const prev = buddySessions;
+    setBuddySessions((list) => list.map((s) => s.id === sessionId ? { ...s, status: newStatus } : s));
+
+    const { error } = await supabase.from("buddy_sessions")
+      .update({ status: newStatus })
       .eq("id", sessionId);
+
+    if (error) {
+      console.error("[Matches] respondToSession failed:", error);
+      setBuddySessions(prev);                        // rollback
+      Alert.alert("Couldn't update session", "Please try again.");
+      return;
+    }
     if (myId) await loadBuddySessions(myId);
   }
 

@@ -239,32 +239,73 @@ export default function NotificationsScreen() {
   async function markAllRead() {
     if (!userId || marking) return;
     setMarking(true);
-    await supabase.from("notifications").update({ read: true }).eq("user_id", userId).eq("read", false);
-    setNotifs(prev => prev.map(n => ({ ...n, read: true })));
+    // Optimistic: assume success so the UI flips instantly.
+    const prev = notifs;
+    setNotifs((p) => p.map((n) => ({ ...n, read: true })));
     refreshBadge();
+
+    const { error } = await supabase
+      .from("notifications").update({ read: true })
+      .eq("user_id", userId).eq("read", false);
     setMarking(false);
+
+    if (error) {
+      console.error("[Notifications] markAllRead failed:", error);
+      setNotifs(prev);                               // rollback
+      refreshBadge();
+      Alert.alert("Couldn't update", "Please try again.");
+    }
   }
 
   async function deleteNotif(id: string) {
-    await supabase.from("notifications").delete().eq("id", id);
-    setNotifs(prev => prev.filter(n => n.id !== id));
+    const prev = notifs;
+    setNotifs((p) => p.filter((n) => n.id !== id));
     refreshBadge();
+
+    const { error } = await supabase.from("notifications").delete().eq("id", id);
+    if (error) {
+      console.error("[Notifications] deleteNotif failed:", error);
+      setNotifs(prev);                               // rollback
+      refreshBadge();
+      Alert.alert("Couldn't remove", "Please try again.");
+    }
   }
 
   async function markRead(id: string) {
-    await supabase.from("notifications").update({ read: true }).eq("id", id);
-    setNotifs(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    const prev = notifs;
+    setNotifs((p) => p.map((n) => n.id === id ? { ...n, read: true } : n));
     refreshBadge();
+
+    const { error } = await supabase.from("notifications").update({ read: true }).eq("id", id);
+    if (error) {
+      console.error("[Notifications] markRead failed:", error);
+      setNotifs(prev);                               // rollback
+      refreshBadge();
+      // No Alert on this one — silent failure is OK; the row stays unread
+      // and the user can tap again. Spamming Alerts on every tap is worse.
+    }
   }
 
   async function acceptMatch(relatedId: string, notifId: string) {
-    await supabase.from("matches").update({ status: "accepted" }).eq("id", relatedId);
+    // Optimistic mark-read happens inside markRead; do the matches update first
+    // so we can rollback only the side that actually fails.
+    const { error } = await supabase.from("matches").update({ status: "accepted" }).eq("id", relatedId);
+    if (error) {
+      console.error("[Notifications] acceptMatch failed:", error);
+      Alert.alert("Couldn't accept", "Please try again from the Matches tab.");
+      return;
+    }
     await markRead(notifId);
     router.push(`/chat/${relatedId}` as any);
   }
 
   async function declineMatch(relatedId: string, notifId: string) {
-    await supabase.from("matches").update({ status: "rejected" }).eq("id", relatedId);
+    const { error } = await supabase.from("matches").update({ status: "rejected" }).eq("id", relatedId);
+    if (error) {
+      console.error("[Notifications] declineMatch failed:", error);
+      Alert.alert("Couldn't decline", "Please try again from the Matches tab.");
+      return;
+    }
     await markRead(notifId);
   }
 

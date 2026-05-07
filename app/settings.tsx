@@ -189,21 +189,46 @@ export default function SettingsScreen() {
   }
 
   // ── Savers ────────────────────────────────────────────────────────────────
+  // All three savers follow the same pattern: optimistic UI flip, then DB
+  // write. If the write fails we revert and Alert. Without rollback the
+  // toggle visibly says "on" while the DB still says "off", which silently
+  // breaks privacy guarantees the user thought they enabled.
   async function saveUnits(u: "imperial" | "metric") {
+    if (!userId) return;
+    const prev = units;
     setUnits(u);
-    if (userId) await supabase.from("users").update({ units: u }).eq("id", userId);
+    const { error } = await supabase.from("users").update({ units: u }).eq("id", userId);
+    if (error) {
+      console.error("[Settings] saveUnits failed:", error);
+      setUnits(prev);
+      Alert.alert("Couldn't save units", "Please try again.");
+    }
   }
 
   async function updatePrivacy(key: keyof Privacy, val: boolean) {
+    if (!userId) return;
+    const prev = privacy;
     const next = { ...privacy, [key]: val };
     setPrivacyState(next);
-    if (userId) await supabase.from("users").update({ privacy_settings: next }).eq("id", userId);
+    const { error } = await supabase.from("users").update({ privacy_settings: next }).eq("id", userId);
+    if (error) {
+      console.error("[Settings] updatePrivacy failed:", error);
+      setPrivacyState(prev);
+      Alert.alert("Couldn't save privacy setting", "Reverted to previous value. Please try again.");
+    }
   }
 
   async function updateNotif(key: keyof NotifPrefs, val: boolean) {
+    if (!userId) return;
+    const prev = notifPrefs;
     const next = { ...notifPrefs, [key]: val };
     setNotifPrefs(next);
-    if (userId) await supabase.from("users").update({ notification_prefs: next }).eq("id", userId);
+    const { error } = await supabase.from("users").update({ notification_prefs: next }).eq("id", userId);
+    if (error) {
+      console.error("[Settings] updateNotif failed:", error);
+      setNotifPrefs(prev);
+      Alert.alert("Couldn't save notification preference", "Reverted to previous value. Please try again.");
+    }
   }
 
   async function changeEmail() {
