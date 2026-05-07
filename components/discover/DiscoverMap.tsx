@@ -138,13 +138,43 @@ export function DiscoverMap({ users, statuses, onUserPress }: Props) {
       return;
     }
 
-    const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-    const { latitude, longitude } = loc.coords;
+    // Fresh, accurate GPS lock. Accuracy.Balanced was returning whatever
+    // the device had cached — including stale coords from a previous trip
+    // (Istanbul reports from a US-based test device for example). High
+    // forces the GPS subsystem to actually fix on satellites instead of
+    // serving the last WiFi/IP-based estimate, even if it costs ~1–3s.
+    //
+    // The 12s timeout is a fallback for indoor / poor-sky users; if the
+    // GPS doesn't lock in time we accept the last-known position rather
+    // than block the map indefinitely.
+    let coords: { latitude: number; longitude: number } | null = null;
+    try {
+      const fresh = await Promise.race([
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("gps-timeout")), 12_000)
+        ),
+      ]);
+      coords = fresh.coords;
+    } catch (err) {
+      // Fall back to last-known if it's recent enough; otherwise surface
+      // an error so the user knows to enable Location Services.
+      const last = await Location.getLastKnownPositionAsync({});
+      if (last && Date.now() - last.timestamp < 10 * 60_000) {
+        coords = last.coords;
+      } else {
+        console.warn("[DiscoverMap] location fetch failed:", err);
+        setLocationError("Could not get your location. Make sure Location Services are on, then tap retry.");
+        return;
+      }
+    }
 
-    const r: Region = { latitude, longitude, latitudeDelta: DELTA, longitudeDelta: DELTA };
-    setRegion(r);
+    const { latitude, longitude } = coords;
+    setRegion({ latitude, longitude, latitudeDelta: DELTA, longitudeDelta: DELTA });
 
-    // Save location to profile (best-effort). DB columns are lat/lng (not latitude/longitude).
+    // Save fresh location to profile (best-effort). DB columns are lat/lng
+    // (not latitude/longitude). Wrong cached coords get overwritten on the
+    // next successful fetch — so reopening the map after the fix self-heals.
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       supabase.from("users").update({ lat: latitude, lng: longitude }).eq("id", user.id).then(() => {});
@@ -154,6 +184,35 @@ export function DiscoverMap({ users, statuses, onUserPress }: Props) {
       fetchVenues(latitude, longitude),
       fetchNearbyUsers(latitude, longitude),
     ]);
+  }
+
+  // ── Manual recenter ────────────────────────────────────────────────────
+  // Called from the floating "📍" button in the map overlay. Forces a fresh
+  // GPS read and animates the map to it. Useful when the initial fetch hit
+  // the timeout fallback or when the user moved.
+  async function recenterToMe() {
+    try {
+      const fresh = await Promise.race([
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("gps-timeout")), 12_000)
+        ),
+      ]);
+      const { latitude, longitude } = fresh.coords;
+      const r: Region = { latitude, longitude, latitudeDelta: DELTA, longitudeDelta: DELTA };
+      setRegion(r);
+      mapRef.current?.animateToRegion(r, 600);
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        supabase.from("users").update({ lat: latitude, lng: longitude }).eq("id", user.id).then(() => {});
+      }
+      // Refresh the data layers so venues / partners reflect the new center.
+      fetchVenues(latitude, longitude);
+      fetchNearbyUsers(latitude, longitude);
+    } catch (err) {
+      console.warn("[DiscoverMap] recenter failed:", err);
+    }
   }
 
   async function fetchVenues(lat: number, lon: number) {
@@ -375,6 +434,18 @@ export function DiscoverMap({ users, statuses, onUserPress }: Props) {
         })}
       </MapView>
 
+      {/* Manual recenter — re-fetches fresh GPS and animates back to user.
+          Always shown so users can recover from a stale-cache initial fix
+          (the bug where the map was opening at a previous trip's location). */}
+      <TouchableOpacity
+        accessibilityLabel="Recenter map on my location"
+        onPress={recenterToMe}
+        activeOpacity={0.75}
+        style={[rc.btn, { backgroundColor: c.bgCard, borderColor: c.border }]}
+      >
+        <Text style={rc.icon}>📍</Text>
+      </TouchableOpacity>
+
       {/* Nearby users count badge */}
       {nearbyUsers.length > 0 && (
         <View style={[bd.badge, { backgroundColor: c.bgCard, borderColor: c.border }]}>
@@ -424,4 +495,24 @@ const bd = StyleSheet.create({
   badge: { position: "absolute", bottom: SPACE[20], alignSelf: "center", flexDirection: "row", alignItems: "center", gap: SPACE[6], borderRadius: RADIUS.pill, borderWidth: 1, paddingHorizontal: SPACE[14], paddingVertical: SPACE[8] },
   dot:   { width: 8, height: 8, borderRadius: 4, backgroundColor: PALETTE.success },
   text:  { fontSize: FONT.size.sm, fontWeight: FONT.weight.semibold },
+});
+
+const rc = StyleSheet.create({
+  btn: {
+    position: "absolute",
+    right: SPACE[16],
+    bottom: 80,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  icon: { fontSize: 20 },
 });
