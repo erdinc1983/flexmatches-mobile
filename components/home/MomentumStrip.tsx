@@ -17,14 +17,15 @@ type Props = {
 };
 
 function Stat({
-  icon, iconColor, value, label, onPress, noBorder,
+  icon, iconColor, value, label, onPress, noBorder, a11yLabel,
 }: {
-  icon:      IconName;
-  iconColor: string;
-  value:     string;
-  label:     string;
-  onPress:   () => void;
-  noBorder?: boolean;
+  icon:       IconName;
+  iconColor:  string;
+  value:      string;
+  label:      string;
+  onPress:    () => void;
+  noBorder?:  boolean;
+  a11yLabel:  string;
 }) {
   const { theme } = useTheme();
   const c = theme.colors;
@@ -34,6 +35,8 @@ function Stat({
       style={[ss.cell, !noBorder && { borderRightWidth: StyleSheet.hairlineWidth, borderRightColor: c.border }]}
       onPress={onPress}
       activeOpacity={0.65}
+      accessibilityRole="button"
+      accessibilityLabel={a11yLabel}
     >
       <Icon name={icon} size={15} color={iconColor} />
       <Text style={[ss.value, { color: c.text }]}>{value}</Text>
@@ -53,18 +56,21 @@ export function MomentumStrip({ streak, matchCount, weekSessions, circlesCount }
         value={streak > 0 ? `${streak}` : "—"}
         label="Streak"
         onPress={() => router.push("/(tabs)/activity" as any)}
+        a11yLabel={streak > 0 ? `${streak} day streak. Open activity.` : "No active streak. Open activity."}
       />
       <Stat
         icon="matchActive" iconColor="#FF4500"
         value={`${matchCount}`}
         label="Partners"
         onPress={() => router.push("/(tabs)/matches" as any)}
+        a11yLabel={`${matchCount} training partner${matchCount === 1 ? "" : "s"}. Open matches.`}
       />
       <Stat
         icon="calendar" iconColor="#06B6D4"
         value={`${weekSessions}`}
         label="Sessions"
         onPress={() => router.push("/(tabs)/messages" as any)}
+        a11yLabel={`${weekSessions} session${weekSessions === 1 ? "" : "s"} this week. Open messages.`}
       />
       <Stat
         icon="circlesActive" iconColor="#8B5CF6"
@@ -72,6 +78,7 @@ export function MomentumStrip({ streak, matchCount, weekSessions, circlesCount }
         label="Circles"
         onPress={() => router.push("/(tabs)/circles" as any)}
         noBorder
+        a11yLabel={`${circlesCount} circle${circlesCount === 1 ? "" : "s"}. Open circles.`}
       />
     </View>
   );

@@ -191,6 +191,9 @@ export function PersonCard({ user, status, onConnect, onCancelRequest, onPress, 
       style={[s.card, { backgroundColor: c.bgCard, borderColor: c.border }]}
       onPress={onPress}
       activeOpacity={onPress ? 0.92 : 1}
+      accessibilityRole="button"
+      accessibilityLabel={`View ${displayName}'s profile`}
+      accessibilityHint={`${user.matchScore}% match. ${user.fitness_level ?? "Unknown level"}.${user.is_at_gym ? " Currently at the gym." : ""}`}
     >
       {/* ── Photo section ──────────────────────────────────────────── */}
       <View style={{ height: PHOTO_H }}>
@@ -308,6 +311,8 @@ export function PersonCard({ user, status, onConnect, onCancelRequest, onPress, 
               style={[s.connectBtn, { backgroundColor: c.brand }]}
               onPress={onConnect}
               activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={`Send connection request to ${displayName}`}
             >
               <Text style={s.connectText}>Connect</Text>
             </TouchableOpacity>
@@ -318,6 +323,9 @@ export function PersonCard({ user, status, onConnect, onCancelRequest, onPress, 
               onPress={onCancelRequest}
               activeOpacity={onCancelRequest ? 0.75 : 1}
               disabled={!onCancelRequest}
+              accessibilityRole="button"
+              accessibilityLabel={onCancelRequest ? `Cancel pending request to ${displayName}` : `Request to ${displayName} is pending`}
+              accessibilityState={{ disabled: !onCancelRequest }}
             >
               <Text style={[s.connectText, { color: c.textMuted }]}>
                 Pending{onCancelRequest ? "  ✕" : ""}
@@ -329,6 +337,8 @@ export function PersonCard({ user, status, onConnect, onCancelRequest, onPress, 
               style={[s.acceptedBtn, { backgroundColor: PALETTE.success + "18", borderColor: PALETTE.success + "50" }]}
               activeOpacity={0.8}
               onPress={() => matchId && router.push(`/chat/${matchId}` as any)}
+              accessibilityRole="button"
+              accessibilityLabel={`Open chat with ${displayName}`}
             >
               <Text style={[s.connectText, { color: PALETTE.success }]}>Open Chat →</Text>
             </TouchableOpacity>

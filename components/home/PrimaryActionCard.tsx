@@ -106,6 +106,10 @@ export function PrimaryActionCard({ action, onLogWorkout, checkingIn }: Props) {
           onPress={cfg.ctaAction}
           disabled={isLogAction && checkingIn}
           activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel={cfg.ctaLabel}
+          accessibilityHint={cfg.subtitle}
+          accessibilityState={{ disabled: isLogAction && checkingIn, busy: isLogAction && checkingIn }}
         >
           {isLogAction && checkingIn
             ? <ActivityIndicator color="#fff" size="small" />

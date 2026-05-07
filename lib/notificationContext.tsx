@@ -16,16 +16,36 @@ import {
 } from "./notifications";
 import { registerPushToken } from "./push";
 
+type NotifRow = {
+  id:         string;
+  type:       string | null;
+  title:      string | null;
+  body:       string | null;
+  message:    string | null;
+  read:       boolean;
+  created_at: string;
+  related_id: string | null;
+  url:        string | null;
+};
+
 type NotifContextValue = {
-  unreadCount: number;
+  unreadCount:    number;
   unreadMessages: number;
-  refresh: () => Promise<void>;
+  refresh:        () => Promise<void>;
+  /**
+   * Subscribe to new-notification INSERT events. The context keeps a single
+   * realtime channel for the whole app; consumers (Notifications screen,
+   * future widgets) register a handler and the context fans out the row.
+   * Returns an unsubscribe function — call it on unmount.
+   */
+  onInsert: (handler: (notif: NotifRow) => void) => () => void;
 };
 
 const NotifContext = createContext<NotifContextValue>({
-  unreadCount: 0,
+  unreadCount:    0,
   unreadMessages: 0,
-  refresh: async () => {},
+  refresh:        async () => {},
+  onInsert:       () => () => {},
 });
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
@@ -45,7 +65,17 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     if (userId) await fetchCount(userId);
   }, [userId, fetchCount]);
 
-  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const channelRef  = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const handlersRef = useRef<Set<(n: NotifRow) => void>>(new Set());
+
+  // Stable subscribe API: consumers register a handler, get back an unsub.
+  // Replaces every duplicate channel that used to open in screens like
+  // notifications.tsx — there is now exactly one realtime subscription
+  // per user for INSERT events on public.notifications.
+  const onInsert = useCallback((handler: (notif: NotifRow) => void) => {
+    handlersRef.current.add(handler);
+    return () => { handlersRef.current.delete(handler); };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -69,12 +99,17 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           "postgres_changes",
           { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` },
           (payload) => {
+            const n = payload.new as NotifRow;
             fetchCount(user.id);
-            const n = payload.new as { type?: string; title?: string; body?: string; message?: string };
+
+            // Local notification dispatch (sound + banner). Stays in the
+            // context because it's app-wide behavior — fires regardless
+            // of which screen the user is on.
             const body = n.body ?? n.message ?? "";
-            // message sound is handled by the messages INSERT handler below (more reliable)
             if (n.type === "match_request")      notifyMatchRequest(body || "Someone wants to train with you!");
             if (n.type === "match_accepted")     notifyMatchAccepted(body || "Your match was accepted");
+            if (n.type === "new_message" ||
+                n.type === "message")            notifyNewMessage(n.title ?? "New message", body || "You have a new message");
             if (n.type === "session_proposed")   notifyGeneric(n.title ?? "Session Proposed 📅", body || "Someone proposed a training session");
             if (n.type === "session_accepted")   notifyGeneric(n.title ?? "Session Accepted 🤜", body || "Your session was accepted");
             if (n.type === "session_declined")   notifyGeneric(n.title ?? "Session Declined", body || "A session was declined");
@@ -84,6 +119,14 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
               const emoji = title.match(/[\u{1F000}-\u{1FFFF}]/u)?.[0] ?? "🏆";
               notifyBadgeUnlocked(emoji, body || title);
             }
+
+            // Fan out to subscribed screens. Each screen handler gets the
+            // raw row and decides what to do (prepend to list, refresh
+            // badge, ignore filtered category).
+            handlersRef.current.forEach((h) => {
+              try { h(n); }
+              catch (err) { console.warn("[NotifCtx] handler threw:", err); }
+            });
           },
         )
         .on(
@@ -93,31 +136,15 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         )
         .on(
           "postgres_changes",
-          { event: "INSERT", schema: "public", table: "messages" },
-          async (payload) => {
-            const msg = payload.new as { sender_id: string; content?: string };
-            if (msg.sender_id !== user.id) {
-              fetchCount(user.id);
-              const { data: sender } = await supabase
-                .from("users")
-                .select("full_name, username")
-                .eq("id", msg.sender_id)
-                .single();
-              const name = sender?.full_name || sender?.username || "Someone";
-              notifyNewMessage(name, msg.content || "New message");
-            }
-          },
-        )
-        .on(
-          "postgres_changes",
-          { event: "UPDATE", schema: "public", table: "messages" },
+          { event: "DELETE", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` },
           () => fetchCount(user.id),
         )
-        .on(
-          "postgres_changes",
-          { event: "DELETE", schema: "public", table: "messages" },
-          () => fetchCount(user.id),
-        )
+        // Note: the global messages INSERT listener that used to live here
+        // has moved to a server-side trigger (migration 23). Every new
+        // message produces a `new_message` row in public.notifications for
+        // the receiver, which fires the INSERT handler above. That
+        // eliminates the unfiltered firehose where every message in the
+        // entire DB used to ship to every connected device.
         .subscribe((status, err) => {
           if (err) console.warn("[NotifCtx] Subscription error:", err.message);
         });
@@ -133,7 +160,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   }, [fetchCount]);
 
   return (
-    <NotifContext.Provider value={{ unreadCount, unreadMessages, refresh }}>
+    <NotifContext.Provider value={{ unreadCount, unreadMessages, refresh, onInsert }}>
       {children}
     </NotifContext.Provider>
   );

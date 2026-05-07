@@ -39,6 +39,8 @@ export function HomeHeader({ name, avatarUrl, unreadCount, streak, isAtGym }: Pr
         style={s.left}
         onPress={() => router.push("/(tabs)/profile")}
         activeOpacity={0.85}
+        accessibilityRole="button"
+        accessibilityLabel="Open your profile"
       >
         <Avatar url={avatarUrl} name={name || "?"} size={48} />
         <View style={s.greetingBlock}>
@@ -57,6 +59,9 @@ export function HomeHeader({ name, avatarUrl, unreadCount, streak, isAtGym }: Pr
           style={[s.iconBtn, { backgroundColor: c.bgCard, borderColor: c.border }]}
           onPress={() => router.push("/search")}
           activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Search users"
+          hitSlop={8}
         >
           <Icon name="search" size={18} color={c.textMuted} />
         </TouchableOpacity>
@@ -65,6 +70,9 @@ export function HomeHeader({ name, avatarUrl, unreadCount, streak, isAtGym }: Pr
           style={[s.iconBtn, { backgroundColor: c.bgCard, borderColor: c.border }]}
           onPress={() => router.push("/notifications")}
           activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}
+          hitSlop={8}
         >
           <Icon name="notification" size={18} color={unreadCount > 0 ? c.brand : c.textMuted} />
           {unreadCount > 0 && (

@@ -8,7 +8,7 @@
  * Actions: mark read, delete (long-press), inline accept/decline for match requests
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, RefreshControl, Alert, ScrollView,
@@ -171,7 +171,7 @@ const EMPTY: Record<Category, { iconName: string; title: string; sub: string }> 
 export default function NotificationsScreen() {
   const { theme } = useTheme();
   const c = theme.colors;
-  const { refresh: refreshBadge } = useNotifications();
+  const { refresh: refreshBadge, onInsert } = useNotifications();
 
   const [notifs,     setNotifs]     = useState<Notif[]>([]);
   const [loading,    setLoading]    = useState(true);
@@ -180,7 +180,6 @@ export default function NotificationsScreen() {
   const [userId,     setUserId]     = useState<string | null>(null);
   const [tab,        setTab]        = useState<Category>("all");
   const [marking,    setMarking]    = useState(false);
-  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   const load = useCallback(async (uid?: string, isRefresh = false) => {
     try {
@@ -208,21 +207,27 @@ export default function NotificationsScreen() {
     }
   }, [userId]);
 
+  // Initial load only — the realtime subscription is now shared with
+  // notificationContext via the onInsert subscription below. We used
+  // to open our own `notifs-${user.id}` channel here that duplicated
+  // the context's `notif-badge-${user.id}-${ts}` channel — same user,
+  // same table, same INSERT filter. One channel per user is enough.
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return;
       setUserId(user.id);
       load(user.id);
-      channelRef.current = supabase
-        .channel(`notifs-${user.id}`)
-        .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` }, (payload) => {
-          setNotifs(prev => [payload.new as Notif, ...prev]);
-          refreshBadge();
-        })
-        .subscribe();
     });
-    return () => { channelRef.current?.unsubscribe(); };
-  }, [load, refreshBadge]);
+  }, [load]);
+
+  // Listen to context-fanned notification INSERTs. The context already
+  // refreshes the unread badge; we only need to prepend the row to our
+  // local list so the screen updates without a refetch.
+  useEffect(() => {
+    return onInsert((notif) => {
+      setNotifs((prev) => [notif as Notif, ...prev]);
+    });
+  }, [onInsert]);
 
   useEffect(() => {
     if (!loading) return;
