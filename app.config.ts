@@ -143,7 +143,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
             "@sentry/react-native/expo",
             {
               organization: process.env.SENTRY_ORG ?? "flexmatches",
-              project:      process.env.SENTRY_PROJECT ?? "flexmatches-mobile",
+              project:      process.env.SENTRY_PROJECT ?? "react-native",
             },
           ] as [string, Record<string, unknown>],
         ]
