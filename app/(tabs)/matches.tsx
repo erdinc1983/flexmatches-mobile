@@ -103,76 +103,34 @@ export default function MatchesScreen() {
     if (loadingRef.current) return;
     loadingRef.current = true;
     try {
-    if (mountedRef.current) setError(false);
-    if (!isRefresh && mountedRef.current) setLoading(true);
-    const user = await getCurrentUserWithRefresh();
-    if (!user) throw new Error("No authenticated user");
-    if (mountedRef.current) setMyId(user.id);
+      if (mountedRef.current) setError(false);
+      if (!isRefresh && mountedRef.current) setLoading(true);
+      const user = await getCurrentUserWithRefresh();
+      if (!user) throw new Error("No authenticated user");
+      if (mountedRef.current) setMyId(user.id);
 
-    const [{ data: incomingRows }, { data: acceptedRows }] = await Promise.all([
-      supabase.from("matches")
-        .select("id, status, sender_id")
-        .eq("receiver_id", user.id).eq("status", "pending"),
-      supabase.from("matches")
-        .select("id, status, sender_id, receiver_id")
-        .eq("status", "accepted")
-        .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`),
-    ]);
-
-    // Collect all user IDs we need to fetch
-    const userIdsToFetch = new Set<string>();
-    (incomingRows ?? []).forEach((m: any) => userIdsToFetch.add(m.sender_id));
-    (acceptedRows ?? []).forEach((m: any) => {
-      const otherId = m.sender_id === user.id ? m.receiver_id : m.sender_id;
-      userIdsToFetch.add(otherId);
-    });
-
-    let userMap = new Map<string, MatchUser>();
-    if (userIdsToFetch.size > 0) {
-      const { data: userRows } = await supabase
-        .from("users")
-        .select("id, username, full_name, fitness_level, city, avatar_url, current_streak, banned_at")
-        .in("id", [...userIdsToFetch])
-        .is("banned_at", null);
-      userMap = new Map((userRows ?? []).map((u: any) => [u.id, u]));
-    }
-
-    setPending((incomingRows ?? [])
-      .filter((m: any) => userMap.has(m.sender_id))
-      .map((m: any) => ({
-        id: m.id, status: m.status, sender_id: m.sender_id, other_user: userMap.get(m.sender_id)!,
-      })));
-
-    const acceptedMatches: Match[] = (acceptedRows ?? [])
-      .map((m: any) => {
-        const otherId = m.sender_id === user.id ? m.receiver_id : m.sender_id;
-        return { id: m.id, status: m.status, sender_id: m.sender_id, other_user: userMap.get(otherId)! };
-      })
-      .filter((m: any) => m.other_user);
-    const seen = new Set<string>();
-    setAccepted(acceptedMatches.filter((m) => {
-      if (!m.other_user || seen.has(m.other_user.id)) return false;
-      seen.add(m.other_user.id);
-      return true;
-    }));
-
-    await loadBuddySessions(user.id);
-
-    // Load completed session counts per match
-    const matchIds = (acceptedRows ?? []).map((m: any) => m.id);
-    if (matchIds.length > 0) {
-      const { data: completedRows } = await supabase
-        .from("buddy_sessions")
-        .select("match_id")
-        .in("match_id", matchIds)
-        .eq("status", "completed");
-      const counts: Record<string, number> = {};
-      (completedRows ?? []).forEach((r: any) => {
-        counts[r.match_id] = (counts[r.match_id] || 0) + 1;
+      // Single RPC replaces the previous 5 sequential client queries
+      // (matches × 2 + users + buddy_sessions × 2). Same JSON shape the
+      // component already maps, server-side joined + deduped by partner.
+      const { data, error: rpcError } = await supabase.rpc("get_connections", {
+        p_user_id: user.id,
       });
-      setSessionCounts(counts);
-    }
-    if (mountedRef.current) lastLoadRef.current = Date.now();
+      if (rpcError) throw rpcError;
+      if (!mountedRef.current) return;
+
+      const conn = (data ?? {}) as {
+        pending?:        Match[];
+        accepted?:       Match[];
+        buddy_sessions?: BuddySession[];
+        session_counts?: Record<string, number>;
+      };
+
+      setPending(conn.pending ?? []);
+      setAccepted(conn.accepted ?? []);
+      setBuddySessions(conn.buddy_sessions ?? []);
+      setSessionCounts(conn.session_counts ?? {});
+
+      if (mountedRef.current) lastLoadRef.current = Date.now();
     } catch (err) {
       console.error("[Matches] load failed:", err);
       if (err instanceof Error && err.message === "No authenticated user") {
