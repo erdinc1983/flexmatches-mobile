@@ -236,7 +236,39 @@ export default function RootLayout() {
   // Keep a live ref to appState so listener closures see current value
   useEffect(() => { appStateRef.current = appState; }, [appState]);
 
+  // Cache-first cold-start path. If a previous successful resolve cached this
+  // user as ready (READY_CACHE_KEY set inside resolveAppState), we trust the
+  // cache, render tabs immediately, and verify auth + banned status in the
+  // background. The background check kicks the user to "unauthenticated" or
+  // "banned" within ~3-5 s if either check fails.
+  //
+  // Trade-off accepted: a remotely-banned user briefly sees tabs (~3-5 s)
+  // before the banned screen takes over. Mitigated by migration 26 RLS gate
+  // (is_banned() check on messages/notifications/reports/buddy_sessions),
+  // which means the banned user can't actually do anything in that window.
+  //
+  // First-time / signed-out users (no cache) fall through to the original
+  // sequential flow with the 20 s timeout — no regression for new accounts.
   async function checkAuth() {
+    const cachedUid = await AsyncStorage.getItem(READY_CACHE_KEY);
+    if (cachedUid) {
+      // Wait for the cold-start notification response to resolve so
+      // pendingRoute is populated before we transition to ready. Without
+      // this await the cache-first path can outrace the notification
+      // handler and skip the deep link to chat / matches.
+      await Notifications.getLastNotificationResponseAsync()
+        .then((response) => {
+          if (response && !pendingRoute.current) {
+            pendingRoute.current = extractRoute(response);
+          }
+        })
+        .catch(() => { /* best-effort, never block auth */ });
+      setAppState("ready");
+      void verifyAuthInBackground(cachedUid);
+      return;
+    }
+
+    // Cache miss → original sequential flow with timeout
     setAppState("loading");
     const timeoutId = setTimeout(() => setAppState("auth_error"), 20_000);
     try {
@@ -251,6 +283,52 @@ export default function RootLayout() {
     } catch {
       clearTimeout(timeoutId);
       setAppState("auth_error");
+    }
+  }
+
+  // Runs after a cache-first ready transition. Re-validates the auth session
+  // and banned_at status; if either check fails, kicks the UI out of "ready".
+  // Silent on success — cache is still valid, no UI change.
+  async function verifyAuthInBackground(cachedUid: string) {
+    try {
+      const user = await getCurrentUserWithRefresh();
+      if (!user) {
+        // Auth cannot be re-established → cache is stale, route to welcome.
+        await AsyncStorage.removeItem(READY_CACHE_KEY);
+        await AsyncStorage.removeItem(ONBOARDING_DONE_KEY);
+        setAppState("unauthenticated");
+        return;
+      }
+      if (user.id !== cachedUid) {
+        // Different user signed in than what was cached (e.g. session swap).
+        // Re-resolve from scratch using the fresh user id.
+        const newState = await resolveAppState(user.id);
+        setAppState(newState);
+        return;
+      }
+
+      // Same user as cache. Verify banned_at hasn't been set since last check.
+      const { data, error } = await supabase
+        .from("users")
+        .select("banned_at")
+        .eq("id", user.id)
+        .single();
+
+      if (error || !data) {
+        // Network blip during background verify — keep cached ready state.
+        // Next cold start will retry; in the meantime RLS still gates
+        // anything banned users could attempt.
+        return;
+      }
+
+      if (data.banned_at) {
+        await AsyncStorage.removeItem(READY_CACHE_KEY);
+        await AsyncStorage.removeItem(ONBOARDING_DONE_KEY);
+        setAppState("banned");
+      }
+      // else: cache valid, user still in good standing, no-op
+    } catch {
+      // Background failure must not disrupt the UI — silent.
     }
   }
 
