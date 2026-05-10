@@ -65,7 +65,9 @@ export function GridCard({ user, status, onPress, onConnect, matchId }: Props) {
 
   const activeStr  = formatActive(user.last_active);
   const isActiveNow = activeStr === "Active now";
-  const levelColor = user.fitness_level ? LEVEL_COLOR[user.fitness_level] : "#9CA3AF";
+  // Fall back to grey for unexpected fitness_level values. The DB column is
+  // free-form text; if the server ever returns "Pro" or a typo we don't crash.
+  const levelColor = (user.fitness_level && LEVEL_COLOR[user.fitness_level]) || "#9CA3AF";
   const sports     = (user.sports ?? []).slice(0, 2);
   const extraSports = (user.sports ?? []).length - 2;
 

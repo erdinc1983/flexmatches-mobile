@@ -12,7 +12,7 @@
 
 import * as Notifications from "expo-notifications";
 import * as Device from "expo-device";
-import { Platform } from "react-native";
+import { Alert, Linking, Platform } from "react-native";
 import { supabase } from "./supabase";
 
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
@@ -114,6 +114,12 @@ export async function notifyUser(
 /**
  * Register push token for the current user.
  * Call once on app start after auth is confirmed.
+ *
+ * If permission was previously denied (status === "denied"), iOS won't show
+ * the system prompt again — the user has to re-enable manually in Settings.
+ * We return null silently here. Use `promptUserToEnablePush()` from a
+ * deliberate user action (e.g. tapping "Enable notifications" in Settings tab)
+ * to surface the deep-link-to-Settings flow.
  */
 export async function registerPushToken(): Promise<string | null> {
   if (!Device.isDevice) return null; // simulators can't receive push
@@ -165,6 +171,142 @@ export async function registerPushToken(): Promise<string | null> {
     console.warn("[Push] Token registration failed:", e);
     return null;
   }
+}
+
+/**
+ * Surface a "permission denied" path that actually fixes the problem.
+ * When the user previously denied push permission, iOS suppresses the system
+ * prompt forever — `requestPermissionsAsync()` immediately resolves with
+ * `denied` and no UI appears. The only fix is the OS Settings app.
+ *
+ * Call from a user-initiated action (e.g. Settings tab → Notifications card),
+ * not at app launch — at launch we'd be popping Alerts on every cold start
+ * for a user who has consciously declined.
+ */
+export async function promptUserToEnablePush(): Promise<void> {
+  const { status, canAskAgain } = await Notifications.getPermissionsAsync();
+  if (status === "granted") return; // already on, nothing to do
+
+  if (canAskAgain) {
+    // Fresh prompt path — let the OS handle it
+    await Notifications.requestPermissionsAsync();
+    return;
+  }
+
+  // Permanently denied — only Settings can fix it. Deep link there.
+  Alert.alert(
+    "Notifications are off",
+    "Open Settings to turn on notifications for FlexMatches. Without them, you won't get match requests, messages, or session reminders.",
+    [
+      { text: "Not now", style: "cancel" },
+      {
+        text:    "Open Settings",
+        onPress: () => Linking.openSettings(),
+      },
+    ],
+  );
+}
+
+/**
+ * Fan-out variant of notifyUser. Sends the same notification to many users
+ * in two batched calls (one DB insert, one Expo push POST) instead of N×2
+ * sequential round-trips. Use this for circle events, broadcast updates,
+ * and any other "tell N people the same thing" path.
+ *
+ * Per-user notification_prefs are honoured: each recipient is filtered
+ * before insert, so opted-out users get neither a row nor a push.
+ *
+ * Best-effort. Failures are logged, never thrown.
+ */
+export async function notifyUsers(
+  userIds: string[],
+  opts: {
+    type: NotifType;
+    title: string;
+    body: string;
+    relatedId?: string;
+    data?: Record<string, any>;
+  },
+): Promise<void> {
+  if (userIds.length === 0) return;
+
+  // 1. Filter recipients by their notification_prefs in a single SELECT.
+  const prefKey = TYPE_TO_PREF[opts.type];
+  let allowed = userIds;
+  if (prefKey) {
+    const { data, error } = await supabase
+      .from("users")
+      .select("id, notification_prefs")
+      .in("id", userIds);
+    if (error) {
+      console.warn("[notifyUsers] Prefs lookup failed, defaulting to send-all:", error.message);
+    } else if (data) {
+      const optedIn = new Set<string>();
+      for (const row of data) {
+        const prefs = (row.notification_prefs ?? {}) as Record<string, boolean>;
+        if (prefs[prefKey] !== false) optedIn.add(row.id);
+      }
+      // Recipients we couldn't find in the SELECT (RLS / deleted) default to send.
+      allowed = userIds.filter((id) => !data.some((r) => r.id === id) || optedIn.has(id));
+    }
+  }
+  if (allowed.length === 0) return;
+
+  // 2. Single batched insert into notifications table.
+  const rows = allowed.map((uid) => ({
+    user_id:    uid,
+    type:       opts.type,
+    title:      opts.title,
+    body:       opts.body,
+    message:    opts.body,
+    related_id: opts.relatedId ?? null,
+    read:       false,
+  }));
+  const { error: insertError } = await supabase.from("notifications").insert(rows);
+  if (insertError) console.warn("[notifyUsers] Batched insert failed:", insertError.message);
+
+  // 3. Single batched push send via the existing sendPushToUsers helper
+  //    (one HTTP POST to Expo with all tokens in the body array).
+  await sendPushToUsers(allowed, {
+    title:     opts.title,
+    body:      opts.body,
+    channelId: opts.type === "message" ? "messages" : "default",
+    data:      { type: opts.type, ...opts.data },
+  });
+}
+
+/**
+ * Subscribe to mid-session token rotation. Apple and Google rotate Expo push
+ * tokens periodically (typically every few weeks, sometimes after OS updates
+ * or when the user wipes the device). Without this listener, a rotated token
+ * is silently stale until the next cold start re-registers it — push delivery
+ * dies in between with no visible signal.
+ *
+ * Wire this once at app startup alongside the initial registerPushToken().
+ * Returns an unsubscribe function so callers can clean up on unmount.
+ *
+ * Cold-start rotation is already covered by registerPushToken() reading the
+ * fresh token via getExpoPushTokenAsync on every "ready" transition.
+ */
+export function subscribeToPushTokenChanges(): () => void {
+  if (!Device.isDevice) return () => {};
+  const sub = Notifications.addPushTokenListener(async (tokenData) => {
+    const token = tokenData.data;
+    if (!token) return;
+    if (__DEV__) console.log("[Push] Token rotated mid-session — updating DB");
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { error } = await supabase
+        .from("users")
+        .update({ expo_push_token: token })
+        .eq("id", user.id);
+      if (error) console.warn("[Push] Rotated token store failed:", error.message);
+    } catch (e) {
+      console.warn("[Push] Rotation handler threw:", e);
+    }
+  });
+  return () => sub.remove();
 }
 
 /**

@@ -113,10 +113,15 @@ export async function notifyGeneric(title: string, body: string): Promise<void> 
 /**
  * Schedule a "Did you meet?" reminder for 9am the morning after the session date.
  * Call this when a session is proposed or accepted.
+ *
+ * If `sessionId` is provided, uses a stable identifier (`session-reminder-{id}`)
+ * so the same reminder can be cancel-and-replaced without stacking duplicates.
+ * Without a sessionId we fall back to a system-assigned id (legacy callers).
  */
 export async function scheduleSessionReminder(
   partnerName: string,
   sessionDateStr: string,  // "YYYY-MM-DD"
+  sessionId?: string,
 ): Promise<string | null> {
   try {
     const granted = await requestNotificationPermission();
@@ -126,7 +131,14 @@ export async function scheduleSessionReminder(
     const fireAt = new Date(y, m - 1, d + 1, 9, 0, 0); // 9am next day
     if (fireAt <= new Date()) return null;
 
+    const identifier = sessionId ? `session-reminder-${sessionId}` : undefined;
+    if (identifier) {
+      // Cancel any prior schedule with this identifier so we don't double-fire.
+      await Notifications.cancelScheduledNotificationAsync(identifier).catch(() => {});
+    }
+
     const id = await Notifications.scheduleNotificationAsync({
+      ...(identifier ? { identifier } : {}),
       content: {
         title: "Did you meet up? 🤝",
         body:  `How did your session with ${partnerName} go? Mark it done in chat!`,
@@ -208,6 +220,60 @@ export async function scheduleEventReminder(
     return id;
   } catch {
     return null;
+  }
+}
+
+/**
+ * Re-schedule local "Did you meet?" reminders for every accepted future-dated
+ * session involving the calling user. iOS wipes all scheduled local notifs on
+ * reinstall — without this, reinstalls silently drop session reminders.
+ *
+ * Idempotent: each reminder uses a stable `session-reminder-{sessionId}`
+ * identifier so re-running this on every launch doesn't stack duplicates.
+ *
+ * Pass the user's id explicitly so we don't double-fetch from the auth layer
+ * here (the caller already has it from the same getUser() call that gates
+ * push token registration).
+ */
+export async function reschedulePendingSessionReminders(
+  supabase: { from: (t: string) => any },
+  userId: string,
+): Promise<void> {
+  try {
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
+    const { data: sessions, error } = await supabase
+      .from("buddy_sessions")
+      .select("id, session_date, proposer_id, receiver_id, sport")
+      .or(`proposer_id.eq.${userId},receiver_id.eq.${userId}`)
+      .eq("status", "accepted")
+      .gte("session_date", todayStr);
+    if (error || !sessions || sessions.length === 0) return;
+
+    // Need partner names for each session. Single batched IN query.
+    const partnerIds = Array.from(
+      new Set(
+        sessions.map((s: any) => (s.proposer_id === userId ? s.receiver_id : s.proposer_id)),
+      ),
+    );
+    const { data: partners } = await supabase
+      .from("users")
+      .select("id, full_name, username")
+      .in("id", partnerIds);
+
+    const nameById = new Map<string, string>();
+    for (const p of (partners ?? [])) {
+      nameById.set(p.id, (p.full_name ?? p.username ?? "your partner") as string);
+    }
+
+    for (const s of sessions) {
+      const partnerId = s.proposer_id === userId ? s.receiver_id : s.proposer_id;
+      const partnerName = (nameById.get(partnerId)?.split(" ")[0]) ?? "your partner";
+      await scheduleSessionReminder(partnerName, s.session_date, s.id);
+    }
+  } catch {
+    // Best-effort. Silent on failure — reminders are nice-to-have.
   }
 }
 

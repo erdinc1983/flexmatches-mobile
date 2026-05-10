@@ -73,11 +73,18 @@ function Tile({
   const { theme } = useTheme();
   const c = theme.colors;
 
+  const badgeLabel = badge && badge > 0
+    ? `, ${badge} unread`
+    : "";
+  const a11yLabel = `${label}, ${sub}${badgeLabel}`;
+
   return (
     <TouchableOpacity
       style={[s.tile, { backgroundColor: c.bgCard, borderColor: c.border }]}
       onPress={onPress}
       activeOpacity={0.75}
+      accessibilityRole="button"
+      accessibilityLabel={a11yLabel}
     >
       <View style={{ position: "relative", alignSelf: "flex-start" }}>
         <View style={[s.tileIcon, { backgroundColor: c.bgCardAlt }]}>
@@ -105,6 +112,10 @@ function GymTile({ isAtGym, toggling, onPress }: { isAtGym: boolean; toggling: b
   const activeIcon   = "#22C55E";
   const activeText   = "#22C55E";
 
+  const a11yLabel = isAtGym
+    ? "At gym, checked in. Tap to check out."
+    : "Gym, check in";
+
   return (
     <TouchableOpacity
       style={[
@@ -116,6 +127,9 @@ function GymTile({ isAtGym, toggling, onPress }: { isAtGym: boolean; toggling: b
       onPress={onPress}
       activeOpacity={0.75}
       disabled={toggling}
+      accessibilityRole="button"
+      accessibilityLabel={a11yLabel}
+      accessibilityState={{ disabled: toggling, busy: toggling, selected: isAtGym }}
     >
       <View style={[s.tileIcon, { backgroundColor: isAtGym ? "#16A34A22" : c.bgCardAlt }]}>
         {toggling

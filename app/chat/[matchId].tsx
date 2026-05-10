@@ -45,6 +45,11 @@ type Message = {
   sender_id:  string;
   created_at: string;
   read_at:    string | null;
+  // Client-side flags for optimistic UI. Real DB rows never have these set.
+  // `id` for optimistic rows is prefixed `temp_` until the realtime INSERT replay
+  // arrives and we swap it out for the server-issued UUID.
+  pending?:   boolean;
+  failed?:    boolean;
 };
 
 type OtherUser = {
@@ -197,6 +202,12 @@ export default function ChatScreen() {
   const [loading,         setLoading]         = useState(true);
   const [text,            setText]            = useState("");
   const [sending,         setSending]         = useState(false);
+  // Set when an insert fails with what looks like an RLS denial AND the
+  // matches row is no longer queryable from this side (unmatch / block /
+  // ban from the other user). Surfaces a banner + disables input so the
+  // user understands "you can't send here anymore" without a confusing
+  // generic error.
+  const [conversationClosed, setConversationClosed] = useState<null | "unmatched" | "blocked" | "unknown">(null);
 
   // Action menu (3-line button)
   const [showActionMenu,  setShowActionMenu]  = useState(false);
@@ -246,7 +257,31 @@ export default function ChatScreen() {
         filter: `match_id=eq.${matchId}`,
       }, (payload) => {
         const newMsg = payload.new as Message;
-        setMessages((prev) => [...prev, newMsg]);
+        setMessages((prev) => {
+          // Reconnect replay can re-deliver the same INSERT — skip duplicates by ID.
+          if (prev.some((m) => m.id === newMsg.id)) return prev;
+          // If this is the echo of our own optimistic send, swap the temp row
+          // for the real one (matched by sender + exact content + 30 s window).
+          // Falls back to plain append for messages from the other user.
+          const newTs = new Date(newMsg.created_at).getTime();
+          const idx = prev.findIndex(
+            (m) =>
+              m.id.startsWith("temp_") &&
+              m.sender_id === newMsg.sender_id &&
+              m.content === newMsg.content &&
+              Math.abs(new Date(m.created_at).getTime() - newTs) < 30_000,
+          );
+          if (idx >= 0) {
+            const next = prev.slice();
+            next[idx] = newMsg;
+            return next;
+          }
+          // Append + keep ordered by created_at (cheap insert-sort; messages
+          // almost always arrive in order, this just protects against jitter).
+          const next = [...prev, newMsg];
+          next.sort((a, b) => a.created_at.localeCompare(b.created_at));
+          return next;
+        });
         if (userIdRef.current && newMsg.sender_id !== userIdRef.current) Vibration.vibrate(150);
         setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 80);
       })
@@ -535,16 +570,65 @@ export default function ChatScreen() {
     setProposing(true);
     try {
       const sportValue = sessionSport === "Other" && sessionTitle.trim() ? sessionTitle.trim().slice(0, 100) : sessionSport;
-      const { error } = await supabase.from("buddy_sessions").insert({
-        proposer_id: userId, receiver_id: other.id, match_id: matchId,
-        sport: sportValue, session_date: sessionDate.trim(),
-        session_time: useTime ? `${String(sessionHour).padStart(2,"0")}:${String(sessionMinute).padStart(2,"0")}` : null,
-        location: sessionLocation.trim() || null, notes: null, status: "pending",
-      });
-      if (error) throw error;
+
+      // Pre-flight: bail early if another active session already exists for
+      // this match. The DB has a partial unique index that catches the race
+      // window when both users tap Propose at the same moment, but this
+      // pre-check makes the common case clean (no INSERT attempt → no
+      // 23505 to translate into a user message).
+      // Migration 26 adds the index — this handler also handles the 23505
+      // case below in case the race window does fire.
+      if (!editingSessionRef.current) {
+        const { data: existingActive } = await supabase
+          .from("buddy_sessions")
+          .select("id, proposer_id, sport, session_date")
+          .eq("match_id", matchId)
+          .in("status", ["pending", "accepted"])
+          .maybeSingle();
+        if (existingActive) {
+          setProposing(false);
+          const fromOther = existingActive.proposer_id !== userId;
+          Alert.alert(
+            "A session is already in motion",
+            fromOther
+              ? `${other.full_name ?? other.username} just proposed ${existingActive.sport} on ${existingActive.session_date}. Respond to that one or cancel it before proposing a new session.`
+              : `You already proposed ${existingActive.sport} on ${existingActive.session_date}. Cancel that one before proposing a new session.`,
+            [{ text: "OK" }],
+          );
+          return;
+        }
+      }
+
+      const { data: inserted, error } = await supabase
+        .from("buddy_sessions")
+        .insert({
+          proposer_id: userId, receiver_id: other.id, match_id: matchId,
+          sport: sportValue, session_date: sessionDate.trim(),
+          session_time: useTime ? `${String(sessionHour).padStart(2,"0")}:${String(sessionMinute).padStart(2,"0")}` : null,
+          location: sessionLocation.trim() || null, notes: null, status: "pending",
+        })
+        .select("id")
+        .single();
+      // Race window: if the partial unique index rejected us with 23505,
+      // refresh the session view so the user sees what's actually there.
+      if (error) {
+        const code = (error as any)?.code ?? (error as any)?.details?.code;
+        if (code === "23505") {
+          setProposing(false);
+          await loadSession();
+          Alert.alert(
+            "Already proposed",
+            "Looks like a session for this match was created at the same moment. Pull to refresh and respond to it instead.",
+          );
+          return;
+        }
+        throw error;
+      }
       if (sessionDate.trim()) {
         const partnerName = other?.full_name?.split(" ")[0] ?? other?.username ?? "your partner";
-        scheduleSessionReminder(partnerName, sessionDate.trim());
+        // Pass session ID so the reminder uses a stable identifier — survives
+        // launch-time re-schedule without duplicating.
+        scheduleSessionReminder(partnerName, sessionDate.trim(), inserted?.id);
       }
       const { data: me } = await supabase.from("users").select("full_name, username").eq("id", userId).single();
       notifyUser(other.id, {
@@ -578,16 +662,55 @@ export default function ChatScreen() {
   }
 
   // ── Messaging ────────────────────────────────────────────────────────────
-  async function sendMessage() {
-    const trimmed = text.trim();
+  // Optimistic send flow:
+  //   1. Append a `temp_*` row with `pending: true` immediately, clear input.
+  //   2. Insert in background; on success the realtime INSERT echo arrives
+  //      ~200 ms later and the realtime handler swaps temp → real (matched by
+  //      sender + content + 30 s window).
+  //   3. On failure mark the temp row `failed: true` so the bubble shows red
+  //      with a retry button. Tapping retry calls retrySend(tempId).
+  async function sendMessage(retryOf?: string) {
+    const trimmed = retryOf
+      ? messages.find((m) => m.id === retryOf)?.content ?? ""
+      : text.trim();
     if (!trimmed || !userId || sending) return;
+
+    const tempId = retryOf ?? `temp_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    const createdAt = new Date().toISOString();
+
+    if (retryOf) {
+      // Retry — flip the existing failed row back to pending
+      setMessages((prev) =>
+        prev.map((m) => (m.id === retryOf ? { ...m, pending: true, failed: false } : m)),
+      );
+    } else {
+      // First send — append optimistic row + clear input
+      const optimistic: Message = {
+        id: tempId,
+        content: trimmed,
+        sender_id: userId,
+        created_at: createdAt,
+        read_at: null,
+        pending: true,
+      };
+      setMessages((prev) => [...prev, optimistic]);
+      setText("");
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
+    }
+
     setSending(true);
     try {
       const { error: insertError } = await supabase.from("messages").insert({
         match_id: matchId, sender_id: userId, content: trimmed, read_at: null,
       });
       if (insertError) throw insertError;
-      setText("");
+      // Success — temp row stays in place until realtime echo replaces it.
+      // Clear `pending` flag so the bubble loses its grey treatment immediately
+      // (the realtime swap happens 100–500 ms later, no need to wait).
+      setMessages((prev) =>
+        prev.map((m) => (m.id === tempId ? { ...m, pending: false } : m)),
+      );
+
       // Notify the other user (push + in-app)
       if (other?.id) {
         const { data: me } = await supabase.from("users").select("full_name, username").eq("id", userId).single();
@@ -599,11 +722,38 @@ export default function ChatScreen() {
           data: { type: "message", matchId },
         }).catch((e: any) => console.warn("[sendMessage] notifyUser threw:", e));
       }
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 80);
-    } catch (err) {
+    } catch (err: any) {
       console.error("[sendMessage] failed:", err);
-      Alert.alert("Send Failed", "Your message could not be sent. Please try again.");
-      // text is preserved — user can retry
+      // Mark the optimistic row as failed first (always — even if we go on
+      // to detect a "conversation closed" state, the bubble should still
+      // visually fail rather than silently clear).
+      setMessages((prev) =>
+        prev.map((m) => (m.id === tempId ? { ...m, pending: false, failed: true } : m)),
+      );
+
+      // If the failure looks like an RLS denial (Postgres 42501 or generic
+      // permission error), check whether the match is still readable. If
+      // not, the other user has unmatched / blocked / been banned — show
+      // the closed-conversation banner so the user understands why retry
+      // won't work.
+      const code = err?.code ?? err?.details?.code;
+      const looksLikeRLSDenial = code === "42501" || /row.*violates|permission denied|policy/i.test(err?.message ?? "");
+      if (looksLikeRLSDenial) {
+        const { data: match } = await supabase
+          .from("matches")
+          .select("id, status")
+          .eq("id", matchId)
+          .maybeSingle();
+        if (!match) {
+          setConversationClosed("unmatched");
+        } else if (match.status !== "accepted") {
+          setConversationClosed("unmatched");
+        } else {
+          // Match exists but our insert was still rejected — most likely
+          // we got banned ourselves between sends. Generic closed state.
+          setConversationClosed("unknown");
+        }
+      }
     } finally {
       setSending(false);
     }
@@ -722,27 +872,51 @@ export default function ChatScreen() {
             }
             const { msg } = item;
             const isMine  = msg.sender_id === userId;
+            const isPending = !!msg.pending;
+            const isFailed  = !!msg.failed;
             return (
               <View style={[s.bubbleRow, isMine && s.bubbleRowMine]}>
                 {!isMine && <Avatar url={other?.avatar_url} name={otherName} size={26} />}
-                <View style={[
-                  s.bubble,
-                  isMine
-                    ? { backgroundColor: c.brand, borderBottomRightRadius: 4 }
-                    : { backgroundColor: c.bgCard, borderBottomLeftRadius: 4, borderWidth: 1, borderColor: c.border },
-                ]}>
+                <TouchableOpacity
+                  activeOpacity={isFailed ? 0.7 : 1}
+                  disabled={!isFailed}
+                  onPress={isFailed ? () => sendMessage(msg.id) : undefined}
+                  accessibilityRole={isFailed ? "button" : undefined}
+                  accessibilityLabel={isFailed ? "Tap to retry sending this message" : undefined}
+                  style={[
+                    s.bubble,
+                    isMine
+                      ? {
+                          backgroundColor: c.brand,
+                          borderBottomRightRadius: 4,
+                          opacity: isPending ? 0.55 : 1,
+                          ...(isFailed ? { borderWidth: 1.5, borderColor: "#E53E3E" } : {}),
+                        }
+                      : { backgroundColor: c.bgCard, borderBottomLeftRadius: 4, borderWidth: 1, borderColor: c.border },
+                  ]}
+                >
                   <Text style={[s.bubbleText, { color: isMine ? "#fff" : c.text }]}>{msg.content}</Text>
                   <View style={s.bubbleMeta}>
                     <Text style={[s.bubbleTime, { color: isMine ? "rgba(255,255,255,0.45)" : c.textFaint }]}>
                       {formatTime(msg.created_at)}
                     </Text>
                     {isMine && (
-                      <Text style={{ fontSize: 11, fontWeight: "700", color: msg.read_at ? "#60A5FA" : "rgba(255,255,255,0.45)", letterSpacing: -1 }}>
-                        {msg.read_at ? "✓✓" : "✓"}
-                      </Text>
+                      isFailed ? (
+                        <Text style={{ fontSize: 11, fontWeight: "700", color: "#FCA5A5" }}>
+                          ! Tap to retry
+                        </Text>
+                      ) : isPending ? (
+                        <Text style={{ fontSize: 11, fontWeight: "700", color: "rgba(255,255,255,0.55)", letterSpacing: -1 }}>
+                          ⌛
+                        </Text>
+                      ) : (
+                        <Text style={{ fontSize: 11, fontWeight: "700", color: msg.read_at ? "#60A5FA" : "rgba(255,255,255,0.45)", letterSpacing: -1 }}>
+                          {msg.read_at ? "✓✓" : "✓"}
+                        </Text>
+                      )
                     )}
                   </View>
-                </View>
+                </TouchableOpacity>
               </View>
             );
           }}
@@ -759,35 +933,62 @@ export default function ChatScreen() {
           }
         />
 
-        {/* Input row */}
-        <View style={[s.inputRow, { borderTopColor: c.border, backgroundColor: c.bg }]}>
-          <TextInput
-            style={[s.input, { backgroundColor: c.bgCard, color: c.text, borderColor: c.border }]}
-            value={text}
-            onChangeText={setText}
-            placeholder="Message..."
-            placeholderTextColor={c.textFaint}
-            accessibilityLabel="Message input"
-            multiline
-            maxLength={500}
-          />
-          <TouchableOpacity
-            style={[
-              s.sendBtn,
-              text.trim() && !sending
-                ? { backgroundColor: c.brand }
-                : { backgroundColor: c.bgCardAlt, borderWidth: 1, borderColor: c.border },
-            ]}
-            onPress={sendMessage}
-            disabled={!text.trim() || sending}
-            activeOpacity={0.85}
-          >
-            {sending
-              ? <ActivityIndicator color={c.brand} size="small" />
-              : <Icon name="send" size={17} color={text.trim() ? "#fff" : c.textFaint} />
-            }
-          </TouchableOpacity>
-        </View>
+        {/* Closed-conversation banner (other user unmatched / blocked / banned) */}
+        {conversationClosed && (
+          <View style={[s.closedBanner, { backgroundColor: c.bgCard, borderTopColor: c.border }]}>
+            <Text style={[s.closedTitle, { color: c.text }]}>
+              {conversationClosed === "unmatched"
+                ? "This conversation has ended"
+                : conversationClosed === "blocked"
+                  ? "You can't send messages here"
+                  : "Sending is disabled for this conversation"}
+            </Text>
+            <Text style={[s.closedBody, { color: c.textMuted }]}>
+              {conversationClosed === "unmatched"
+                ? `${other?.full_name ?? other?.username ?? "This user"} is no longer connected with you. Your draft is preserved if you want to copy it.`
+                : "If this looks wrong, restart the app or contact support."}
+            </Text>
+            <TouchableOpacity
+              style={[s.closedBtn, { backgroundColor: c.brand }]}
+              onPress={() => router.replace("/(tabs)/messages" as any)}
+              activeOpacity={0.85}
+            >
+              <Text style={s.closedBtnText}>Back to Messages</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Input row — hidden when conversation is closed */}
+        {!conversationClosed && (
+          <View style={[s.inputRow, { borderTopColor: c.border, backgroundColor: c.bg }]}>
+            <TextInput
+              style={[s.input, { backgroundColor: c.bgCard, color: c.text, borderColor: c.border }]}
+              value={text}
+              onChangeText={setText}
+              placeholder="Message..."
+              placeholderTextColor={c.textFaint}
+              accessibilityLabel="Message input"
+              multiline
+              maxLength={500}
+            />
+            <TouchableOpacity
+              style={[
+                s.sendBtn,
+                text.trim() && !sending
+                  ? { backgroundColor: c.brand }
+                  : { backgroundColor: c.bgCardAlt, borderWidth: 1, borderColor: c.border },
+              ]}
+              onPress={() => sendMessage()}
+              disabled={!text.trim() || sending}
+              activeOpacity={0.85}
+            >
+              {sending
+                ? <ActivityIndicator color={c.brand} size="small" />
+                : <Icon name="send" size={17} color={text.trim() ? "#fff" : c.textFaint} />
+              }
+            </TouchableOpacity>
+          </View>
+        )}
       </KeyboardAvoidingView>
 
       {/* ── Action menu — centered card ──────────────────────────────── */}
@@ -1338,4 +1539,10 @@ const s = StyleSheet.create({
   inputRow:     { flexDirection: "row", alignItems: "flex-end", padding: SPACE[10], gap: SPACE[8], borderTopWidth: 1 },
   input:        { flex: 1, borderRadius: RADIUS.xl, paddingHorizontal: SPACE[16], paddingVertical: SPACE[10], fontSize: FONT.size.md, maxHeight: 120, borderWidth: 1 },
   sendBtn:      { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+
+  closedBanner: { padding: SPACE[16], borderTopWidth: 1, gap: SPACE[6], alignItems: "center" },
+  closedTitle:  { fontSize: FONT.size.md, fontWeight: FONT.weight.extrabold, textAlign: "center" },
+  closedBody:   { fontSize: FONT.size.sm, textAlign: "center", lineHeight: 18 },
+  closedBtn:    { marginTop: SPACE[6], paddingHorizontal: SPACE[20], paddingVertical: SPACE[10], borderRadius: RADIUS.pill },
+  closedBtnText:{ fontSize: FONT.size.sm, fontWeight: FONT.weight.bold, color: "#fff", letterSpacing: -0.1 },
 });

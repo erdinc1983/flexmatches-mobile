@@ -8,8 +8,10 @@ import { Image } from "expo-image";
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as AppleAuthentication from "expo-apple-authentication";
+import { AntDesign } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase";
 import { signInWithApple, isAppleAuthAvailable } from "../../lib/appleAuth";
+import { useGoogleSignIn, isGoogleAuthAvailable } from "../../lib/googleAuth";
 
 export default function LoginScreen() {
   const [email,          setEmail]          = useState("");
@@ -43,7 +45,35 @@ export default function LoginScreen() {
     setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
-    if (error) Alert.alert("Login Failed", error.message);
+    if (error) {
+      // Supabase returns generic "Invalid login credentials" for both wrong
+      // password AND unconfirmed email. The latter is detectable via the
+      // status code (400) + message containing "Email not confirmed", or by
+      // the auth API returning email_confirmed_at: null. We surface a
+      // specific path so users know to check their inbox vs. retry password.
+      const isUnconfirmed =
+        /email not confirmed/i.test(error.message) ||
+        /email.*verify/i.test(error.message);
+      if (isUnconfirmed) {
+        Alert.alert(
+          "Email not verified",
+          "Check your inbox for the confirmation link. Didn't get it?",
+          [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "Resend",
+              onPress: async () => {
+                const { error: resendErr } = await supabase.auth.resend({ type: "signup", email });
+                if (resendErr) Alert.alert("Resend failed", resendErr.message);
+                else Alert.alert("Sent", "Check your inbox.");
+              },
+            },
+          ],
+        );
+      } else {
+        Alert.alert("Login Failed", error.message);
+      }
+    }
   }
 
   async function handleAppleSignIn() {
@@ -55,6 +85,14 @@ export default function LoginScreen() {
     }
     // Routing handled centrally by _layout.tsx
   }
+
+  // Google Sign In — only rendered if EXPO_PUBLIC_GOOGLE_*_CLIENT_ID env vars are set.
+  const googleConfigured = isGoogleAuthAvailable();
+  const { promptAsync: googlePrompt, signingIn: googleSigningIn, ready: googleReady } =
+    useGoogleSignIn((res) => {
+      if (res.status === "error") Alert.alert("Google Sign In Failed", res.message);
+      // success/cancelled → routing handled centrally by _layout.tsx
+    });
 
   return (
     <SafeAreaView style={styles.container}>
@@ -141,8 +179,8 @@ export default function LoginScreen() {
               }
             </TouchableOpacity>
 
-            {/* Apple Sign In */}
-            {appleAvailable && (
+            {/* Apple Sign In + Google Sign In */}
+            {(appleAvailable || googleConfigured) && (
               <>
                 <View style={styles.divider}>
                   <View style={styles.dividerLine} />
@@ -150,19 +188,42 @@ export default function LoginScreen() {
                   <View style={styles.dividerLine} />
                 </View>
 
-                {appleLoading ? (
-                  <View style={styles.appleLoading}>
-                    <ActivityIndicator color="#555" size="small" />
-                    <Text style={styles.appleLoadingText}>Signing in with Apple...</Text>
-                  </View>
-                ) : (
-                  <AppleAuthentication.AppleAuthenticationButton
-                    buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
-                    buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
-                    cornerRadius={14}
-                    style={styles.appleBtn}
-                    onPress={handleAppleSignIn}
-                  />
+                {appleAvailable && (
+                  appleLoading ? (
+                    <View style={styles.appleLoading}>
+                      <ActivityIndicator color="#555" size="small" />
+                      <Text style={styles.appleLoadingText}>Signing in with Apple...</Text>
+                    </View>
+                  ) : (
+                    <AppleAuthentication.AppleAuthenticationButton
+                      buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+                      buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+                      cornerRadius={14}
+                      style={styles.appleBtn}
+                      onPress={handleAppleSignIn}
+                    />
+                  )
+                )}
+
+                {googleConfigured && (
+                  <TouchableOpacity
+                    style={[styles.googleBtn, (googleSigningIn || !googleReady) && styles.buttonDisabled]}
+                    onPress={googlePrompt}
+                    disabled={googleSigningIn || !googleReady}
+                    activeOpacity={0.85}
+                    accessibilityRole="button"
+                    accessibilityLabel="Continue with Google"
+                    accessibilityState={{ disabled: googleSigningIn || !googleReady, busy: googleSigningIn }}
+                  >
+                    {googleSigningIn ? (
+                      <ActivityIndicator color="#555" size="small" />
+                    ) : (
+                      <>
+                        <AntDesign name="google" size={18} color="#4285F4" />
+                        <Text style={styles.googleBtnText}>Continue with Google</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
                 )}
               </>
             )}
@@ -238,6 +299,8 @@ const styles = StyleSheet.create({
   appleBtn:         { width: "100%", height: 52 },
   appleLoading:     { height: 52, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, backgroundColor: "#F5F5F5", borderRadius: 14, borderWidth: 1, borderColor: "#E8E8E8" },
   appleLoadingText: { color: "#888", fontSize: 15, fontWeight: "600" },
+  googleBtn:        { width: "100%", height: 52, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, backgroundColor: "#FFFFFF", borderRadius: 14, borderWidth: 1, borderColor: "#DADCE0" },
+  googleBtnText:    { color: "#3C4043", fontSize: 15, fontWeight: "600", letterSpacing: 0.1 },
   inputWrap:  { flexDirection: "row", alignItems: "center", backgroundColor: "#F5F5F5", borderRadius: 14, borderWidth: 1.5, borderColor: "#E8E8E8" },
   inputInner: { flex: 1, paddingHorizontal: 18, paddingVertical: 15, color: "#111", fontSize: 16 },
   eyeBtn:     { paddingHorizontal: 14, paddingVertical: 14 },

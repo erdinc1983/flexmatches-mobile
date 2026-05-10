@@ -55,18 +55,27 @@ function CircleCard({ circle, onPress, onDismiss }: {
   const hasDate = !!circle.event_date;
   const dateLabel = hasDate ? formatCardDate(circle.event_date!) : null;
 
+  const memberLabel = `${circle.member_count} ${circle.member_count === 1 ? "member" : "members"}`;
+  const dateA11y = dateLabel ? `, ${dateLabel}` : "";
+  const cardA11y = `${circle.name}${dateA11y}, ${memberLabel}`;
+
   return (
     <TouchableOpacity
       style={[s.card, SHADOW.md]}
       onPress={() => onPress ? onPress(circle) : router.push("/(tabs)/circles" as any)}
       activeOpacity={0.88}
+      accessibilityRole="button"
+      accessibilityLabel={cardA11y}
+      accessibilityHint="Opens this circle"
     >
       {/* Dismiss X */}
       {onDismiss && (
         <Pressable
           style={s.dismissBtn}
           onPress={(e) => { e.stopPropagation?.(); onDismiss(circle.id); }}
-          hitSlop={8}
+          hitSlop={11}
+          accessibilityRole="button"
+          accessibilityLabel={`Dismiss ${circle.name}`}
         >
           <View style={s.dismissCircle}>
             <Icon name="close" size={10} color="#fff" />

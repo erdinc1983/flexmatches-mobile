@@ -10,8 +10,10 @@ import { Image } from "expo-image";
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as AppleAuthentication from "expo-apple-authentication";
+import { AntDesign } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase";
 import { signInWithApple, isAppleAuthAvailable } from "../../lib/appleAuth";
+import { useGoogleSignIn, isGoogleAuthAvailable } from "../../lib/googleAuth";
 
 const TERMS_URL   = "https://www.flexmatches.com/terms";
 const PRIVACY_URL = "https://www.flexmatches.com/privacy-policy";
@@ -104,6 +106,28 @@ export default function RegisterScreen() {
     }
     setLoading(true);
     const normalizedUsername = username.trim().toLowerCase();
+
+    // Synchronous re-verify of username availability immediately before signUp.
+    // The debounced check feeding `usernameStatus` is UI-only — two devices
+    // typing the same name within 300ms can both pass the debounced gate and
+    // both submit. This blocks that race without serialising via RPC.
+    const { data: existing, error: checkError } = await supabase
+      .from("users")
+      .select("id")
+      .eq("username", normalizedUsername)
+      .maybeSingle();
+    if (checkError) {
+      setLoading(false);
+      Alert.alert("Couldn't verify username", "Check your connection and try again.");
+      return;
+    }
+    if (existing) {
+      setLoading(false);
+      setUsernameStatus("taken");
+      Alert.alert("Username already taken", "Pick a different username and try again.");
+      return;
+    }
+
     const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { username: normalizedUsername } } });
     if (error) { setLoading(false); Alert.alert("Error", error.message); return; }
     if (data.user) {
@@ -142,6 +166,14 @@ export default function RegisterScreen() {
     }
     // Routing handled centrally by _layout.tsx (needsOnboarding check)
   }
+
+  // Google Sign In — only rendered if EXPO_PUBLIC_GOOGLE_*_CLIENT_ID env vars are set.
+  const googleConfigured = isGoogleAuthAvailable();
+  const { promptAsync: googlePrompt, signingIn: googleSigningIn, ready: googleReady } =
+    useGoogleSignIn((res) => {
+      if (res.status === "error") Alert.alert("Google Sign In Failed", res.message);
+      // success/cancelled → routing handled centrally by _layout.tsx
+    });
 
   return (
     <SafeAreaView style={styles.container}>
@@ -283,8 +315,8 @@ export default function RegisterScreen() {
               }
             </TouchableOpacity>
 
-            {/* Apple Sign In */}
-            {appleAvailable && (
+            {/* Apple Sign In + Google Sign In */}
+            {(appleAvailable || googleConfigured) && (
               <>
                 <View style={styles.divider}>
                   <View style={styles.dividerLine} />
@@ -292,19 +324,42 @@ export default function RegisterScreen() {
                   <View style={styles.dividerLine} />
                 </View>
 
-                {appleLoading ? (
-                  <View style={styles.appleLoading}>
-                    <ActivityIndicator color="#fff" size="small" />
-                    <Text style={styles.appleLoadingText}>Signing in with Apple...</Text>
-                  </View>
-                ) : (
-                  <AppleAuthentication.AppleAuthenticationButton
-                    buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_UP}
-                    buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
-                    cornerRadius={18}
-                    style={styles.appleBtn}
-                    onPress={handleAppleSignIn}
-                  />
+                {appleAvailable && (
+                  appleLoading ? (
+                    <View style={styles.appleLoading}>
+                      <ActivityIndicator color="#fff" size="small" />
+                      <Text style={styles.appleLoadingText}>Signing in with Apple...</Text>
+                    </View>
+                  ) : (
+                    <AppleAuthentication.AppleAuthenticationButton
+                      buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_UP}
+                      buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+                      cornerRadius={18}
+                      style={styles.appleBtn}
+                      onPress={handleAppleSignIn}
+                    />
+                  )
+                )}
+
+                {googleConfigured && (
+                  <TouchableOpacity
+                    style={[styles.googleBtn, (googleSigningIn || !googleReady) && styles.buttonDisabled]}
+                    onPress={googlePrompt}
+                    disabled={googleSigningIn || !googleReady}
+                    activeOpacity={0.85}
+                    accessibilityRole="button"
+                    accessibilityLabel="Continue with Google"
+                    accessibilityState={{ disabled: googleSigningIn || !googleReady, busy: googleSigningIn }}
+                  >
+                    {googleSigningIn ? (
+                      <ActivityIndicator color="#555" size="small" />
+                    ) : (
+                      <>
+                        <AntDesign name="google" size={18} color="#4285F4" />
+                        <Text style={styles.googleBtnText}>Continue with Google</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
                 )}
               </>
             )}
@@ -377,6 +432,8 @@ const styles = StyleSheet.create({
   appleBtn:         { width: "100%", height: 52 },
   appleLoading:     { height: 52, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, backgroundColor: "#F5F5F5", borderRadius: 14, borderWidth: 1, borderColor: "#E8E8E8" },
   appleLoadingText: { color: "#888", fontSize: 15, fontWeight: "600" },
+  googleBtn:        { width: "100%", height: 52, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, backgroundColor: "#FFFFFF", borderRadius: 18, borderWidth: 1, borderColor: "#DADCE0" },
+  googleBtnText:    { color: "#3C4043", fontSize: 15, fontWeight: "600", letterSpacing: 0.1 },
   inputWrap:     { flexDirection: "row", alignItems: "center", backgroundColor: "#F5F5F5", borderRadius: 14, borderWidth: 1.5, borderColor: "#E8E8E8" },
   inputInner:    { flex: 1, paddingHorizontal: 18, paddingVertical: 15, color: "#111", fontSize: 16 },
   eyeBtn:        { paddingHorizontal: 14, paddingVertical: 14 },

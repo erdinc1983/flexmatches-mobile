@@ -9,7 +9,8 @@ import { getCurrentUserWithRefresh } from "../lib/authSession";
 import { ThemeProvider, useTheme, FONT, SPACE, PALETTE } from "../lib/theme";
 import { NotificationProvider } from "../lib/notificationContext";
 import { AppDataProvider, useAppData } from "../lib/appDataContext";
-import { registerPushToken } from "../lib/push";
+import { registerPushToken, subscribeToPushTokenChanges } from "../lib/push";
+import { reschedulePendingSessionReminders } from "../lib/notifications";
 import { Button } from "../components/ui/Button";
 import { GenderBackfillModal } from "../components/GenderBackfillModal";
 import { initSentry } from "../lib/sentry";
@@ -319,9 +320,22 @@ export default function RootLayout() {
     InteractionManager.runAfterInteractions(() => {
       registerPushToken();
       supabase.auth.getUser().then(({ data: { user } }) => {
-        if (user) supabase.from("users").update({ last_active: new Date().toISOString() }).eq("id", user.id).then(() => {});
+        if (!user) return;
+        supabase.from("users").update({ last_active: new Date().toISOString() }).eq("id", user.id).then(() => {});
+        // Re-schedule any local "Did you meet?" reminders that iOS wiped on
+        // reinstall. Idempotent — uses stable per-session identifiers.
+        reschedulePendingSessionReminders(supabase, user.id);
       });
     });
+  }, [appState]);
+
+  // Subscribe to mid-session push token rotation once we're ready. Apple/Google
+  // rotate tokens every few weeks; without this, push delivery silently dies
+  // between the rotation and the next cold start.
+  useEffect(() => {
+    if (appState !== "ready") return;
+    const unsubscribe = subscribeToPushTokenChanges();
+    return unsubscribe;
   }, [appState]);
 
   if (appState === "loading") return <LoadingScreen />;

@@ -12,7 +12,13 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   newArchEnabled: true,
 
   ios: {
-    supportsTablet: true,
+    // iPad disabled for v1.0 — codebase uses Dimensions.get("window") at module
+    // load in 9 components (BestMatchesSection, PersonCard, GridCard, SwipeDeck,
+    // ProfileSheet, home, circles, onboarding, CalendarPicker), so layouts
+    // freeze at first-render width and look stretched on iPad's wider canvas.
+    // Flip to true after a responsive pass with useWindowDimensions().
+    // See docs/apple-readiness-audit.md (web repo) for full audit.
+    supportsTablet: false,
     bundleIdentifier: "com.flexmatches.app",
     buildNumber: "26",
     infoPlist: {
@@ -24,11 +30,20 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       ITSAppUsesNonExemptEncryption: false,
     },
     privacyManifests: {
+      // Reasons are the union of what our installed libraries actually access,
+      // verified by reading their bundled PrivacyInfo.xcprivacy files (2026-05-09):
+      //   - C617.1: react-native core, cxxreact, expo-application, AsyncStorage
+      //   - 0A2A.1, 3B52.1: expo-file-system
+      //   - E174.1, 85F4.1: expo-file-system
+      //   - CA92.1: react-native core, expo-notifications
+      //   - 35F9.1: expo-device
+      // If a library is added/removed, re-run the audit in docs/apple-readiness-audit.md
+      // (web repo) by reading its node_modules/<lib>/ios/PrivacyInfo.xcprivacy.
       NSPrivacyAccessedAPITypes: [
-        { NSPrivacyAccessedAPIType: "NSPrivacyAccessedAPICategoryUserDefaults",  NSPrivacyAccessedAPITypeReasons: ["CA92.1"] },
-        { NSPrivacyAccessedAPIType: "NSPrivacyAccessedAPICategoryFileTimestamp",  NSPrivacyAccessedAPITypeReasons: ["C617.1"] },
+        { NSPrivacyAccessedAPIType: "NSPrivacyAccessedAPICategoryUserDefaults",   NSPrivacyAccessedAPITypeReasons: ["CA92.1"] },
+        { NSPrivacyAccessedAPIType: "NSPrivacyAccessedAPICategoryFileTimestamp",  NSPrivacyAccessedAPITypeReasons: ["C617.1", "0A2A.1", "3B52.1"] },
         { NSPrivacyAccessedAPIType: "NSPrivacyAccessedAPICategorySystemBootTime", NSPrivacyAccessedAPITypeReasons: ["35F9.1"] },
-        { NSPrivacyAccessedAPIType: "NSPrivacyAccessedAPICategoryDiskSpace",      NSPrivacyAccessedAPITypeReasons: ["E174.1"] },
+        { NSPrivacyAccessedAPIType: "NSPrivacyAccessedAPICategoryDiskSpace",      NSPrivacyAccessedAPITypeReasons: ["E174.1", "85F4.1"] },
       ],
       NSPrivacyCollectedDataTypes: [
         { NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeEmailAddress",    NSPrivacyCollectedDataTypeLinked: true, NSPrivacyCollectedDataTypeTracking: false, NSPrivacyCollectedDataTypePurposes: ["NSPrivacyCollectedDataTypePurposeAppFunctionality"] },

@@ -73,8 +73,18 @@ function MatchPhotoCard({ user, onPress }: { user: SuggestedUser; onPress: () =>
     .filter((r, i, arr) => arr.indexOf(r) === i)
     .slice(0, 2);
 
+  const tagLabel = tags.length > 0 ? `, ${tags.join(", ")}` : "";
+  const a11yLabel = `Train together with ${displayName}${tagLabel}`;
+
   return (
-    <TouchableOpacity style={[s.card, { backgroundColor: c.bgCard }, SHADOW.md]} onPress={onPress} activeOpacity={0.88}>
+    <TouchableOpacity
+      style={[s.card, { backgroundColor: c.bgCard }, SHADOW.md]}
+      onPress={onPress}
+      activeOpacity={0.88}
+      accessibilityRole="button"
+      accessibilityLabel={a11yLabel}
+      accessibilityHint="Opens their profile to send a training request"
+    >
       {/* expo-image as background — handles Supabase URLs same as Avatar */}
       <Image
         source={{ uri: photoUrl }}
@@ -106,7 +116,13 @@ function MatchPhotoCard({ user, onPress }: { user: SuggestedUser; onPress: () =>
             ))}
           </View>
         )}
-        <TouchableOpacity style={s.connectBtn} onPress={onPress} activeOpacity={0.85}>
+        <TouchableOpacity
+          style={s.connectBtn}
+          onPress={onPress}
+          activeOpacity={0.85}
+          importantForAccessibility="no"
+          accessible={false}
+        >
           <Text style={s.connectText}>Train Together</Text>
         </TouchableOpacity>
       </View>

@@ -27,7 +27,7 @@ import { EmptyState } from "../../components/ui/EmptyState";
 import { CirclesSkeleton } from "../../components/ui/Skeleton";
 import { MapLocationPicker } from "../../components/MapLocationPicker";
 import { scheduleEventReminder } from "../../lib/notifications";
-import { notifyUser } from "../../lib/push";
+import { notifyUser, notifyUsers } from "../../lib/push";
 import { getSportPhoto } from "../../lib/sportPhotos";
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -350,20 +350,21 @@ export default function CirclesScreen() {
     ));
     setSelectedCircle((prev) => prev ? { ...prev, name: editName.trim(), description: editDesc.trim() || null, field: editField.trim() || null, event_date: newEventDate, event_time: editTime.trim() || null, recurrence: newRecurrence } : prev);
 
-    // Notify all members when a new event date is set
+    // Notify all members when a new event date is set — batched into a single
+    // DB insert + single Expo push POST instead of N×2 round-trips.
     if (eventAdded && circleMembers.length > 0) {
       const { data: { user } } = await supabase.auth.getUser();
       const dateLabel = newEventDate.split("-").slice(1).join("/"); // "MM/DD"
-      for (const member of circleMembers) {
-        if (member.id === user?.id) continue; // skip self
-        notifyUser(member.id, {
-          type: "match_accepted", // reuse generic type for delivery
-          title: `📅 New event in ${editName.trim()}`,
-          body: `Event scheduled for ${dateLabel}${editTime.trim() ? " at " + editTime.trim() : ""}`,
-          relatedId: selectedCircle.id,
-          data: { type: "circle_event", relatedId: selectedCircle.id },
-        });
-      }
+      const recipients = circleMembers
+        .filter((m) => m.id !== user?.id)
+        .map((m) => m.id);
+      notifyUsers(recipients, {
+        type: "match_accepted", // reuse generic type for delivery
+        title: `📅 New event in ${editName.trim()}`,
+        body: `Event scheduled for ${dateLabel}${editTime.trim() ? " at " + editTime.trim() : ""}`,
+        relatedId: selectedCircle.id,
+        data: { type: "circle_event", relatedId: selectedCircle.id },
+      });
     }
 
     setEditSaving(false);

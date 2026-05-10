@@ -4,6 +4,9 @@ This is the **single source of truth** for the iOS/Android app.
 
 > 📊 **Full project workbook:** `docs/FlexMatches_JIRA_Backlog_v3.xlsx` (14 tabs: epics, RICE scoring, backlog, sprint plan, DoD, retrospective, UAT, defect log, dependencies, release readiness, incidents, decision log, metrics, compliance)
 
+> ✅ **Always-on quality bar:** see `CODE_QUALITY.md` — quality gates, TypeScript rules, RN/Expo conventions, Acceptance Criteria format, Definition of Done, code review checklist. Applies to every change.
+> @CODE_QUALITY.md
+
 ---
 
 ## Repo Identity

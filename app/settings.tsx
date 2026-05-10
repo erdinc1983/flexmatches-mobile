@@ -19,7 +19,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { supabase } from "../lib/supabase";
-import { unregisterPushToken } from "../lib/push";
+import { unregisterPushToken, promptUserToEnablePush } from "../lib/push";
+import * as Notifications from "expo-notifications";
 import { useTheme, SPACE, FONT, RADIUS, PALETTE } from "../lib/theme";
 import { AppModal } from "../components/ui/AppModal";
 import { Avatar } from "../components/Avatar";
@@ -79,7 +80,18 @@ export default function SettingsScreen() {
   const [units,        setUnits]        = useState<"imperial" | "metric">("imperial");
   const [privacy,      setPrivacyState] = useState<Privacy>(DEFAULT_PRIVACY);
   const [notifPrefs,   setNotifPrefs]   = useState<NotifPrefs>(DEFAULT_NOTIF);
+  const [pushPermission, setPushPermission] = useState<"granted" | "denied" | "undetermined">("undetermined");
   const [openFaq,      setOpenFaq]      = useState<number | null>(null);
+
+  // Re-check OS push permission whenever the screen becomes active. The user
+  // may have toggled it in iOS Settings between visits.
+  useEffect(() => {
+    Notifications.getPermissionsAsync().then(({ status }) => {
+      setPushPermission(
+        status === "granted" ? "granted" : status === "denied" ? "denied" : "undetermined",
+      );
+    });
+  }, []);
 
   // Change email modal
   const [emailModal,   setEmailModal]   = useState(false);
@@ -546,6 +558,35 @@ export default function SettingsScreen() {
 
         {/* ── Notifications ── */}
         <SettingCard title="Notifications" description="Manage what you get notified about" c={c}>
+          {/* OS-level permission banner. The per-type toggles below are moot
+              if iOS/Android has push disabled for the app — this row gives
+              the user a single tap to fix it. */}
+          {pushPermission !== "granted" && (
+            <TouchableOpacity
+              style={[s.toggleRow, { borderBottomWidth: 1, borderBottomColor: c.border, paddingBottom: SPACE[12], gap: SPACE[8] }]}
+              onPress={async () => {
+                await promptUserToEnablePush();
+                const { status } = await Notifications.getPermissionsAsync();
+                setPushPermission(status === "granted" ? "granted" : status === "denied" ? "denied" : "undetermined");
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Notifications are off in system Settings, tap to enable"
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={[s.toggleLabel, { color: c.text, fontWeight: FONT.weight.semibold }]}>
+                  Notifications are off
+                </Text>
+                <Text style={{ fontSize: FONT.size.sm, color: c.textMuted, marginTop: 2 }}>
+                  {pushPermission === "denied"
+                    ? "Tap to open Settings and turn them on"
+                    : "Tap to enable push notifications"}
+                </Text>
+              </View>
+              <Text style={{ color: c.brand, fontSize: FONT.size.sm, fontWeight: FONT.weight.bold }}>
+                Enable →
+              </Text>
+            </TouchableOpacity>
+          )}
           {([
             { key: "match_requests",    label: "🤝  Match requests" },
             { key: "new_messages",      label: "💬  New messages" },

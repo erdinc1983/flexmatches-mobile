@@ -51,12 +51,13 @@ function RequestRow({
   const { theme } = useTheme();
   const c = theme.colors;
   const meta = [req.fitness_level, req.city].filter(Boolean).join(" · ");
+  const requesterName = req.full_name ?? req.username;
 
   return (
     <View style={[s.row, { backgroundColor: c.bgCard, borderColor: c.brandBorder }]}>
-      <Avatar url={req.avatar_url} name={req.full_name ?? req.username} size={44} />
+      <Avatar url={req.avatar_url} name={requesterName} size={44} />
       <View style={{ flex: 1, gap: 2 }}>
-        <Text style={[s.name, { color: c.text }]}>{req.full_name ?? req.username}</Text>
+        <Text style={[s.name, { color: c.text }]}>{requesterName}</Text>
         {meta ? <Text style={[s.meta, { color: c.textMuted }]}>{meta}</Text> : null}
       </View>
       <View style={{ flexDirection: "row", gap: SPACE[8] }}>
@@ -64,6 +65,8 @@ function RequestRow({
           style={[s.declineBtn, { borderColor: c.borderMedium }]}
           onPress={onDecline}
           activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={`Decline request from ${requesterName}`}
         >
           <Text style={[s.declineTxt, { color: c.textMuted }]}>Pass</Text>
         </TouchableOpacity>
@@ -71,6 +74,8 @@ function RequestRow({
           style={[s.acceptBtn, { backgroundColor: c.brand }]}
           onPress={onAccept}
           activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel={`Accept request from ${requesterName}`}
         >
           <Text style={s.acceptTxt}>Accept</Text>
         </TouchableOpacity>

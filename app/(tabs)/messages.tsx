@@ -20,7 +20,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { router, useFocusEffect } from "expo-router";
+import { router, useFocusEffect, usePathname } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import { requestNotificationPermission } from "../../lib/notifications";
 import { useTheme, SPACE, FONT, RADIUS } from "../../lib/theme";
@@ -63,6 +63,13 @@ export default function MessagesScreen() {
 
   const myIdRef           = useRef<string | null>(null);
   const conversationsRef  = useRef<Conversation[]>([]);
+
+  // Pull current route so the realtime INSERT handler can suppress the unread
+  // bump when the user is already viewing that match's chat — avoids briefly
+  // flashing a +1 badge that the chat screen immediately marks back to 0.
+  const currentPath = usePathname();
+  const currentPathRef = useRef(currentPath);
+  currentPathRef.current = currentPath;
   const lastLoadRef       = useRef(0);
   const loadingRef        = useRef(false); // Fix: prevent concurrent loads
   const mountedRef        = useRef(true);  // Fix: prevent setState after unmount
@@ -159,7 +166,10 @@ export default function MessagesScreen() {
       .channel("chat-inbox")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
         const msg = payload.new as { sender_id: string; match_id: string; content: string; created_at: string };
-        const isIncoming = myIdRef.current && msg.sender_id !== myIdRef.current;
+        const viewingThisChat = currentPathRef.current === `/chat/${msg.match_id}`;
+        // Don't bump unread for the match the user is actively viewing — the
+        // chat screen marks read on load anyway, the badge would just flash.
+        const isIncoming = myIdRef.current && msg.sender_id !== myIdRef.current && !viewingThisChat;
 
         // Sound + local notification is handled by NotificationContext (single source)
         // This handler only updates the conversation list UI
@@ -188,7 +198,12 @@ export default function MessagesScreen() {
           load();
         }
       })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages" }, () => load())
+      // UPDATE events on `messages` are read-receipts (read_at flips). They
+      // don't change conversation ordering or content, only the unread count
+      // at the OTHER user's screen. Triggering load() here was the source of
+      // the badge race: a bulk mark-all-read while the user enters chat fires
+      // many UPDATEs, each re-querying and competing with our local state.
+      // We rely on the INSERT path + load() on focus to keep counts honest.
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };

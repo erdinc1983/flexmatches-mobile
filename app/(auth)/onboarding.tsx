@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
   ScrollView, ActivityIndicator, Alert, StatusBar, Dimensions,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { supabase } from "../../lib/supabase";
@@ -11,6 +12,23 @@ import { CityAutocomplete } from "../../components/CityAutocomplete";
 
 const { width: _width } = Dimensions.get("window");
 const TOTAL_STEPS = 6;
+
+// Local persistence key prefix for onboarding drafts. Per-user so multiple
+// accounts on the same device don't collide. Cleared on finish() success.
+const DRAFT_KEY_PREFIX = "onboarding-draft:";
+
+type OnboardingDraft = {
+  step:           number;
+  fullName:       string;
+  bio:            string;
+  gender:         string;
+  showMe:         string;
+  sports:         string[];
+  fitnessLevel:   string;
+  preferredTimes: string[];
+  city:           string;
+  trainingIntent: string;
+};
 
 // Layer 2 of the privacy system. The default 'everyone' lets users
 // finish onboarding without thinking about it; they can sharpen the
@@ -70,36 +88,70 @@ export default function OnboardingScreen() {
   const [fullName, setFullName] = useState("");
   const [bio, setBio] = useState("");
 
-  // On mount: populate full_name from best-available source.
-  //   1. If users.full_name already set (Apple Sign In), skip step 1.
-  //   2. Otherwise prefill from the email prefix (e.g. "erdinc.emur@…"
-  //      → "Erdinc Emur") so the user rarely has to type — but DON'T
-  //      skip the step. Email prefix is a guess, not a real name.
+  // Track auth user id for the per-user draft key. Set in the mount effect.
+  const userIdRef = useRef<string | null>(null);
+  // Don't write a draft until the initial DB hydration has run — otherwise
+  // the first persistence effect overwrites the saved draft with empty state.
+  const [hydrated, setHydrated] = useState(false);
+
+  // On mount: hydrate from the local draft FIRST (so a force-close at step 3
+  // resumes at step 3, not step 1), then fall through to DB for full_name
+  // and email-prefix guess if no draft exists.
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return;
-      supabase.from("users").select("full_name").eq("id", user.id).single().then(({ data }) => {
-        if (data?.full_name) {
-          setFullName(data.full_name);
-          setStep(2); // Apple / Sign-in-with-Apple already provided a real name
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setHydrated(true); return; }
+      userIdRef.current = user.id;
+
+      const draftRaw = await AsyncStorage.getItem(DRAFT_KEY_PREFIX + user.id);
+      if (draftRaw) {
+        try {
+          const d = JSON.parse(draftRaw) as Partial<OnboardingDraft>;
+          if (d.step)           setStep(d.step);
+          if (d.fullName)       setFullName(d.fullName);
+          if (d.bio)            setBio(d.bio);
+          if (d.gender)         setGender(d.gender);
+          if (d.showMe)         setShowMe(d.showMe);
+          if (d.sports)         setSports(d.sports);
+          if (d.fitnessLevel)   setFitnessLevel(d.fitnessLevel);
+          if (d.preferredTimes) setPreferredTimes(d.preferredTimes);
+          if (d.city)           setCity(d.city);
+          if (d.trainingIntent) setTrainingIntent(d.trainingIntent);
+          setHydrated(true);
           return;
+        } catch {
+          // Corrupt draft — fall through to DB hydration
         }
-        // Fallback: title-case the email prefix as a default guess.
-        const email = user.email ?? "";
-        const prefix = email.split("@")[0] ?? "";
-        if (prefix) {
-          const guess = prefix
-            .replace(/[._+-]+/g, " ")
-            .replace(/[0-9]+$/g, "")
-            .trim()
-            .split(/\s+/)
-            .map((w) => w ? w[0].toUpperCase() + w.slice(1).toLowerCase() : "")
-            .join(" ")
-            .trim();
-          if (guess.length >= 2) setFullName(guess);
-        }
-      });
-    });
+      }
+
+      // No draft → original DB-driven prefill flow
+      const { data } = await supabase
+        .from("users")
+        .select("full_name")
+        .eq("id", user.id)
+        .single();
+      if (data?.full_name) {
+        setFullName(data.full_name);
+        setStep(2); // Apple / Sign-in-with-Apple already provided a real name
+        setHydrated(true);
+        return;
+      }
+      // Fallback: title-case the email prefix as a default guess.
+      const email = user.email ?? "";
+      const prefix = email.split("@")[0] ?? "";
+      if (prefix) {
+        const guess = prefix
+          .replace(/[._+-]+/g, " ")
+          .replace(/[0-9]+$/g, "")
+          .trim()
+          .split(/\s+/)
+          .map((w) => w ? w[0].toUpperCase() + w.slice(1).toLowerCase() : "")
+          .join(" ")
+          .trim();
+        if (guess.length >= 2) setFullName(guess);
+      }
+      setHydrated(true);
+    })();
   }, []);
 
   // Step 2 — gender (required) + show_me filter (optional, defaults to everyone)
@@ -118,6 +170,22 @@ export default function OnboardingScreen() {
 
   // Step 6
   const [trainingIntent, setTrainingIntent] = useState("");
+
+  // Persist a draft to AsyncStorage on every state change after hydration.
+  // Cheap (single key, ~200 bytes) and protects against force-close at any
+  // step. Cleared in finish() once the DB write succeeds.
+  useEffect(() => {
+    if (!hydrated || !userIdRef.current) return;
+    const draft: OnboardingDraft = {
+      step, fullName, bio, gender, showMe, sports,
+      fitnessLevel, preferredTimes, city, trainingIntent,
+    };
+    AsyncStorage.setItem(DRAFT_KEY_PREFIX + userIdRef.current, JSON.stringify(draft))
+      .catch(() => {/* best-effort, never block onboarding */});
+  }, [
+    hydrated, step, fullName, bio, gender, showMe, sports,
+    fitnessLevel, preferredTimes, city, trainingIntent,
+  ]);
 
   function toggleSport(s: string) {
     setSports((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]);
@@ -158,6 +226,9 @@ export default function OnboardingScreen() {
       }).eq("id", user.id);
 
       if (error) throw error;
+      // Onboarding committed to DB → drop the local draft so a future signup
+      // on the same device starts clean.
+      await AsyncStorage.removeItem(DRAFT_KEY_PREFIX + user.id).catch(() => {});
       // Invalidate the cached AppUser so Profile/Home/Discover read the
       // values we just saved instead of the pre-onboarding snapshot.
       await refreshAppUser();

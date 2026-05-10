@@ -19,6 +19,7 @@ import { router, useFocusEffect } from "expo-router";
 import { CityAutocomplete } from "../../components/CityAutocomplete";
 import * as ImagePicker from "expo-image-picker";
 import { supabase } from "../../lib/supabase";
+import { processAvatarForUpload } from "../../lib/imageUpload";
 import { getCurrentUserWithRefresh } from "../../lib/authSession";
 import { useTheme, SPACE, FONT, RADIUS, PALETTE, BRAND } from "../../lib/theme";
 import { useAppData } from "../../lib/appDataContext";
@@ -399,16 +400,21 @@ export default function ProfileScreen() {
 
     setUploadingPhoto(true);
     try {
-      const asset = result.assets[0];
-      const ext = asset.uri.split(".").pop() ?? "jpg";
-      const fileName = `${userId}-${Date.now()}.${ext}`;
-      const response = await fetch(asset.uri);
+      // Pre-size and JPEG-compress before upload (target ~25 KB).
+      // Cuts Supabase Storage egress ~5× — see lib/imageUpload.ts header.
+      const processed = await processAvatarForUpload(result.assets[0].uri);
+      const fileName = `${userId}-${Date.now()}.${processed.extension}`;
+      const response = await fetch(processed.uri);
       const blob = await response.blob();
       const arrayBuffer = await new Response(blob).arrayBuffer();
 
       const { error: uploadError } = await supabase.storage
         .from("avatars")
-        .upload(fileName, arrayBuffer, { contentType: `image/${ext}`, upsert: true });
+        .upload(fileName, arrayBuffer, {
+          contentType: processed.mimeType,
+          upsert:      true,
+          cacheControl: "31536000",
+        });
 
       if (uploadError) { Alert.alert("Upload failed", uploadError.message); return; }
 
