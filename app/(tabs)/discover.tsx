@@ -279,6 +279,10 @@ function FilterPill({ label, active, dot, onPress, c }: {
       style={[fp.pill, { backgroundColor: active ? c.brand : c.bgCard, borderColor: active ? c.brand : c.border }]}
       onPress={onPress}
       activeOpacity={0.8}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected: active }}
+      hitSlop={6}
     >
       {dot && <View style={[fp.dot, { backgroundColor: dot }]} />}
       <Text style={[fp.label, { color: active ? "#fff" : c.textSecondary }]}>{label}</Text>
@@ -718,6 +722,10 @@ export default function DiscoverScreen() {
           <TouchableOpacity
             style={[s.headerBtn, { backgroundColor: showSearch ? c.brand : c.bgCard, borderColor: showSearch ? c.brand : c.border }]}
             onPress={() => { setShowSearch((v) => !v); if (showSearch) setSearchQuery(""); }}
+            accessibilityRole="button"
+            accessibilityLabel={showSearch ? "Close search" : "Search partners"}
+            accessibilityState={{ expanded: showSearch }}
+            hitSlop={8}
           >
             <Icon name="search" size={18} color={showSearch ? "#fff" : c.textSecondary} />
           </TouchableOpacity>
@@ -726,6 +734,9 @@ export default function DiscoverScreen() {
           <TouchableOpacity
             style={[s.headerBtn, { backgroundColor: c.bgCard, borderColor: filterCount > 0 ? c.brand : c.border }]}
             onPress={() => setShowFilter(true)}
+            accessibilityRole="button"
+            accessibilityLabel={filterCount > 0 ? `Filters, ${filterCount} active` : "Filters"}
+            hitSlop={8}
           >
             <Icon name="filter" size={18} color={filterCount > 0 ? c.brand : c.textSecondary} />
             {filterCount > 0 && (
@@ -736,12 +747,19 @@ export default function DiscoverScreen() {
           </TouchableOpacity>
 
           {/* Mode toggle: swipe / list / map */}
-          <View style={[s.modeSeg, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}>
+          <View
+            style={[s.modeSeg, { backgroundColor: c.bgCardAlt, borderColor: c.border }]}
+            accessibilityRole="tablist"
+          >
             {(["swipe", "list", "map"] as const).map((mode) => (
               <TouchableOpacity
                 key={mode}
                 style={[s.modeBtn, viewMode === mode && { backgroundColor: c.brand }]}
                 onPress={() => setViewMode(mode)}
+                accessibilityRole="tab"
+                accessibilityLabel={mode === "swipe" ? "Swipe view" : mode === "list" ? "List view" : "Map view"}
+                accessibilityState={{ selected: viewMode === mode }}
+                hitSlop={8}
               >
                 <Icon
                   name={mode === "swipe" ? "discoverActive" : mode === "list" ? "list" : "map"}
@@ -770,7 +788,12 @@ export default function DiscoverScreen() {
             clearButtonMode="while-editing"
           />
           {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery("")}>
+            <TouchableOpacity
+              onPress={() => setSearchQuery("")}
+              accessibilityRole="button"
+              accessibilityLabel="Clear search"
+              hitSlop={10}
+            >
               <Icon name="close" size={16} color={c.textMuted} />
             </TouchableOpacity>
           )}
@@ -783,6 +806,8 @@ export default function DiscoverScreen() {
           style={[s.nudgeBanner, { backgroundColor: c.brand + "18", borderColor: c.brand + "40" }]}
           onPress={() => router.push("/(tabs)/profile")}
           activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Add your sports to see real match scores. Opens profile."
         >
           <Text style={[s.nudgeText, { color: c.brand }]}>
             Add your sports to see real match scores
@@ -947,7 +972,10 @@ export default function DiscoverScreen() {
 
       {/* ── Connect undo toast (list view only) ─────────────────────────── */}
       {connectUndo && (
-        <View style={[s.undoToast, { backgroundColor: c.bgCard, borderColor: c.border, shadowColor: c.text }]}>
+        <View
+          style={[s.undoToast, { backgroundColor: c.bgCard, borderColor: c.border, shadowColor: c.text }]}
+          accessibilityLiveRegion="polite"
+        >
           <Text style={[s.undoLabel, { color: c.text }]} numberOfLines={1}>
             Request sent to {connectUndo.name}
           </Text>
@@ -955,6 +983,8 @@ export default function DiscoverScreen() {
             style={[s.undoBtn, { backgroundColor: c.brand }]}
             onPress={doConnectUndo}
             activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={`Undo request to ${connectUndo.name}`}
           >
             <Text style={s.undoBtnText}>Undo</Text>
           </TouchableOpacity>
@@ -1050,6 +1080,8 @@ function FilterModal({
                 style={[fm.closeBtn, { backgroundColor: c.bgCardAlt }]}
                 onPress={onClose}
                 hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Close filters"
               >
                 <Icon name="close" size={14} color={c.textMuted} />
               </TouchableOpacity>
@@ -1063,6 +1095,9 @@ function FilterModal({
               style={[fm.toggleRow, { backgroundColor: c.bgCardAlt, borderColor: draft.atGym ? PALETTE.success : c.border }]}
               onPress={() => setDraft((d) => ({ ...d, atGym: !d.atGym }))}
               activeOpacity={0.8}
+              accessibilityRole="checkbox"
+              accessibilityLabel={`At gym now, ${atGymCount} currently training`}
+              accessibilityState={{ checked: draft.atGym }}
             >
               <View style={fm.toggleLeft}>
                 <View style={[fm.liveDot, { backgroundColor: PALETTE.success }]} />
@@ -1170,6 +1205,8 @@ function FilterModal({
             style={[fm.applyBtn, { backgroundColor: c.brand }]}
             onPress={() => onApply(draft)}
             activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel={`Apply filters. Show ${previewCount} partner${previewCount !== 1 ? "s" : ""}.`}
           >
             <Text style={fm.applyText}>
               Show {previewCount} partner{previewCount !== 1 ? "s" : ""}
@@ -1191,6 +1228,10 @@ function OptionChip({ label, active, onPress }: { label: string; active: boolean
       style={[fm.optionChip, { backgroundColor: active ? c.brand : "transparent", borderColor: active ? c.brand : c.borderMedium }]}
       onPress={onPress}
       activeOpacity={0.75}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected: active }}
+      hitSlop={6}
     >
       <Text style={[fm.optionText, { color: active ? "#fff" : c.textSecondary }]}>{label}</Text>
     </TouchableOpacity>
