@@ -9,6 +9,7 @@
  */
 
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { AppState } from "react-native";
 import { supabase } from "./supabase";
 import {
   notifyMatchRequest, notifyMatchAccepted, notifyBadgeUnlocked, notifyPartnerWorkout,
@@ -158,6 +159,24 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       }
     };
   }, [fetchCount]);
+
+  // iOS suspends the JS event loop during background. supabase-js's heartbeat
+  // stops firing, the server drops the socket after its own timeout, but the
+  // client still believes the channel is joined. Result: silent message loss
+  // in chat and stale badges in NotificationContext. Forcing connect() on
+  // foreground re-establishes the socket and re-joins every channel that was
+  // subscribed on this client (including the per-match channels in chat).
+  // connect() is idempotent — no-op when the socket is already healthy.
+  useEffect(() => {
+    if (!userId) return;
+    const sub = AppState.addEventListener("change", (next) => {
+      if (next === "active") {
+        supabase.realtime.connect();
+        fetchCount(userId);
+      }
+    });
+    return () => sub.remove();
+  }, [userId, fetchCount]);
 
   return (
     <NotifContext.Provider value={{ unreadCount, unreadMessages, refresh, onInsert }}>
